@@ -6,6 +6,7 @@
 #include "bwstring.h"
 #include "result.h"
 #include "bwdate.h"
+#include "cjson.h"
 
 typedef struct {
   int id;
@@ -30,9 +31,11 @@ result transaction_init(
 );
 
 void transaction_free(Transaction *transaction);
+cJSON *transaction_to_json(Transaction *transaction);
+result transaction_from_json(Transaction *transaction, cJSON *json);
 
 result transaction_array_init(TransactionArray *array);
-result transaction_array_push(TransactionArray *array, Transaction transaction);
+result transaction_array_push_move(TransactionArray *array, Transaction transaction);
 void transaction_array_free(TransactionArray *array);
 
 #endif
