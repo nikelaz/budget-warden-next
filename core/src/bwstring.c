@@ -1,9 +1,9 @@
 #include <stdio.h>
 #include <string.h>
-#include "dynamic_string.h"
+#include "bwstring.h"
 #include "result.h"
 
-result string_init(String *s)
+result bw_string_init(BWString *s)
 {
     s->capacity = 16;
     s->length = 0;
@@ -17,7 +17,7 @@ result string_init(String *s)
     return ok;
 }
 
-result string_append(String *s, const char *text)
+result bw_string_append(BWString *s, const char *text)
 {
     size_t text_len = strlen(text);
     size_t required = s->length + text_len + 1;
@@ -45,7 +45,7 @@ result string_append(String *s, const char *text)
     return ok;
 }
 
-void string_free(String *s)
+void bw_string_free(BWString *s)
 {
     free(s->data);
     s->data = NULL;

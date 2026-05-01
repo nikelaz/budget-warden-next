@@ -1,6 +1,6 @@
-#include "date.h"
+#include "bwdate.h"
 
-int date_create(Date *date, int year, int month, int day)
+int bw_date_create(BWDate *date, int year, int month, int day)
 {
     struct tm tm_date = {0};
 
@@ -20,7 +20,7 @@ int date_create(Date *date, int year, int month, int day)
     return 1;
 }
 
-int date_get_year(const Date *date)
+int bw_date_get_year(const BWDate *date)
 {
     struct tm *tm_date = localtime(&date->timestamp);
 
@@ -31,7 +31,7 @@ int date_get_year(const Date *date)
     return tm_date->tm_year + 1900;
 }
 
-int date_get_month(const Date *date)
+int bw_date_get_month(const BWDate *date)
 {
     struct tm *tm_date = localtime(&date->timestamp);
 
@@ -42,7 +42,7 @@ int date_get_month(const Date *date)
     return tm_date->tm_mon + 1;
 }
 
-int date_get_day(const Date *date)
+int bw_date_get_day(const BWDate *date)
 {
     struct tm *tm_date = localtime(&date->timestamp);
 

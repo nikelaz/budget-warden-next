@@ -1,17 +1,17 @@
 #ifndef BUDGET_H
 #define BUDGET_H
 
-#include "dynamic_string.h"
-#include "date.h"
+#include "bwstring.h"
+#include "bwdate.h"
 #include "result.h"
 
 typedef struct {
-  String title;
-  Date period_start;
-  Date period_end;
+  BWString title;
+  BWDate period_start;
+  BWDate period_end;
 } Budget;
 
-result budget_create(Budget *budget, const char* title, Date period_start, Date period_end);
+result budget_create(Budget *budget, const char* title, BWDate period_start, BWDate period_end);
 void budget_free(Budget* budget);
 
 #endif

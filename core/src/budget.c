@@ -3,8 +3,8 @@
 result budget_create(
     Budget *budget,
     const char *title,
-    Date period_start,
-    Date period_end
+    BWDate period_start,
+    BWDate period_end
 )
 {
   if (budget == NULL || title == NULL)
@@ -12,16 +12,16 @@ result budget_create(
     return err;
   }
 
-  String title_str; 
-  
-  if (string_init(&title_str) == err)
+  BWString title_str;
+
+  if (bw_string_init(&title_str) == err)
   {
     return err;
   }
 
-  if (string_append(&title_str, title) == err)
+  if (bw_string_append(&title_str, title) == err)
   {
-    string_free(&title_str);
+    bw_string_free(&title_str);
     return err;
   }
 
@@ -33,5 +33,5 @@ result budget_create(
 
 void budget_free(Budget *budget)
 {
-  string_free(&budget->title);
+  bw_string_free(&budget->title);
 }

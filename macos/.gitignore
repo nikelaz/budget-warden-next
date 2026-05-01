@@ -1,0 +1,20 @@
+# Local macOS/Xcode noise
+.DS_Store
+*.swp
+*.swo
+
+# App-local build products
+.build/
+build/
+DerivedData/
+*.app
+*.dSYM
+*.xcarchive
+
+# Xcode user and machine state
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.moved-aside
+*.xccheckout
+
