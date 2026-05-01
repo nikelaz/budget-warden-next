@@ -7,6 +7,13 @@
 #include "category.h"
 #include "transaction.h"
 
+BWDate test_date() {
+  BWDate date;
+  result date_res = bw_date_init(&date, 2026, 1, 31);
+  assert(date_res == ok);
+  return date;
+}
+
 void test_date_init() {
   BWDate date;
 
@@ -82,11 +89,13 @@ void test_category_init_with_accumulated() {
 
 void test_transaction_init() {
   Transaction transaction;
+  BWDate date = test_date();
 
-  result transaction_res = transaction_init(&transaction, "x", "y", 100);
+  result transaction_res = transaction_init(&transaction, "x", "y", date, 100);
   assert(transaction_res == ok);
   assert(strcmp(transaction.title.data, "x") == 0);
   assert(strcmp(transaction.description.data, "y") == 0);
+  assert(transaction.date.timestamp == date.timestamp);
   assert(transaction.amount == 100);
   transaction_free(&transaction);
   printf("(Pass) transaction_init\n");
@@ -99,7 +108,7 @@ void test_transaction_array_push() {
 
   for (int i = 0; i < 5; i++) {
     Transaction transaction;
-    result transaction_res = transaction_init(&transaction, "x", "y", 100 + i);
+    result transaction_res = transaction_init(&transaction, "x", "y", test_date(), 100 + i);
     assert(transaction_res == ok);
 
     result push_res = transaction_array_push(&transactions, transaction);
@@ -143,7 +152,7 @@ void test_category_add_transaction() {
   assert(category_res == ok);
 
   Transaction transaction;
-  result transaction_res = transaction_init(&transaction, "Groceries", "Weekly shop", 125);
+  result transaction_res = transaction_init(&transaction, "Groceries", "Weekly shop", test_date(), 125);
   assert(transaction_res == ok);
 
   result add_res = category_add_transaction(&category, transaction);
@@ -163,11 +172,11 @@ void test_category_remove_transaction() {
   assert(category_res == ok);
 
   Transaction first;
-  result first_res = transaction_init(&first, "Groceries", "Weekly shop", 125);
+  result first_res = transaction_init(&first, "Groceries", "Weekly shop", test_date(), 125);
   assert(first_res == ok);
 
   Transaction second;
-  result second_res = transaction_init(&second, "Coffee", "Morning coffee", 5);
+  result second_res = transaction_init(&second, "Coffee", "Morning coffee", test_date(), 5);
   assert(second_res == ok);
 
   result first_add_res = category_add_transaction(&category, first);
@@ -193,7 +202,7 @@ void test_category_transactions_do_not_change_accumulated() {
   assert(category_res == ok);
 
   Transaction transaction;
-  result transaction_res = transaction_init(&transaction, "Deposit", "Monthly saving", 125);
+  result transaction_res = transaction_init(&transaction, "Deposit", "Monthly saving", test_date(), 125);
   assert(transaction_res == ok);
 
   result add_res = category_add_transaction(&category, transaction);
@@ -216,11 +225,11 @@ void test_category_remove_transaction_not_found() {
   assert(category_res == ok);
 
   Transaction stored;
-  result stored_res = transaction_init(&stored, "Groceries", "Weekly shop", 125);
+  result stored_res = transaction_init(&stored, "Groceries", "Weekly shop", test_date(), 125);
   assert(stored_res == ok);
 
   Transaction missing;
-  result missing_res = transaction_init(&missing, "Coffee", "Morning coffee", 5);
+  result missing_res = transaction_init(&missing, "Coffee", "Morning coffee", test_date(), 5);
   assert(missing_res == ok);
 
   result add_res = category_add_transaction(&category, stored);
@@ -254,7 +263,7 @@ void test_budget_nested_free() {
   assert(category_res == ok);
 
   Transaction transaction;
-  result transaction_res = transaction_init(&transaction, "Groceries", "Weekly shop", 125);
+  result transaction_res = transaction_init(&transaction, "Groceries", "Weekly shop", test_date(), 125);
   assert(transaction_res == ok);
 
   result add_res = category_add_transaction(&category, transaction);

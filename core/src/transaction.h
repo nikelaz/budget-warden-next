@@ -5,11 +5,13 @@
 #include <stdlib.h>
 #include "bwstring.h"
 #include "result.h"
+#include "bwdate.h"
 
 typedef struct {
   int id;
   BWString title;
   BWString description;
+  BWDate date;
   uint64_t amount;
 } Transaction;
 
@@ -23,6 +25,7 @@ result transaction_init(
   Transaction *transaction,
   const char *title,
   const char *description,
+  BWDate date,
   uint64_t amount
 );
 

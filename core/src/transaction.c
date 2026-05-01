@@ -6,6 +6,7 @@ result transaction_init(
   Transaction *transaction,
   const char *title,
   const char *description,
+  BWDate date,
   uint64_t amount
 )
 {
@@ -40,6 +41,7 @@ result transaction_init(
   transaction->title = title_str;
   transaction->description = description_str;
   transaction->amount = amount;
+  transaction->date = date;
   return ok;
 }
 
