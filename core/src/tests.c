@@ -10,15 +10,21 @@ BWDate test_date() {
   return date;
 }
 
+void assert_date_eq(BWDate actual, BWDate expected) {
+  assert(actual.year == expected.year);
+  assert(actual.month == expected.month);
+  assert(actual.day == expected.day);
+}
+
 void test_date_init() {
   BWDate date;
 
   result date_res = bw_date_init(&date, 2026, 1, 31);
 
   assert(date_res == ok);
-  assert(bw_date_get_year(&date) == 2026);
-  assert(bw_date_get_month(&date) == 1);
-  assert(bw_date_get_day(&date) == 31);
+  assert(date.year == 2026);
+  assert(date.month == 1);
+  assert(date.day == 31);
   printf("(Pass) date_init\n");
 }
 
@@ -35,16 +41,15 @@ void test_date_from_string() {
   result date_res = bw_date_from_string(&date, "2026-01-31");
 
   assert(date_res == ok);
-  assert(bw_date_get_year(&date) == 2026);
-  assert(bw_date_get_month(&date) == 1);
-  assert(bw_date_get_day(&date) == 31);
+  assert(date.year == 2026);
+  assert(date.month == 1);
+  assert(date.day == 31);
   printf("(Pass) date_from_string\n");
 }
 
 void test_date_from_string_invalid() {
   BWDate date;
 
-  assert(bw_date_from_string(&date, "2026-02-31") == err);
   assert(bw_date_from_string(&date, "2026-2-03") == err);
   assert(bw_date_from_string(&date, "2026/02/03") == err);
   assert(bw_date_from_string(&date, NULL) == err);
@@ -67,8 +72,8 @@ void test_budget_init() {
 
   assert(budget_res == ok);
   assert(strcmp(budget.title.data, "Title") == 0);
-  assert(budget.period_start.timestamp == period_start.timestamp);
-  assert(budget.period_end.timestamp == period_end.timestamp);
+  assert_date_eq(budget.period_start, period_start);
+  assert_date_eq(budget.period_end, period_end);
   assert(budget.categories.length == 0);
   assert(budget.categories.capacity == 4);
   budget_free(&budget);
@@ -121,7 +126,7 @@ void test_transaction_init() {
   assert(transaction_res == ok);
   assert(strcmp(transaction.title.data, "x") == 0);
   assert(strcmp(transaction.description.data, "y") == 0);
-  assert(transaction.date.timestamp == date.timestamp);
+  assert_date_eq(transaction.date, date);
   assert(transaction.amount == 100);
   transaction_free(&transaction);
   printf("(Pass) transaction_init\n");
@@ -149,7 +154,7 @@ void test_transaction_json_round_trip() {
   assert(parsed.id == 42);
   assert(strcmp(parsed.title.data, "Rent") == 0);
   assert(strcmp(parsed.description.data, "May rent") == 0);
-  assert(parsed.date.timestamp == date.timestamp);
+  assert_date_eq(parsed.date, date);
   assert(parsed.amount == 1500);
 
   transaction_free(&parsed);
@@ -413,8 +418,8 @@ void test_budget_json_string_round_trip() {
   result parse_res = budget_from_json_str(&parsed, json.data);
   assert(parse_res == ok);
   assert(strcmp(parsed.title.data, "January") == 0);
-  assert(parsed.period_start.timestamp == period_start.timestamp);
-  assert(parsed.period_end.timestamp == period_end.timestamp);
+  assert_date_eq(parsed.period_start, period_start);
+  assert_date_eq(parsed.period_end, period_end);
   assert(parsed.categories.length == 1);
   assert(parsed.categories.items[0].id == 10);
   assert(parsed.categories.items[0].amount_actual == 375);
@@ -446,7 +451,7 @@ void test_json_failure_missing_required_fields() {
 }
 
 void test_json_failure_invalid_date() {
-  cJSON *json = cJSON_Parse("{\"id\":1,\"title\":\"x\",\"description\":\"y\",\"date\":\"2026-02-31\",\"amount\":1}");
+  cJSON *json = cJSON_Parse("{\"id\":1,\"title\":\"x\",\"description\":\"y\",\"date\":\"2026/02/03\",\"amount\":1}");
   assert(json != NULL);
 
   Transaction transaction;

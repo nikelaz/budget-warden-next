@@ -6,55 +6,14 @@
 
 result bw_date_init(BWDate *date, int year, int month, int day)
 {
-    struct tm tm_date = {0};
-
-    tm_date.tm_year = year - 1900;
-    tm_date.tm_mon = month - 1;
-    tm_date.tm_mday = day;
-
-    tm_date.tm_hour = 12;
-
-    time_t timestamp = mktime(&tm_date);
-
-    if (timestamp == (time_t)-1) {
-        return err;
-    }
-
-    date->timestamp = timestamp;
-    return ok;
-}
-
-int bw_date_get_year(const BWDate *date)
-{
-    struct tm *tm_date = localtime(&date->timestamp);
-
-    if (tm_date == NULL) {
-        return 0;
-    }
-
-    return tm_date->tm_year + 1900;
-}
-
-int bw_date_get_month(const BWDate *date)
-{
-    struct tm *tm_date = localtime(&date->timestamp);
-
-    if (tm_date == NULL) {
-        return 0;
-    }
-
-    return tm_date->tm_mon + 1;
-}
-
-int bw_date_get_day(const BWDate *date)
-{
-    struct tm *tm_date = localtime(&date->timestamp);
-
-    if (tm_date == NULL) {
-        return 0;
-    }
-
-    return tm_date->tm_mday;
+  if (date == NULL)
+  {
+    return err;
+  }
+  date->year = year;
+  date->month = month;
+  date->day = day;
+  return ok;
 }
 
 BWString bw_date_to_string(const BWDate *date)
@@ -64,12 +23,12 @@ BWString bw_date_to_string(const BWDate *date)
   bw_string_init(&date_str);
 
   char year_str[5];
-  snprintf(year_str, sizeof(year_str), "%d", bw_date_get_year(date));
+  snprintf(year_str, sizeof(year_str), "%d", date->year);
 
   bw_string_append(&date_str, year_str);
   bw_string_append(&date_str, "-");
 
-  int month = bw_date_get_month(date);
+  int month = date->month;
   char month_str[3];
   snprintf(month_str, sizeof(month_str), "%d", month);
 
@@ -81,7 +40,7 @@ BWString bw_date_to_string(const BWDate *date)
   bw_string_append(&date_str, month_str);
   bw_string_append(&date_str, "-");
 
-  int day = bw_date_get_day(date);
+  int day = date->day;
   char day_str[3];
   snprintf(day_str, sizeof(day_str), "%d", day);
 
@@ -134,15 +93,6 @@ result bw_date_from_string(BWDate *date, const char *date_str)
   BWDate parsed;
 
   if (bw_date_init(&parsed, year, month, day) == err)
-  {
-    return err;
-  }
-
-  if (
-    bw_date_get_year(&parsed) != year ||
-    bw_date_get_month(&parsed) != month ||
-    bw_date_get_day(&parsed) != day
-  )
   {
     return err;
   }

@@ -6,7 +6,9 @@
 #include "result.h"
 
 typedef struct {
-    time_t timestamp;
+  int year;
+  int month;
+  int day;
 } BWDate;
 
 result bw_date_init(BWDate *date, int year, int month, int day);

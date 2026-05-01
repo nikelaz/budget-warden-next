@@ -10,6 +10,9 @@
 		5ABF61442FA460000057F866 /* budget.c in Sources */ = {isa = PBXBuildFile; fileRef = 5ABF613D2FA460000057F866 /* budget.c */; };
 		5ABF614F2FA45C180057F866 /* bwstring.c in Sources */ = {isa = PBXBuildFile; fileRef = 5ABF614E2FA45C180057F866 /* bwstring.c */; };
 		5ABF61502FA45C180057F866 /* bwdate.c in Sources */ = {isa = PBXBuildFile; fileRef = 5ABF614C2FA45C180057F866 /* bwdate.c */; };
+		5AFE11A02FA4AB32002CB713 /* cjson.c in Sources */ = {isa = PBXBuildFile; fileRef = 5AFE119B2FA4AB32002CB713 /* cjson.c */; };
+		5AFE11A12FA4AB32002CB713 /* category.c in Sources */ = {isa = PBXBuildFile; fileRef = 5AFE11992FA4AB32002CB713 /* category.c */; };
+		5AFE11A22FA4AB32002CB713 /* transaction.c in Sources */ = {isa = PBXBuildFile; fileRef = 5AFE119E2FA4AB32002CB713 /* transaction.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -21,6 +24,14 @@
 		5ABF614C2FA45C180057F866 /* bwdate.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = bwdate.c; sourceTree = "<group>"; };
 		5ABF614D2FA45C180057F866 /* bwstring.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bwstring.h; sourceTree = "<group>"; };
 		5ABF614E2FA45C180057F866 /* bwstring.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = bwstring.c; sourceTree = "<group>"; };
+		5AFE11972FA4AB32002CB713 /* budget_warden_core.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = budget_warden_core.h; sourceTree = "<group>"; };
+		5AFE11982FA4AB32002CB713 /* category.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = category.h; sourceTree = "<group>"; };
+		5AFE11992FA4AB32002CB713 /* category.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = category.c; sourceTree = "<group>"; };
+		5AFE119A2FA4AB32002CB713 /* cjson.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = cjson.h; sourceTree = "<group>"; };
+		5AFE119B2FA4AB32002CB713 /* cjson.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = cjson.c; sourceTree = "<group>"; };
+		5AFE119D2FA4AB32002CB713 /* transaction.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = transaction.h; sourceTree = "<group>"; };
+		5AFE119E2FA4AB32002CB713 /* transaction.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = transaction.c; sourceTree = "<group>"; };
+		5AFE119F2FA4AB32002CB713 /* user_preferences.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = user_preferences.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -62,6 +73,14 @@
 		5ABF613C2FA460000057F866 /* Core */ = {
 			isa = PBXGroup;
 			children = (
+				5AFE11972FA4AB32002CB713 /* budget_warden_core.h */,
+				5AFE11982FA4AB32002CB713 /* category.h */,
+				5AFE11992FA4AB32002CB713 /* category.c */,
+				5AFE119A2FA4AB32002CB713 /* cjson.h */,
+				5AFE119B2FA4AB32002CB713 /* cjson.c */,
+				5AFE119D2FA4AB32002CB713 /* transaction.h */,
+				5AFE119E2FA4AB32002CB713 /* transaction.c */,
+				5AFE119F2FA4AB32002CB713 /* user_preferences.h */,
 				5ABF614B2FA45C180057F866 /* bwdate.h */,
 				5ABF614C2FA45C180057F866 /* bwdate.c */,
 				5ABF614D2FA45C180057F866 /* bwstring.h */,
@@ -151,6 +170,9 @@
 				5ABF61442FA460000057F866 /* budget.c in Sources */,
 				5ABF614F2FA45C180057F866 /* bwstring.c in Sources */,
 				5ABF61502FA45C180057F866 /* bwdate.c in Sources */,
+				5AFE11A02FA4AB32002CB713 /* cjson.c in Sources */,
+				5AFE11A12FA4AB32002CB713 /* category.c in Sources */,
+				5AFE11A22FA4AB32002CB713 /* transaction.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -285,7 +307,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
+				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/../core/src";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -317,7 +339,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
+				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/../core/src";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
