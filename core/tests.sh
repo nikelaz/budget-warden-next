@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
 
-gcc ./src/tests.c -o ./out/tests
+set -euo pipefail
+
+mkdir -p ./out
+
+sources=(./src/*.c)
+
+gcc "${sources[@]}" -o ./out/tests
 ./out/tests

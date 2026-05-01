@@ -1,6 +1,6 @@
 #include "budget.h"
 
-result budget_create(
+result budget_init(
     Budget *budget,
     const char *title,
     BWDate period_start,

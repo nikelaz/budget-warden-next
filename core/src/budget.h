@@ -11,7 +11,7 @@ typedef struct {
   BWDate period_end;
 } Budget;
 
-result budget_create(Budget *budget, const char* title, BWDate period_start, BWDate period_end);
+result budget_init(Budget *budget, const char* title, BWDate period_start, BWDate period_end);
 void budget_free(Budget* budget);
 
 #endif

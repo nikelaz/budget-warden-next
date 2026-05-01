@@ -1,6 +1,7 @@
 #include "bwdate.h"
+#include "result.h"
 
-int bw_date_create(BWDate *date, int year, int month, int day)
+result bw_date_init(BWDate *date, int year, int month, int day)
 {
     struct tm tm_date = {0};
 
@@ -13,11 +14,11 @@ int bw_date_create(BWDate *date, int year, int month, int day)
     time_t timestamp = mktime(&tm_date);
 
     if (timestamp == (time_t)-1) {
-        return 0;
+        return err;
     }
 
     date->timestamp = timestamp;
-    return 1;
+    return ok;
 }
 
 int bw_date_get_year(const BWDate *date)
