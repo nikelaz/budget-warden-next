@@ -58,22 +58,12 @@ void test_date_from_string_invalid() {
 }
 
 void test_budget_init() {
-  BWDate period_start;
-  result period_start_res = bw_date_init(&period_start, 2026, 1, 1);
-  assert(period_start_res == ok);
-
-  BWDate period_end;
-  result period_end_res = bw_date_init(&period_end, 2026, 1, 31);
-  assert(period_end_res == ok);
-
   Budget budget;
 
-  result budget_res = budget_init(&budget, "Title", period_start, period_end); 
+  result budget_res = budget_init(&budget, "Title"); 
 
   assert(budget_res == ok);
   assert(strcmp(budget.title.data, "Title") == 0);
-  assert_date_eq(budget.period_start, period_start);
-  assert_date_eq(budget.period_end, period_end);
   assert(budget.categories.length == 0);
   assert(budget.categories.capacity == 4);
   budget_free(&budget);
@@ -348,16 +338,8 @@ void test_category_remove_transaction_not_found() {
 }
 
 void test_budget_nested_free() {
-  BWDate period_start;
-  result period_start_res = bw_date_init(&period_start, 2026, 1, 1);
-  assert(period_start_res == ok);
-
-  BWDate period_end;
-  result period_end_res = bw_date_init(&period_end, 2026, 1, 31);
-  assert(period_end_res == ok);
-
   Budget budget;
-  result budget_res = budget_init(&budget, "Title", period_start, period_end);
+  result budget_res = budget_init(&budget, "Title");
   assert(budget_res == ok);
 
   Category category;
@@ -383,16 +365,8 @@ void test_budget_nested_free() {
 }
 
 void test_budget_json_string_round_trip() {
-  BWDate period_start;
-  result period_start_res = bw_date_init(&period_start, 2026, 1, 1);
-  assert(period_start_res == ok);
-
-  BWDate period_end;
-  result period_end_res = bw_date_init(&period_end, 2026, 1, 31);
-  assert(period_end_res == ok);
-
   Budget budget;
-  result budget_res = budget_init(&budget, "January", period_start, period_end);
+  result budget_res = budget_init(&budget, "January");
   assert(budget_res == ok);
 
   Category category;
@@ -418,8 +392,6 @@ void test_budget_json_string_round_trip() {
   result parse_res = budget_from_json_str(&parsed, json.data);
   assert(parse_res == ok);
   assert(strcmp(parsed.title.data, "January") == 0);
-  assert_date_eq(parsed.period_start, period_start);
-  assert_date_eq(parsed.period_end, period_end);
   assert(parsed.categories.length == 1);
   assert(parsed.categories.items[0].id == 10);
   assert(parsed.categories.items[0].amount_actual == 375);

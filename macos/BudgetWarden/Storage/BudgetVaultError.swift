@@ -11,6 +11,7 @@ enum BudgetVaultError: LocalizedError {
     case transactionCategoryNotFound
     case jsonCreationFailed
     case budgetReadFailed(URL)
+    case budgetRemoveFailed(URL)
 
     var errorDescription: Swift.String? {
         switch self {
@@ -34,6 +35,8 @@ enum BudgetVaultError: LocalizedError {
             return "The budget JSON could not be created."
         case .budgetReadFailed(let url):
             return "The budget file could not be read: \(url.lastPathComponent)"
+        case .budgetRemoveFailed(let url):
+            return "The budget file could not be moved to Trash: \(url.lastPathComponent)"
         }
     }
 }

@@ -14,8 +14,11 @@ struct BudgetWardenApp: App {
     var body: some Scene {
         WindowGroup {
             WelcomeView(store: store)
+                .containerBackground(.thinMaterial, for: .window)
         }
+        .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 760, height: 420)
+        .windowResizability(.contentSize)
 
         WindowGroup("Budget Warden", id: "workspace") {
             ContentView(store: store)

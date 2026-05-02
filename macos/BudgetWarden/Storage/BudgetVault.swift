@@ -103,6 +103,14 @@ final class BudgetVault {
         return url
     }
 
+    func configuredLocalParentURL() -> URL? {
+        guard let vaultURL = try? resolveVaultURL(), !isICloudURL(vaultURL) else {
+            return nil
+        }
+
+        return vaultURL.deletingLastPathComponent()
+    }
+
     func loadBudgets() throws -> [BudgetDocument] {
         let vaultURL = try resolveVaultURL()
         return try access(vaultURL) {
@@ -115,7 +123,7 @@ final class BudgetVault {
             return urls
                 .filter { $0.pathExtension == "budget" }
                 .compactMap { try? BudgetCodec.readBudget(from: $0) }
-                .sorted(by: Self.sortByPeriodStart)
+                .sorted(by: Self.sortByFileName)
         }
     }
 
@@ -123,8 +131,9 @@ final class BudgetVault {
         let vaultURL = try resolveVaultURL()
 
         return try access(vaultURL) {
-            let json = try BudgetCodec.makeJSON(from: draft)
-            let destination = uniqueBudgetURL(for: draft.title, in: vaultURL)
+            let uniqueBudget = uniqueBudgetLocation(for: draft.title, in: vaultURL)
+            let json = try BudgetCodec.makeJSON(title: uniqueBudget.title)
+            let destination = uniqueBudget.url
             try json.write(to: destination, atomically: true, encoding: .utf8)
             return try BudgetCodec.readBudget(from: destination)
         }
@@ -146,6 +155,23 @@ final class BudgetVault {
         }
     }
 
+    func removeBudget(_ budget: BudgetDocument) throws {
+        let vaultURL = try resolveVaultURL()
+
+        try access(vaultURL) {
+            guard Self.isBudgetFile(budget.url, in: vaultURL) else {
+                throw BudgetVaultError.budgetRemoveFailed(budget.url)
+            }
+
+            do {
+                var trashedURL: NSURL?
+                try fileManager.trashItem(at: budget.url, resultingItemURL: &trashedURL)
+            } catch {
+                throw BudgetVaultError.budgetRemoveFailed(budget.url)
+            }
+        }
+    }
+
     private func access<T>(_ url: URL, operation: () throws -> T) throws -> T {
         let didAccess = url.startAccessingSecurityScopedResource()
         defer {
@@ -157,35 +183,44 @@ final class BudgetVault {
         return try operation()
     }
 
-    private func uniqueBudgetURL(for title: Swift.String, in directory: URL) -> URL {
+    private func uniqueBudgetLocation(for title: Swift.String, in directory: URL) -> (title: Swift.String, url: URL) {
         let baseName = Self.fileName(from: title)
-        var candidate = directory.appendingPathComponent(baseName).appendingPathExtension("budget")
+        var uniqueTitle = baseName
+        var candidate = directory.appendingPathComponent(uniqueTitle).appendingPathExtension("budget")
         var suffix = 2
 
         while fileManager.fileExists(atPath: candidate.path) {
+            uniqueTitle = "\(baseName) \(suffix)"
             candidate = directory
-                .appendingPathComponent("\(baseName) \(suffix)")
+                .appendingPathComponent(uniqueTitle)
                 .appendingPathExtension("budget")
             suffix += 1
         }
 
-        return candidate
+        return (uniqueTitle, candidate)
     }
 
-    nonisolated private static func sortByPeriodStart(_ lhs: BudgetDocument, _ rhs: BudgetDocument) -> Bool {
-        if lhs.periodStart.year != rhs.periodStart.year {
-            return lhs.periodStart.year < rhs.periodStart.year
-        }
-
-        if lhs.periodStart.month != rhs.periodStart.month {
-            return lhs.periodStart.month < rhs.periodStart.month
-        }
-
-        if lhs.periodStart.day != rhs.periodStart.day {
-            return lhs.periodStart.day < rhs.periodStart.day
-        }
-
+    nonisolated private static func sortByFileName(_ lhs: BudgetDocument, _ rhs: BudgetDocument) -> Bool {
         return lhs.url.lastPathComponent.localizedStandardCompare(rhs.url.lastPathComponent) == .orderedAscending
+    }
+
+    nonisolated private static func isBudgetFile(_ url: URL, in vaultURL: URL) -> Bool {
+        url.pathExtension == "budget" &&
+            url.deletingLastPathComponent().standardizedFileURL == vaultURL.standardizedFileURL
+    }
+
+    private func isICloudURL(_ url: URL) -> Bool {
+        let path = url.standardizedFileURL.path
+
+        if path.contains("/Mobile Documents/") {
+            return true
+        }
+
+        guard let iCloudURL = fileManager.url(forUbiquityContainerIdentifier: nil) else {
+            return false
+        }
+
+        return path.hasPrefix(iCloudURL.standardizedFileURL.path)
     }
 
     private static func fileName(from title: Swift.String) -> Swift.String {

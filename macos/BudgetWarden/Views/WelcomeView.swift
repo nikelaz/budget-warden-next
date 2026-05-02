@@ -6,16 +6,22 @@ struct WelcomeView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openWindow) private var openWindow
     @State private var shouldOpenWorkspaceAfterCreate = false
+    @State private var budgetPendingRemoval: BudgetDocument?
 
     var body: some View {
         HStack(spacing: 0) {
-            actionPane
-
-            Divider()
-
-            vaultBudgetPane
+            leftColumn
+            rightColumn
         }
-        .frame(minWidth: 680, minHeight: 380)
+        .frame(
+            minWidth: 760,
+            idealWidth: 760,
+            maxWidth: 760,
+            minHeight: 420,
+            idealHeight: 420,
+            maxHeight: 420
+        )
+        .background(WelcomeWindowConfigurator())
         .task {
             store.loadBudgets()
         }
@@ -33,11 +39,13 @@ struct WelcomeView: View {
             .frame(minWidth: 420)
         }
         .sheet(isPresented: $store.isConfiguringVault) {
-            VaultSetupView {
+            VaultSetupView(
+                initialLocalParentURL: store.configuredLocalVaultParentURL
+            ) {
                 store.configureVault(preferICloud: true)
                 openWorkspaceAfterCreateIfNeeded()
-            } onChooseLocal: {
-                store.configureVault(preferICloud: false)
+            } onChooseLocal: { parentURL in
+                store.configureVault(parentURL: parentURL)
                 openWorkspaceAfterCreateIfNeeded()
             } onCancel: {
                 shouldOpenWorkspaceAfterCreate = false
@@ -53,51 +61,63 @@ struct WelcomeView: View {
         } message: {
             Text(store.presentedError ?? "")
         }
-    }
-
-    private var actionPane: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Image(nsImage: NSApp.applicationIconImage)
-                .resizable()
-                .frame(width: 88, height: 88)
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Budget Warden")
-                    .font(.largeTitle)
-                    .fontWeight(.semibold)
-
-                Text("Choose a budget to begin.")
-                    .foregroundStyle(.secondary)
+        .alert(
+            "Remove Budget?",
+            isPresented: removeBudgetConfirmationBinding,
+            presenting: budgetPendingRemoval
+        ) { budget in
+            Button("Move to Trash", role: .destructive) {
+                store.removeBudget(budget)
+                budgetPendingRemoval = nil
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                welcomeButton("Create New Budget", systemImage: "plus") {
+            Button("Cancel", role: .cancel) {
+                budgetPendingRemoval = nil
+            }
+        } message: { budget in
+            Text("Move \(budget.url.lastPathComponent) to Trash?")
+        }
+    }
+
+    private var leftColumn: some View {
+        VStack(alignment: .center, spacing: 20) {
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .frame(width: 130, height: 130)
+                .accessibilityHidden(true)
+            
+            Text("Budget Warden")
+                .font(.largeTitle)
+                .fontWeight(.semibold)
+            
+            VStack(alignment: .center, spacing: 10) {
+                Button("Create New Budget", systemImage: "plus") {
                     shouldOpenWorkspaceAfterCreate = true
                     store.showCreateBudget()
                 }
-
-                welcomeButton("Open Budget", systemImage: "folder") {
+                
+                Button("Open Budget", systemImage: "folder") {
                     if store.openBudgetInPlace() {
                         openWorkspace()
                     }
                 }
-
-                welcomeButton("Configure Vault", systemImage: "externaldrive") {
+                
+                Button("Configure Vault", systemImage: "externaldrive") {
                     shouldOpenWorkspaceAfterCreate = false
                     store.showVaultSetup()
                 }
             }
-            .padding(.top, 6)
-
+            
             Spacer()
         }
-        .padding(32)
-        .frame(minWidth: 310, idealWidth: 310, maxWidth: 310, maxHeight: .infinity, alignment: .topLeading)
+        .padding(20)
+        .frame(maxWidth: .infinity)
     }
 
-    private var vaultBudgetPane: some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private var rightColumn: some View {
+        VStack(alignment: .center, spacing: 10) {
+            Spacer()
+            
             Text("Budgets in Vault")
                 .font(.headline)
 
@@ -109,34 +129,39 @@ struct WelcomeView: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List(store.budgets) { budget in
-                    Button {
-                        store.selectBudget(budget)
-                        openWorkspace()
-                    } label: {
-                        BudgetRowView(budget: budget)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .buttonStyle(.plain)
-                }
-                .listStyle(.inset)
-            }
-        }
-        .padding(22)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
+                ScrollView {
+                     VStack(spacing: 5) {
+                         ForEach(store.budgets) { budget in
+                             Button {
+                                 store.selectBudget(budget)
+                                 openWorkspace()
+                             } label: {
+                                 BudgetRowView(budget: budget)
+                                     .frame(maxWidth: .infinity, alignment: .leading)
+                             }
+                             .contextMenu {
+                                 Button {
+                                     showInFinder(budget)
+                                 } label: {
+                                     Label("Show in Finder", systemImage: "folder")
+                                 }
 
-    private func welcomeButton(
-        _ title: Swift.String,
-        systemImage: Swift.String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                                 Button(role: .destructive) {
+                                     budgetPendingRemoval = budget
+                                 } label: {
+                                     Label("Remove from Vault", systemImage: "trash")
+                                 }
+                             }
+                         }
+                     }
+                 }
+                .padding(.bottom, 30)
+            }
+            
+            Spacer()
         }
-        .controlSize(.large)
-        .buttonStyle(.borderless)
+        .padding(20)
+        .frame(maxWidth: .infinity)
     }
 
     private func openWorkspaceIfPossible() {
@@ -159,6 +184,10 @@ struct WelcomeView: View {
         dismiss()
     }
 
+    private func showInFinder(_ budget: BudgetDocument) {
+        NSWorkspace.shared.activateFileViewerSelecting([budget.url])
+    }
+
     private var errorBinding: Binding<Bool> {
         Binding(
             get: { store.presentedError != nil },
@@ -169,8 +198,52 @@ struct WelcomeView: View {
             }
         )
     }
+
+    private var removeBudgetConfirmationBinding: Binding<Bool> {
+        Binding(
+            get: { budgetPendingRemoval != nil },
+            set: {
+                if !$0 {
+                    budgetPendingRemoval = nil
+                }
+            }
+        )
+    }
 }
 
 #Preview {
     WelcomeView(store: BudgetStore())
+}
+
+private struct WelcomeWindowConfigurator: NSViewRepresentable {
+    private static let contentSize = NSSize(width: 760, height: 420)
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        configureWindow(for: view)
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        configureWindow(for: nsView)
+    }
+
+    private func configureWindow(for view: NSView) {
+        DispatchQueue.main.async {
+            guard let window = view.window else {
+                return
+            }
+
+            window.styleMask.remove([.resizable, .miniaturizable])
+            window.standardWindowButton(.miniaturizeButton)?.isHidden = true
+            window.standardWindowButton(.zoomButton)?.isHidden = true
+            window.collectionBehavior.remove([.fullScreenPrimary, .fullScreenAuxiliary])
+            window.collectionBehavior.insert(.fullScreenNone)
+            window.setContentSize(Self.contentSize)
+            window.contentMinSize = Self.contentSize
+            window.contentMaxSize = Self.contentSize
+            window.minSize = window.frame.size
+            window.maxSize = window.frame.size
+        }
+    }
 }

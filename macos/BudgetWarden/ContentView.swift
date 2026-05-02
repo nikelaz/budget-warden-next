@@ -57,10 +57,12 @@ struct ContentView: View {
             .frame(minWidth: 420)
         }
         .sheet(isPresented: $store.isConfiguringVault) {
-            VaultSetupView {
+            VaultSetupView(
+                initialLocalParentURL: store.configuredLocalVaultParentURL
+            ) {
                 store.configureVault(preferICloud: true)
-            } onChooseLocal: {
-                store.configureVault(preferICloud: false)
+            } onChooseLocal: { parentURL in
+                store.configureVault(parentURL: parentURL)
             } onCancel: {
                 store.cancelVaultSetup()
             }

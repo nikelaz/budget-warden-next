@@ -14,9 +14,7 @@ static cJSON *json_get_string(cJSON *json, const char *name)
 
 result budget_init(
     Budget *budget,
-    const char *title,
-    BWDate period_start,
-    BWDate period_end
+    const char *title
 )
 {
   if (budget == NULL || title == NULL)
@@ -46,8 +44,6 @@ result budget_init(
   }
 
   budget->title = title_str;
-  budget->period_start = period_start;
-  budget->period_end = period_end;
   budget->categories = categories;
   return ok;
 }
@@ -75,26 +71,17 @@ cJSON *budget_to_json(Budget *budget)
     return NULL;
   }
 
-  BWString period_start = bw_date_to_string(&budget->period_start);
-  BWString period_end = bw_date_to_string(&budget->period_end);
-
   if (
     cJSON_AddStringToObject(json, "title", budget->title.data) == NULL ||
-    cJSON_AddStringToObject(json, "period_start", period_start.data) == NULL ||
-    cJSON_AddStringToObject(json, "period_end", period_end.data) == NULL ||
     !cJSON_AddItemToObject(json, "categories", categories)
   )
   {
-    bw_string_free(&period_start);
-    bw_string_free(&period_end);
     cJSON_Delete(json);
     cJSON_Delete(categories);
     return NULL;
   }
 
   categories = NULL;
-  bw_string_free(&period_start);
-  bw_string_free(&period_end);
 
   for (size_t i = 0; i < budget->categories.length; i++)
   {
@@ -142,21 +129,13 @@ result budget_from_json(Budget *budget, cJSON *json)
     return err;
   }
 
-  BWDate period_start;
-  BWDate period_end;
   cJSON *title = json_get_string(json, "title");
-  cJSON *period_start_json = json_get_string(json, "period_start");
-  cJSON *period_end_json = json_get_string(json, "period_end");
   cJSON *categories = cJSON_GetObjectItemCaseSensitive(json, "categories");
 
   if (
     title == NULL ||
-    period_start_json == NULL ||
-    period_end_json == NULL ||
     !cJSON_IsArray(categories) ||
-    bw_date_from_string(&period_start, period_start_json->valuestring) == err ||
-    bw_date_from_string(&period_end, period_end_json->valuestring) == err ||
-    budget_init(budget, title->valuestring, period_start, period_end) == err
+    budget_init(budget, title->valuestring) == err
   )
   {
     return err;

@@ -2,9 +2,13 @@ import Foundation
 
 enum BudgetCodec {
     static func makeJSON(from draft: BudgetDraft) throws -> Swift.String {
+        try makeJSON(title: draft.title)
+    }
+
+    static func makeJSON(title: Swift.String) throws -> Swift.String {
         var budget = Budget()
 
-        guard budget_init(&budget, draft.title, draft.periodStart, draft.periodEnd) == 0 else {
+        guard budget_init(&budget, title) == 0 else {
             throw BudgetVaultError.budgetCreationFailed
         }
 
@@ -38,8 +42,6 @@ enum BudgetCodec {
             id: url,
             url: url,
             title: title,
-            periodStart: budget.period_start,
-            periodEnd: budget.period_end,
             categories: categories(from: budget)
         )
     }

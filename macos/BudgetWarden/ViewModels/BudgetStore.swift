@@ -42,6 +42,10 @@ final class BudgetStore: ObservableObject {
         return budgets.first ?? externalBudget
     }
 
+    var configuredLocalVaultParentURL: URL? {
+        vault.configuredLocalParentURL()
+    }
+
     func showCreateBudget() {
         presentedError = nil
         isCreatingBudget = true
@@ -103,6 +107,10 @@ final class BudgetStore: ObservableObject {
             return
         }
 
+        configureVault(parentURL: parentURL)
+    }
+
+    func configureVault(parentURL: URL) {
         do {
             try vault.configureVault(parentURL: parentURL)
             isConfiguringVault = false
@@ -202,6 +210,22 @@ final class BudgetStore: ObservableObject {
             }
 
             selectedBudgetID = updated.id
+        } catch {
+            presentedError = error.localizedDescription
+        }
+    }
+
+    func removeBudget(_ budget: BudgetDocument) {
+        do {
+            let wasSelected = selectedBudgetID == budget.id
+            try vault.removeBudget(budget)
+
+            let loadedBudgets = try vault.loadBudgets()
+            budgets = loadedBudgets
+
+            if wasSelected || !loadedBudgets.contains(where: { $0.id == selectedBudgetID }) {
+                selectedBudgetID = externalBudget?.id ?? loadedBudgets.first?.id
+            }
         } catch {
             presentedError = error.localizedDescription
         }

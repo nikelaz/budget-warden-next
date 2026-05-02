@@ -8,7 +8,7 @@ struct BudgetRowView: View {
             Text(budget.title)
                 .font(.headline)
 
-            Text(budget.period)
+            Text(budget.url.lastPathComponent)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -22,8 +22,6 @@ struct BudgetRowView: View {
             id: URL(filePath: "/tmp/May 2026.budget"),
             url: URL(filePath: "/tmp/May 2026.budget"),
             title: "May 2026",
-            periodStart: BWDate(year: 2026, month: 5, day: 1),
-            periodEnd: BWDate(year: 2026, month: 5, day: 31),
             categories: []
         )
     )
