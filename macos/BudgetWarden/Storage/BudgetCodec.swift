@@ -53,7 +53,7 @@ enum BudgetCodec {
 
         var category = Category()
 
-        guard category_init(&category, draft.title, 0, 0, 0, draft.type.coreType) == 0 else {
+        guard category_init(&category, draft.title, draft.amountPlanned, 0, 0, draft.type.coreType) == 0 else {
             throw BudgetVaultError.categoryCreationFailed
         }
 
@@ -62,6 +62,56 @@ enum BudgetCodec {
         guard category_array_push_move(&budget.categories, category) == 0 else {
             category_free(&category)
             throw BudgetVaultError.categorySaveFailed
+        }
+
+        var jsonString = budget_to_json_str(&budget)
+
+        defer {
+            bw_string_free(&jsonString)
+        }
+
+        guard let jsonData = jsonString.data else {
+            throw BudgetVaultError.jsonCreationFailed
+        }
+
+        try Swift.String(cString: jsonData).write(to: url, atomically: true, encoding: .utf8)
+        return try readBudget(from: url)
+    }
+
+    static func addTransaction(_ draft: TransactionDraft, to url: URL) throws -> BudgetDocument {
+        var budget = try readCoreBudget(from: url)
+
+        defer {
+            budget_free(&budget)
+        }
+
+        guard let categories = budget.categories.items else {
+            throw BudgetVaultError.transactionCategoryNotFound
+        }
+
+        guard let categoryIndex = (0..<budget.categories.length).first(where: {
+            Int(categories[$0].id) == draft.categoryID
+        }) else {
+            throw BudgetVaultError.transactionCategoryNotFound
+        }
+
+        var transaction = Transaction()
+
+        guard transaction_init(
+            &transaction,
+            draft.title,
+            draft.description,
+            draft.date,
+            draft.amount
+        ) == 0 else {
+            throw BudgetVaultError.transactionCreationFailed
+        }
+
+        transaction.id = nextTransactionID(in: budget)
+
+        guard category_add_transaction(categories.advanced(by: categoryIndex), transaction) == 0 else {
+            transaction_free(&transaction)
+            throw BudgetVaultError.transactionSaveFailed
         }
 
         var jsonString = budget_to_json_str(&budget)
@@ -102,7 +152,7 @@ enum BudgetCodec {
             return []
         }
 
-        return (0..<budget.categories.length).compactMap { index in
+        return (0..<budget.categories.length).compactMap { index -> BudgetCategory? in
             let category = items[index]
 
             guard let type = BudgetCategoryType(coreType: category.category_type) else {
@@ -110,15 +160,51 @@ enum BudgetCodec {
             }
 
             let title = category.title.data.map { Swift.String(cString: $0) } ?? ""
+            let categoryID = Int(category.id)
 
             return BudgetCategory(
                 id: "\(type.id)-\(category.id)-\(index)",
-                coreID: Int(category.id),
+                coreID: categoryID,
                 title: title,
                 amountPlanned: category.amount_planned,
                 amountActual: category.amount_actual,
                 amountAccumulated: category.amount_accumulated,
-                type: type
+                type: type,
+                transactions: transactions(
+                    from: category.transactions,
+                    categoryID: categoryID,
+                    categoryTitle: title,
+                    categoryType: type
+                )
+            )
+        }
+    }
+
+    private static func transactions(
+        from transactionArray: TransactionArray,
+        categoryID: Int,
+        categoryTitle: Swift.String,
+        categoryType: BudgetCategoryType
+    ) -> [BudgetTransaction] {
+        guard let items = transactionArray.items else {
+            return []
+        }
+
+        return (0..<transactionArray.length).map { index in
+            let transaction = items[index]
+            let title = transaction.title.data.map { Swift.String(cString: $0) } ?? ""
+            let description = transaction.description.data.map { Swift.String(cString: $0) } ?? ""
+
+            return BudgetTransaction(
+                id: "\(categoryType.id)-\(categoryID)-\(transaction.id)-\(index)",
+                coreID: Int(transaction.id),
+                title: title,
+                description: description,
+                date: transaction.date,
+                amount: transaction.amount,
+                categoryID: categoryID,
+                categoryTitle: categoryTitle,
+                categoryType: categoryType
             )
         }
     }
@@ -129,6 +215,27 @@ enum BudgetCodec {
         }
 
         let maxID = (0..<budget.categories.length).map { items[$0].id }.max() ?? 0
+        return maxID + 1
+    }
+
+    private static func nextTransactionID(in budget: Budget) -> Int32 {
+        guard let categories = budget.categories.items else {
+            return 1
+        }
+
+        var maxID: Int32 = 0
+
+        for categoryIndex in 0..<budget.categories.length {
+            guard let transactions = categories[categoryIndex].transactions.items else {
+                continue
+            }
+
+            let categoryMaxID = (0..<categories[categoryIndex].transactions.length)
+                .map { transactions[$0].id }
+                .max() ?? 0
+            maxID = max(maxID, Int32(categoryMaxID))
+        }
+
         return maxID + 1
     }
 }

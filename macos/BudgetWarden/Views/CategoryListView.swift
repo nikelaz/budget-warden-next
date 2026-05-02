@@ -7,12 +7,10 @@ struct CategoryListView: View {
     let onAddCategory: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
+        VStack(alignment: .leading, spacing: 15) {
+            HStack(spacing: 15) {
                 Text(type.title)
                     .font(.headline)
-
-                Spacer()
 
                 Button {
                     onAddCategory()
@@ -22,21 +20,29 @@ struct CategoryListView: View {
                 .help("Add \(type.title) Category")
             }
 
-            List {
+            VStack(alignment: .leading, spacing: 0) {
                 if categories.isEmpty {
                     Text("No categories")
                         .foregroundStyle(.secondary)
-                        .listRowBackground(rowBackground)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
                     ForEach(categories) { category in
                         CategoryRowView(category: category)
-                            .listRowBackground(rowBackground)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        if category.id != categories.last?.id {
+                            Divider()
+                        }
                     }
                 }
             }
-            .listStyle(.inset)
+            .background(rowBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
         }
-        .frame(minHeight: 160)
     }
 
     private var rowBackground: Color {

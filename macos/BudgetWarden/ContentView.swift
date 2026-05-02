@@ -1,26 +1,49 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var store = BudgetStore()
+    @ObservedObject var store: BudgetStore
+    @State private var selectedSection: BudgetSidebarSection = .budget
 
     var body: some View {
         NavigationSplitView {
             BudgetSidebarView(
-                budgets: store.budgets,
-                selectedBudgetID: $store.selectedBudgetID,
-                onCreateBudget: store.showCreateBudget
+                selectedSection: $selectedSection
             )
         } detail: {
             if let selectedBudget = store.selectedBudget {
-                BudgetDetailView(
-                    budget: selectedBudget,
-                    onAddCategory: store.addCategory
-                )
+                switch selectedSection {
+                case .budget:
+                    BudgetDetailView(
+                        budgets: store.availableBudgets,
+                        budget: selectedBudget,
+                        selectedBudgetID: $store.selectedBudgetID,
+                        onCreateBudget: store.showCreateBudget,
+                        onAddCategory: store.addCategory,
+                        onAddTransaction: store.addTransaction
+                    )
+                case .transactions:
+                    TransactionsView(
+                        budgets: store.availableBudgets,
+                        budget: selectedBudget,
+                        selectedBudgetID: $store.selectedBudgetID,
+                        onCreateBudget: store.showCreateBudget,
+                        onAddTransaction: store.addTransaction
+                    )
+                }
             } else {
                 ContentUnavailableView(
                     "No Budget Selected",
                     systemImage: "creditcard.and.123"
                 )
+                .toolbar {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            store.showCreateBudget()
+                        } label: {
+                            Label("Create New Budget", systemImage: "plus")
+                        }
+                    }
+                }
             }
         }
         .task {
@@ -66,5 +89,5 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
+    ContentView(store: BudgetStore())
 }

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		5A7C00012FA5A10000B77777 /* budget-warden.icon in Resources */ = {isa = PBXBuildFile; fileRef = 5A7C00002FA5A10000B77777 /* budget-warden.icon */; };
 		5ABF61442FA460000057F866 /* budget.c in Sources */ = {isa = PBXBuildFile; fileRef = 5ABF613D2FA460000057F866 /* budget.c */; };
 		5ABF614F2FA45C180057F866 /* bwstring.c in Sources */ = {isa = PBXBuildFile; fileRef = 5ABF614E2FA45C180057F866 /* bwstring.c */; };
 		5ABF61502FA45C180057F866 /* bwdate.c in Sources */ = {isa = PBXBuildFile; fileRef = 5ABF614C2FA45C180057F866 /* bwdate.c */; };
@@ -16,6 +17,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		5A7C00002FA5A10000B77777 /* budget-warden.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = "budget-warden.icon"; sourceTree = "<group>"; };
 		5ABF612E2FA456980057F866 /* BudgetWarden.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BudgetWarden.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5ABF613D2FA460000057F866 /* budget.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = budget.c; sourceTree = "<group>"; };
 		5ABF61402FA460000057F866 /* budget.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = budget.h; sourceTree = "<group>"; };
@@ -57,6 +59,7 @@
 			isa = PBXGroup;
 			children = (
 				5ABF61302FA456980057F866 /* BudgetWarden */,
+				5A7C00002FA5A10000B77777 /* budget-warden.icon */,
 				5ABF613C2FA460000057F866 /* Core */,
 				5ABF612F2FA456980057F866 /* Products */,
 			);
@@ -157,6 +160,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5A7C00012FA5A10000B77777 /* budget-warden.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -300,7 +304,7 @@
 		5ABF613A2FA456990057F866 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = "budget-warden";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -332,7 +336,7 @@
 		5ABF613B2FA456990057F866 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = "budget-warden";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;

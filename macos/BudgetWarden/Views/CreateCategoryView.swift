@@ -2,10 +2,11 @@ import SwiftUI
 
 struct CreateCategoryView: View {
     let type: BudgetCategoryType
-    let onSave: (Swift.String) -> Void
+    let onSave: (Swift.String, UInt64) -> Void
     let onCancel: () -> Void
 
     @State private var title = ""
+    @State private var plannedAmount = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -14,6 +15,9 @@ struct CreateCategoryView: View {
 
             Form {
                 TextField("Title", text: $title)
+
+                TextField("Planned Amount", text: $plannedAmount)
+                    .textFieldStyle(.roundedBorder)
             }
 
             HStack {
@@ -24,10 +28,10 @@ struct CreateCategoryView: View {
                 }
 
                 Button("Save") {
-                    onSave(trimmedTitle)
+                    onSave(trimmedTitle, parsedPlannedAmount ?? 0)
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(trimmedTitle.isEmpty)
+                .disabled(trimmedTitle.isEmpty || parsedPlannedAmount == nil)
             }
         }
         .padding()
@@ -35,5 +39,15 @@ struct CreateCategoryView: View {
 
     private var trimmedTitle: Swift.String {
         title.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var parsedPlannedAmount: UInt64? {
+        let trimmedAmount = plannedAmount.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmedAmount.isEmpty else {
+            return 0
+        }
+
+        return UInt64(trimmedAmount)
     }
 }

@@ -34,6 +34,24 @@ final class BudgetVault {
         return panel.url
     }
 
+    func selectBudgetFile() -> URL? {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [UTType(filenameExtension: "budget") ?? .data]
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.canCreateDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Open"
+        panel.title = "Open Budget"
+        panel.message = "Choose a Budget Warden budget file."
+
+        guard panel.runModal() == .OK else {
+            return nil
+        }
+
+        return panel.url
+    }
+
     func configureVault(parentURL: URL) throws {
         let didAccess = parentURL.startAccessingSecurityScopedResource()
         defer {
@@ -117,6 +135,14 @@ final class BudgetVault {
 
         return try access(vaultURL) {
             try BudgetCodec.addCategory(draft, to: budget.url)
+        }
+    }
+
+    func addTransaction(_ draft: TransactionDraft, to budget: BudgetDocument) throws -> BudgetDocument {
+        let vaultURL = try resolveVaultURL()
+
+        return try access(vaultURL) {
+            try BudgetCodec.addTransaction(draft, to: budget.url)
         }
     }
 
