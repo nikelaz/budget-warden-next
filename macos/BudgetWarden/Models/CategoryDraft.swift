@@ -6,6 +6,13 @@ struct CategoryDraft {
     let type: BudgetCategoryType
 }
 
+struct CategoryUpdate {
+    let categoryID: Int
+    let title: Swift.String
+    let amountPlanned: UInt64
+    let amountAccumulated: UInt64
+}
+
 struct TransactionDraft {
     let categoryID: Int
     let title: Swift.String

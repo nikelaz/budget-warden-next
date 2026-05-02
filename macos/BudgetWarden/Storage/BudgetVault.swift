@@ -147,6 +147,30 @@ final class BudgetVault {
         }
     }
 
+    func updateCategory(_ update: CategoryUpdate, in budget: BudgetDocument) throws -> BudgetDocument {
+        let vaultURL = try resolveVaultURL()
+
+        return try access(vaultURL) {
+            try BudgetCodec.updateCategory(update, in: budget.url)
+        }
+    }
+
+    func removeCategory(_ category: BudgetCategory, from budget: BudgetDocument) throws -> BudgetDocument {
+        let vaultURL = try resolveVaultURL()
+
+        return try access(vaultURL) {
+            try BudgetCodec.removeCategory(categoryID: category.coreID, from: budget.url)
+        }
+    }
+
+    func reorderCategories(type: BudgetCategoryType, orderedCategoryIDs: [Int], in budget: BudgetDocument) throws -> BudgetDocument {
+        let vaultURL = try resolveVaultURL()
+
+        return try access(vaultURL) {
+            try BudgetCodec.reorderCategories(type: type, orderedCategoryIDs: orderedCategoryIDs, in: budget.url)
+        }
+    }
+
     func addTransaction(_ draft: TransactionDraft, to budget: BudgetDocument) throws -> BudgetDocument {
         let vaultURL = try resolveVaultURL()
 

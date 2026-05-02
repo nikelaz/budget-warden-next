@@ -203,6 +203,7 @@ void test_category_json_round_trip() {
   result category_res = category_init(&category, "Emergency fund", 1000, 99, 250, CATEGORY_SAVINGS);
   assert(category_res == ok);
   category.id = 7;
+  category.ordinal = 3;
 
   Transaction transaction;
   result transaction_res = transaction_init(&transaction, "Deposit", "Monthly saving", test_date(), 125);
@@ -215,6 +216,7 @@ void test_category_json_round_trip() {
   cJSON *json = category_to_json(&category);
   assert(json != NULL);
   assert(cJSON_GetObjectItemCaseSensitive(json, "id")->valuedouble == 7);
+  assert(cJSON_GetObjectItemCaseSensitive(json, "ordinal")->valuedouble == 3);
   assert(strcmp(cJSON_GetObjectItemCaseSensitive(json, "category_type")->valuestring, "savings") == 0);
   assert(cJSON_GetObjectItemCaseSensitive(json, "amount_accumulated")->valuedouble == 250);
   assert(cJSON_GetArraySize(cJSON_GetObjectItemCaseSensitive(json, "transactions")) == 1);
@@ -223,6 +225,7 @@ void test_category_json_round_trip() {
   result parse_res = category_from_json(&parsed, json);
   assert(parse_res == ok);
   assert(parsed.id == 7);
+  assert(parsed.ordinal == 3);
   assert(strcmp(parsed.title.data, "Emergency fund") == 0);
   assert(parsed.amount_planned == 1000);
   assert(parsed.amount_actual == 99);

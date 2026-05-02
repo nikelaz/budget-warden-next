@@ -8,15 +8,18 @@ struct BudgetDetailView: View {
     @Binding var selectedBudgetID: BudgetDocument.ID?
     let onCreateBudget: () -> Void
     let onAddCategory: (Swift.String, UInt64, BudgetCategoryType) -> Void
+    let onUpdateCategory: (CategoryUpdate) -> Void
+    let onRemoveCategory: (BudgetCategory) -> Void
+    let onReorderCategories: (BudgetCategoryType, [Int]) -> Void
     let onAddTransaction: (TransactionDraft) -> Void
 
-    @State private var categoryTypeToCreate: BudgetCategoryType?
     @State private var isCreatingTransaction = false
+    @State private var transactionCategoryID: Int?
     @State private var isReportingExpanded = true
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 20) {
                 ForEach(BudgetCategoryType.allCases) { type in
                     categoryList(for: type)
                 }
@@ -25,23 +28,26 @@ struct BudgetDetailView: View {
             .frame(maxWidth: .infinity, alignment: .top)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .navigationTitle(budget.title)
+        .navigationTitle("Budget")
         .toolbar {
             BudgetTopToolbar(
                 budgets: budgets,
                 selectedBudgetID: $selectedBudgetID,
                 onCreateBudget: onCreateBudget
             )
-
-            ToolbarItemGroup(placement: .primaryAction) {
+            
+            ToolbarItemGroup(placement: .principal) {
                 Button {
                     isCreatingTransaction = true
                 } label: {
+                    Text("New Transaction")
                     Image(systemName: "plus")
                 }
                 .help("Add Transaction")
                 .disabled(budget.categories.isEmpty)
+            }
 
+            ToolbarItemGroup(placement: .primaryAction) {
                 Button {
                     isReportingExpanded.toggle()
                 } label: {
@@ -57,28 +63,18 @@ struct BudgetDetailView: View {
             )
             .inspectorColumnWidth(min: 300, ideal: 340, max: 420)
         }
-        .sheet(item: $categoryTypeToCreate) { type in
-            CreateCategoryView(
-                type: type,
-                onSave: { title, amountPlanned in
-                    onAddCategory(title, amountPlanned, type)
-                    categoryTypeToCreate = nil
-                },
-                onCancel: {
-                    categoryTypeToCreate = nil
-                }
-            )
-            .frame(minWidth: 360)
-        }
         .sheet(isPresented: $isCreatingTransaction) {
             CreateTransactionView(
                 categories: budget.categories,
+                initialCategoryID: transactionCategoryID,
                 onSave: { draft in
                     onAddTransaction(draft)
                     isCreatingTransaction = false
+                    transactionCategoryID = nil
                 },
                 onCancel: {
                     isCreatingTransaction = false
+                    transactionCategoryID = nil
                 }
             )
             .frame(minWidth: 420)
@@ -89,8 +85,17 @@ struct BudgetDetailView: View {
         CategoryListView(
             type: type,
             categories: budget.categories(for: type)
-        ) {
-            categoryTypeToCreate = type
+        ) { title, amountPlanned in
+            onAddCategory(title, amountPlanned, type)
+        } onUpdateCategory: { update in
+            onUpdateCategory(update)
+        } onRemoveCategory: { category in
+            onRemoveCategory(category)
+        } onReorderCategories: { orderedCategoryIDs in
+            onReorderCategories(type, orderedCategoryIDs)
+        } onAddTransaction: { category in
+            transactionCategoryID = category.coreID
+            isCreatingTransaction = true
         }
     }
 }
@@ -104,17 +109,19 @@ struct CreateTransactionView: View {
     @State private var description = ""
     @State private var amount = ""
     @State private var date = Date()
+    @State private var isShowingDetails = false
     @State private var selectedCategoryID: Int
 
     init(
         categories: [BudgetCategory],
+        initialCategoryID: Int? = nil,
         onSave: @escaping (TransactionDraft) -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.categories = categories
         self.onSave = onSave
         self.onCancel = onCancel
-        _selectedCategoryID = State(initialValue: categories.first?.coreID ?? 0)
+        _selectedCategoryID = State(initialValue: initialCategoryID ?? categories.first?.coreID ?? 0)
     }
 
     var body: some View {
@@ -122,26 +129,49 @@ struct CreateTransactionView: View {
             Text("New Transaction")
                 .font(.headline)
 
-            Form {
-                Picker("Category", selection: $selectedCategoryID) {
-                    ForEach(categories) { category in
-                        Text("\(category.title) (\(category.type.title))")
-                            .tag(category.coreID)
+            VStack(alignment: .leading, spacing: 12) {
+                field("Category") {
+                    Picker("Category", selection: $selectedCategoryID) {
+                        ForEach(BudgetCategoryType.allCases) { type in
+                            Text(type.title)
+                                .font(.headline)
+                                .disabled(true)
+
+                            ForEach(categories(for: type)) { category in
+                                Text(category.title)
+                                    .tag(category.coreID)
+                            }
+                        }
                     }
+                    .labelsHidden()
                 }
 
-                TextField("Title", text: $title)
+                field("Title") {
+                    TextField("Title", text: $title)
+                }
 
-                TextField("Description", text: $description)
+                field("Amount") {
+                    TextField("Amount", text: $amount)
+                        .textFieldStyle(.roundedBorder)
+                }
 
-                DatePicker(
-                    "Date",
-                    selection: $date,
-                    displayedComponents: .date
-                )
+                DisclosureGroup("More Details", isExpanded: $isShowingDetails) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        field("Description") {
+                            TextField("Description", text: $description)
+                        }
 
-                TextField("Amount", text: $amount)
-                    .textFieldStyle(.roundedBorder)
+                        field("Date") {
+                            DatePicker(
+                                "Date",
+                                selection: $date,
+                                displayedComponents: .date
+                            )
+                            .labelsHidden()
+                        }
+                    }
+                    .padding(.top, 8)
+                }
             }
 
             HStack {
@@ -161,6 +191,19 @@ struct CreateTransactionView: View {
             }
         }
         .padding()
+    }
+
+    private func field<Content: View>(
+        _ title: Swift.String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            content()
+        }
     }
 
     private var draft: TransactionDraft? {
@@ -192,6 +235,18 @@ struct CreateTransactionView: View {
 
     private var parsedAmount: UInt64? {
         UInt64(amount.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    private func categories(for type: BudgetCategoryType) -> [BudgetCategory] {
+        categories
+            .filter { $0.type == type }
+            .sorted {
+                if $0.ordinal != $1.ordinal {
+                    return $0.ordinal < $1.ordinal
+                }
+
+                return $0.coreID < $1.coreID
+            }
     }
 
     private var transactionDate: BWDate? {

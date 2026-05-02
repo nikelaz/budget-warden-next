@@ -105,6 +105,19 @@ static result json_get_int(cJSON *json, const char *name, int *value)
   return ok;
 }
 
+static result json_get_optional_int(cJSON *json, const char *name, int *value, int default_value)
+{
+  cJSON *item = cJSON_GetObjectItemCaseSensitive(json, name);
+
+  if (item == NULL)
+  {
+    *value = default_value;
+    return ok;
+  }
+
+  return json_get_int(json, name, value);
+}
+
 result category_init(
   Category *category,
   const char *title,
@@ -147,6 +160,7 @@ result category_init(
 
   category->title = title_str;
   category->id = 0;
+  category->ordinal = 0;
   category->amount_planned = amount_planned;
   category->amount_actual = amount_actual;
   category->amount_accumulated = amount_accumulated;
@@ -191,6 +205,7 @@ cJSON *category_to_json(Category *category)
 
   if (
     cJSON_AddNumberToObject(json, "id", category->id) == NULL ||
+    cJSON_AddNumberToObject(json, "ordinal", category->ordinal) == NULL ||
     cJSON_AddStringToObject(json, "title", category->title.data) == NULL ||
     cJSON_AddNumberToObject(json, "amount_planned", (double)category->amount_planned) == NULL ||
     cJSON_AddNumberToObject(json, "amount_actual", (double)category->amount_actual) == NULL ||
@@ -229,6 +244,7 @@ result category_from_json(Category *category, cJSON *json)
   }
 
   int id;
+  int ordinal;
   uint64_t amount_planned;
   uint64_t amount_actual;
   uint64_t amount_accumulated;
@@ -242,6 +258,7 @@ result category_from_json(Category *category, cJSON *json)
     category_type_json == NULL ||
     !cJSON_IsArray(transactions) ||
     json_get_int(json, "id", &id) == err ||
+    json_get_optional_int(json, "ordinal", &ordinal, 0) == err ||
     json_get_uint64(json, "amount_planned", &amount_planned) == err ||
     json_get_uint64(json, "amount_actual", &amount_actual) == err ||
     json_get_uint64(json, "amount_accumulated", &amount_accumulated) == err ||
@@ -253,6 +270,7 @@ result category_from_json(Category *category, cJSON *json)
   }
 
   category->id = id;
+  category->ordinal = ordinal;
 
   cJSON *transaction_json = NULL;
   cJSON_ArrayForEach(transaction_json, transactions)

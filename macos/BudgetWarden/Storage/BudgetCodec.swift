@@ -60,23 +60,141 @@ enum BudgetCodec {
         }
 
         category.id = nextCategoryID(in: budget)
+        category.ordinal = nextCategoryOrdinal(in: budget, type: draft.type.coreType)
 
         guard category_array_push_move(&budget.categories, category) == 0 else {
             category_free(&category)
             throw BudgetVaultError.categorySaveFailed
         }
 
-        var jsonString = budget_to_json_str(&budget)
+        try writeBudget(&budget, to: url)
+        return try readBudget(from: url)
+    }
+
+    static func updateCategory(_ update: CategoryUpdate, in url: URL) throws -> BudgetDocument {
+        var budget = try readCoreBudget(from: url)
 
         defer {
-            bw_string_free(&jsonString)
+            budget_free(&budget)
         }
 
-        guard let jsonData = jsonString.data else {
-            throw BudgetVaultError.jsonCreationFailed
+        guard let categories = budget.categories.items else {
+            throw BudgetVaultError.categoryNotFound
         }
 
-        try Swift.String(cString: jsonData).write(to: url, atomically: true, encoding: .utf8)
+        guard let categoryIndex = (0..<budget.categories.length).first(where: {
+            Int(categories[$0].id) == update.categoryID
+        }) else {
+            throw BudgetVaultError.categoryNotFound
+        }
+
+        let category = categories.advanced(by: categoryIndex)
+        let categoryType = category.pointee.category_type
+
+        guard
+            categoryType == CATEGORY_SAVINGS ||
+            categoryType == CATEGORY_DEBT ||
+            update.amountAccumulated == 0
+        else {
+            throw BudgetVaultError.categorySaveFailed
+        }
+
+        var title = BWString()
+
+        guard bw_string_init(&title) == 0 else {
+            throw BudgetVaultError.categorySaveFailed
+        }
+
+        guard bw_string_append(&title, update.title) == 0 else {
+            bw_string_free(&title)
+            throw BudgetVaultError.categorySaveFailed
+        }
+
+        var previousTitle = category.pointee.title
+        bw_string_free(&previousTitle)
+        category.pointee.title = title
+        category.pointee.amount_planned = update.amountPlanned
+        category.pointee.amount_accumulated = update.amountAccumulated
+
+        try writeBudget(&budget, to: url)
+        return try readBudget(from: url)
+    }
+
+    static func removeCategory(categoryID: Int, from url: URL) throws -> BudgetDocument {
+        var budget = try readCoreBudget(from: url)
+
+        defer {
+            budget_free(&budget)
+        }
+
+        guard let categories = budget.categories.items else {
+            throw BudgetVaultError.categoryNotFound
+        }
+
+        guard let categoryIndex = (0..<budget.categories.length).first(where: {
+            Int(categories[$0].id) == categoryID
+        }) else {
+            throw BudgetVaultError.categoryNotFound
+        }
+
+        category_free(categories.advanced(by: categoryIndex))
+
+        if categoryIndex < budget.categories.length - 1 {
+            for index in categoryIndex..<(budget.categories.length - 1) {
+                categories[index] = categories[index + 1]
+            }
+        }
+
+        budget.categories.length -= 1
+
+        try writeBudget(&budget, to: url)
+        return try readBudget(from: url)
+    }
+
+    static func reorderCategories(type: BudgetCategoryType, orderedCategoryIDs: [Int], in url: URL) throws -> BudgetDocument {
+        var budget = try readCoreBudget(from: url)
+
+        defer {
+            budget_free(&budget)
+        }
+
+        guard let categories = budget.categories.items else {
+            throw BudgetVaultError.categoryNotFound
+        }
+
+        var ordinal: Int32 = 0
+
+        for categoryID in orderedCategoryIDs {
+            guard let categoryIndex = (0..<budget.categories.length).first(where: {
+                Int(categories[$0].id) == categoryID && categories[$0].category_type == type.coreType
+            }) else {
+                continue
+            }
+
+            categories[categoryIndex].ordinal = ordinal
+            ordinal += 1
+        }
+
+        let orderedIDs = Set(orderedCategoryIDs)
+        let remainingIndices = (0..<budget.categories.length)
+            .filter {
+                categories[$0].category_type == type.coreType &&
+                !orderedIDs.contains(Int(categories[$0].id))
+            }
+            .sorted {
+                if categories[$0].ordinal != categories[$1].ordinal {
+                    return categories[$0].ordinal < categories[$1].ordinal
+                }
+
+                return categories[$0].id < categories[$1].id
+            }
+
+        for categoryIndex in remainingIndices {
+            categories[categoryIndex].ordinal = ordinal
+            ordinal += 1
+        }
+
+        try writeBudget(&budget, to: url)
         return try readBudget(from: url)
     }
 
@@ -116,6 +234,11 @@ enum BudgetCodec {
             throw BudgetVaultError.transactionSaveFailed
         }
 
+        try writeBudget(&budget, to: url)
+        return try readBudget(from: url)
+    }
+
+    private static func writeBudget(_ budget: inout Budget, to url: URL) throws {
         var jsonString = budget_to_json_str(&budget)
 
         defer {
@@ -127,7 +250,6 @@ enum BudgetCodec {
         }
 
         try Swift.String(cString: jsonData).write(to: url, atomically: true, encoding: .utf8)
-        return try readBudget(from: url)
     }
 
     private static func readCoreBudget(from url: URL) throws -> Budget {
@@ -167,6 +289,7 @@ enum BudgetCodec {
             return BudgetCategory(
                 id: "\(type.id)-\(category.id)-\(index)",
                 coreID: categoryID,
+                ordinal: Int(category.ordinal),
                 title: title,
                 amountPlanned: category.amount_planned,
                 amountActual: category.amount_actual,
@@ -218,6 +341,18 @@ enum BudgetCodec {
 
         let maxID = (0..<budget.categories.length).map { items[$0].id }.max() ?? 0
         return maxID + 1
+    }
+
+    private static func nextCategoryOrdinal(in budget: Budget, type: CategoryType) -> Int32 {
+        guard let items = budget.categories.items else {
+            return 0
+        }
+
+        let ordinals = (0..<budget.categories.length)
+            .filter { items[$0].category_type == type }
+            .map { items[$0].ordinal }
+
+        return (ordinals.max() ?? -1) + 1
     }
 
     private static func nextTransactionID(in budget: Budget) -> Int32 {

@@ -6,10 +6,11 @@ struct CategoryRowView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(category.title)
-                .font(.body)
+                .font(.headline)
+                .fontWeight(.medium)
 
             Text(summary)
-                .font(.caption)
+                .font(.body)
                 .foregroundStyle(.secondary)
         }
         .padding(.vertical, 2)

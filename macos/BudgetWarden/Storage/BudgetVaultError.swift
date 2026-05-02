@@ -6,6 +6,7 @@ enum BudgetVaultError: LocalizedError {
     case budgetCreationFailed
     case categoryCreationFailed
     case categorySaveFailed
+    case categoryNotFound
     case transactionCreationFailed
     case transactionSaveFailed
     case transactionCategoryNotFound
@@ -25,6 +26,8 @@ enum BudgetVaultError: LocalizedError {
             return "The category data could not be created."
         case .categorySaveFailed:
             return "The category could not be saved."
+        case .categoryNotFound:
+            return "Choose an existing category before saving category changes."
         case .transactionCreationFailed:
             return "The transaction data could not be created."
         case .transactionSaveFailed:

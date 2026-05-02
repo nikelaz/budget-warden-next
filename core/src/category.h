@@ -17,6 +17,7 @@ typedef enum {
 
 typedef struct {
   int id;
+  int ordinal;
   BWString title;
   uint64_t amount_planned;
   uint64_t amount_actual;

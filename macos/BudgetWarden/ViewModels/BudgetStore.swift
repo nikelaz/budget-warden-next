@@ -186,6 +186,93 @@ final class BudgetStore: ObservableObject {
         }
     }
 
+    func updateCategory(_ update: CategoryUpdate) {
+        guard let selectedBudget else {
+            return
+        }
+
+        do {
+            let updated: BudgetDocument
+
+            if budgets.contains(where: { sameFile($0.url, selectedBudget.url) }) {
+                updated = try vault.updateCategory(update, in: selectedBudget)
+                budgets = try vault.loadBudgets()
+            } else {
+                let didAccess = selectedBudget.url.startAccessingSecurityScopedResource()
+                defer {
+                    if didAccess {
+                        selectedBudget.url.stopAccessingSecurityScopedResource()
+                    }
+                }
+
+                updated = try BudgetCodec.updateCategory(update, in: selectedBudget.url)
+                externalBudget = updated
+            }
+
+            selectedBudgetID = updated.id
+        } catch {
+            presentedError = error.localizedDescription
+        }
+    }
+
+    func removeCategory(_ category: BudgetCategory) {
+        guard let selectedBudget else {
+            return
+        }
+
+        do {
+            let updated: BudgetDocument
+
+            if budgets.contains(where: { sameFile($0.url, selectedBudget.url) }) {
+                updated = try vault.removeCategory(category, from: selectedBudget)
+                budgets = try vault.loadBudgets()
+            } else {
+                let didAccess = selectedBudget.url.startAccessingSecurityScopedResource()
+                defer {
+                    if didAccess {
+                        selectedBudget.url.stopAccessingSecurityScopedResource()
+                    }
+                }
+
+                updated = try BudgetCodec.removeCategory(categoryID: category.coreID, from: selectedBudget.url)
+                externalBudget = updated
+            }
+
+            selectedBudgetID = updated.id
+        } catch {
+            presentedError = error.localizedDescription
+        }
+    }
+
+    func reorderCategories(type: BudgetCategoryType, orderedCategoryIDs: [Int]) {
+        guard let selectedBudget else {
+            return
+        }
+
+        do {
+            let updated: BudgetDocument
+
+            if budgets.contains(where: { sameFile($0.url, selectedBudget.url) }) {
+                updated = try vault.reorderCategories(type: type, orderedCategoryIDs: orderedCategoryIDs, in: selectedBudget)
+                budgets = try vault.loadBudgets()
+            } else {
+                let didAccess = selectedBudget.url.startAccessingSecurityScopedResource()
+                defer {
+                    if didAccess {
+                        selectedBudget.url.stopAccessingSecurityScopedResource()
+                    }
+                }
+
+                updated = try BudgetCodec.reorderCategories(type: type, orderedCategoryIDs: orderedCategoryIDs, in: selectedBudget.url)
+                externalBudget = updated
+            }
+
+            selectedBudgetID = updated.id
+        } catch {
+            presentedError = error.localizedDescription
+        }
+    }
+
     func addTransaction(_ draft: TransactionDraft) {
         guard let selectedBudget else {
             return

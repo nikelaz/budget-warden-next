@@ -7,7 +7,15 @@ struct BudgetDocument: Identifiable {
     let categories: [BudgetCategory]
 
     func categories(for type: BudgetCategoryType) -> [BudgetCategory] {
-        categories.filter { $0.type == type }
+        categories
+            .filter { $0.type == type }
+            .sorted {
+                if $0.ordinal != $1.ordinal {
+                    return $0.ordinal < $1.ordinal
+                }
+
+                return $0.coreID < $1.coreID
+            }
     }
 
     var transactions: [BudgetTransaction] {

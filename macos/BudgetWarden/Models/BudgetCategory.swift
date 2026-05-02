@@ -3,6 +3,7 @@ import Foundation
 struct BudgetCategory: Identifiable {
     let id: Swift.String
     let coreID: Int
+    let ordinal: Int
     let title: Swift.String
     let amountPlanned: UInt64
     let amountActual: UInt64

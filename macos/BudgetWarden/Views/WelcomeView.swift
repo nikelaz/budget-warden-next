@@ -123,9 +123,9 @@ struct WelcomeView: View {
 
             if store.budgets.isEmpty {
                 ContentUnavailableView(
-                    "No Vault Budgets",
+                    "No Budgets",
                     systemImage: "tray",
-                    description: Text("Configure a vault or create a budget to see it here.")
+                    description: Text("Create a new budget to get starteds")
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {

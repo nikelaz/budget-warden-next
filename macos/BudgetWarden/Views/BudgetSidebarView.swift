@@ -47,25 +47,34 @@ struct BudgetTopToolbar: ToolbarContent {
     let onCreateBudget: () -> Void
 
     var body: some ToolbarContent {
-        ToolbarItem(placement: .principal) {
-            HStack(spacing: 8) {
-                Picker("Budget", selection: $selectedBudgetID) {
-                    ForEach(budgets) { budget in
-                        Text(budget.title)
-                            .tag(Optional(budget.id))
+        ToolbarItemGroup(placement: .principal) {
+            Menu {
+                ForEach(budgets) { budget in
+                    Button {
+                        selectedBudgetID = budget.id
+                    } label: {
+                        if selectedBudgetID == budget.id {
+                            Label(budget.title, systemImage: "checkmark")
+                        } else {
+                            Text(budget.title)
+                        }
                     }
                 }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .frame(minWidth: 140)
+
+                Divider()
 
                 Button {
                     onCreateBudget()
                 } label: {
-                    Image(systemName: "plus")
+                    Label("New Budget", systemImage: "plus")
                 }
-                .help("Create New Budget")
+            } label: {
+                Text(selectedBudgetTitle)
             }
         }
+    }
+
+    private var selectedBudgetTitle: Swift.String {
+        budgets.first(where: { $0.id == selectedBudgetID })?.title ?? "Budget"
     }
 }

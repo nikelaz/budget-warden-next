@@ -19,6 +19,9 @@ struct ContentView: View {
                         selectedBudgetID: $store.selectedBudgetID,
                         onCreateBudget: store.showCreateBudget,
                         onAddCategory: store.addCategory,
+                        onUpdateCategory: store.updateCategory,
+                        onRemoveCategory: store.removeCategory,
+                        onReorderCategories: store.reorderCategories,
                         onAddTransaction: store.addTransaction
                     )
                 case .transactions:
