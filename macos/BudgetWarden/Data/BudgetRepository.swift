@@ -56,7 +56,7 @@ final class CoreBudgetRepository: BudgetRepository {
 
     func addCategory(_ draft: CategoryDraft, to budget: BudgetDocument) throws -> BudgetDocument {
         try mutateBudget(budget) { coreBudget in
-            var category = Category()
+            var category = BWCoreCategory()
 
             guard category_init(&category, draft.title, draft.amountPlanned, 0, draft.amountAccumulated, draft.type.coreType) == 0 else {
                 throw BudgetVaultError.categoryCreationFailed

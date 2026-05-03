@@ -7,6 +7,7 @@ final class BudgetVault {
 
     private let folderName = "Budget Warden Budgets"
     private let bookmarkKey = "BudgetVaultBookmark"
+    private let uiTestingRunIDKey = "BUDGET_WARDEN_UI_TEST_RUN_ID"
     private let fileManager = FileManager.default
 
     private init() {}
@@ -73,6 +74,11 @@ final class BudgetVault {
     }
 
     func resolveVaultURL() throws -> URL {
+        if let uiTestingVaultURL {
+            try fileManager.createDirectory(at: uiTestingVaultURL, withIntermediateDirectories: true)
+            return uiTestingVaultURL
+        }
+
         guard let bookmark = UserDefaults.standard.data(forKey: bookmarkKey) else {
             throw BudgetVaultError.vaultNotConfigured
         }
@@ -104,6 +110,10 @@ final class BudgetVault {
     }
 
     func configuredLocalParentURL() -> URL? {
+        if let uiTestingVaultURL {
+            return uiTestingVaultURL.deletingLastPathComponent()
+        }
+
         guard let vaultURL = try? resolveVaultURL(), !isICloudURL(vaultURL) else {
             return nil
         }
@@ -189,5 +199,24 @@ final class BudgetVault {
             .filter { !$0.isEmpty }
 
         return parts.joined(separator: " ").isEmpty ? "Budget" : parts.joined(separator: " ")
+    }
+
+    private var uiTestingVaultURL: URL? {
+        guard
+            ProcessInfo.processInfo.arguments.contains("--ui-testing"),
+            let runID = ProcessInfo.processInfo.environment[uiTestingRunIDKey],
+            !runID.isEmpty,
+            let applicationSupportURL = fileManager.urls(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask
+            ).first
+        else {
+            return nil
+        }
+
+        return applicationSupportURL
+            .appendingPathComponent("BudgetWardenUITests", isDirectory: true)
+            .appendingPathComponent(runID, isDirectory: true)
+            .appendingPathComponent(folderName, isDirectory: true)
     }
 }

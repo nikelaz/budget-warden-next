@@ -26,6 +26,7 @@ struct CreateBudgetView: View {
 
             Form {
                 TextField("Title", text: $title)
+                    .accessibilityIdentifier("budget-title-field")
             }
 
             HStack {

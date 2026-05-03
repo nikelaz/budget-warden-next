@@ -169,17 +169,20 @@ struct CreateTransactionView: View {
 
                 field("Title") {
                     TextField("Title", text: $title)
+                        .accessibilityIdentifier("transaction-title-field")
                 }
 
                 field("Amount") {
                     TextField("Amount", text: $amount)
                         .textFieldStyle(.roundedBorder)
+                        .accessibilityIdentifier("transaction-amount-field")
                 }
 
                 DisclosureGroup("More Details", isExpanded: $isShowingDetails) {
                     VStack(alignment: .leading, spacing: 12) {
                         field("Description") {
                             TextField("Description", text: $description)
+                                .accessibilityIdentifier("transaction-description-field")
                         }
 
                         field("Date") {

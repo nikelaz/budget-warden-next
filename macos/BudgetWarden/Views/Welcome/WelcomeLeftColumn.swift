@@ -21,14 +21,17 @@ struct WelcomeLeftColumn: View {
                 Button("Create New Budget", systemImage: "plus") {
                     onCreateBudget()
                 }
+                .accessibilityIdentifier("welcome-create-budget-button")
                 
                 Button("Open Budget", systemImage: "folder") {
                     onOpenBudget()
                 }
+                .accessibilityIdentifier("welcome-open-budget-button")
                 
                 Button("Configure Vault", systemImage: "externaldrive") {
                     onConfigureVault()
                 }
+                .accessibilityIdentifier("welcome-configure-vault-button")
             }
             
             Spacer()

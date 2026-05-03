@@ -19,6 +19,8 @@
 /* Begin PBXFileReference section */
 		5A7C00002FA5A10000B77777 /* budget-warden.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = "budget-warden.icon"; sourceTree = "<group>"; };
 		5ABF612E2FA456980057F866 /* BudgetWarden.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BudgetWarden.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5AC100002FA7000000AAA001 /* BudgetWardenTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BudgetWardenTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		5AC100012FA7000000AAA001 /* BudgetWardenUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BudgetWardenUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		5ABF613D2FA460000057F866 /* budget.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = budget.c; sourceTree = "<group>"; };
 		5ABF61402FA460000057F866 /* budget.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = budget.h; sourceTree = "<group>"; };
 		5ABF61432FA460000057F866 /* result.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = result.h; sourceTree = "<group>"; };
@@ -42,10 +44,34 @@
 			path = BudgetWarden;
 			sourceTree = "<group>";
 		};
+		5AC100022FA7000000AAA001 /* BudgetWardenTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = BudgetWardenTests;
+			sourceTree = "<group>";
+		};
+		5AC100032FA7000000AAA001 /* BudgetWardenUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = BudgetWardenUITests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		5ABF612B2FA456980057F866 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5AC100042FA7000000AAA001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5AC1000B2FA7000000AAA001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -59,6 +85,8 @@
 			isa = PBXGroup;
 			children = (
 				5ABF61302FA456980057F866 /* BudgetWarden */,
+				5AC100022FA7000000AAA001 /* BudgetWardenTests */,
+				5AC100032FA7000000AAA001 /* BudgetWardenUITests */,
 				5A7C00002FA5A10000B77777 /* budget-warden.icon */,
 				5ABF613C2FA460000057F866 /* Core */,
 				5ABF612F2FA456980057F866 /* Products */,
@@ -69,6 +97,8 @@
 			isa = PBXGroup;
 			children = (
 				5ABF612E2FA456980057F866 /* BudgetWarden.app */,
+				5AC100002FA7000000AAA001 /* BudgetWardenTests.xctest */,
+				5AC100012FA7000000AAA001 /* BudgetWardenUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -98,6 +128,23 @@
 		};
 /* End PBXGroup section */
 
+/* Begin PBXContainerItemProxy section */
+		5AC100142FA7000000AAA001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5ABF61262FA456980057F866 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5ABF612D2FA456980057F866;
+			remoteInfo = BudgetWarden;
+		};
+		5AC100162FA7000000AAA001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5ABF61262FA456980057F866 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5ABF612D2FA456980057F866;
+			remoteInfo = BudgetWarden;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXNativeTarget section */
 		5ABF612D2FA456980057F866 /* BudgetWarden */ = {
 			isa = PBXNativeTarget;
@@ -121,6 +168,52 @@
 			productReference = 5ABF612E2FA456980057F866 /* BudgetWarden.app */;
 			productType = "com.apple.product-type.application";
 		};
+		5AC100072FA7000000AAA001 /* BudgetWardenTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5AC1000A2FA7000000AAA001 /* Build configuration list for PBXNativeTarget "BudgetWardenTests" */;
+			buildPhases = (
+				5AC100062FA7000000AAA001 /* Sources */,
+				5AC100042FA7000000AAA001 /* Frameworks */,
+				5AC100052FA7000000AAA001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				5AC100152FA7000000AAA001 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				5AC100022FA7000000AAA001 /* BudgetWardenTests */,
+			);
+			name = BudgetWardenTests;
+			packageProductDependencies = (
+			);
+			productName = BudgetWardenTests;
+			productReference = 5AC100002FA7000000AAA001 /* BudgetWardenTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		5AC1000E2FA7000000AAA001 /* BudgetWardenUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5AC100112FA7000000AAA001 /* Build configuration list for PBXNativeTarget "BudgetWardenUITests" */;
+			buildPhases = (
+				5AC1000D2FA7000000AAA001 /* Sources */,
+				5AC1000B2FA7000000AAA001 /* Frameworks */,
+				5AC1000C2FA7000000AAA001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				5AC100172FA7000000AAA001 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				5AC100032FA7000000AAA001 /* BudgetWardenUITests */,
+			);
+			name = BudgetWardenUITests;
+			packageProductDependencies = (
+			);
+			productName = BudgetWardenUITests;
+			productReference = 5AC100012FA7000000AAA001 /* BudgetWardenUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -133,6 +226,14 @@
 				TargetAttributes = {
 					5ABF612D2FA456980057F866 = {
 						CreatedOnToolsVersion = 26.4;
+					};
+					5AC100072FA7000000AAA001 = {
+						CreatedOnToolsVersion = 26.4;
+						TestTargetID = 5ABF612D2FA456980057F866;
+					};
+					5AC1000E2FA7000000AAA001 = {
+						CreatedOnToolsVersion = 26.4;
+						TestTargetID = 5ABF612D2FA456980057F866;
 					};
 				};
 			};
@@ -151,6 +252,8 @@
 			projectRoot = "";
 			targets = (
 				5ABF612D2FA456980057F866 /* BudgetWarden */,
+				5AC100072FA7000000AAA001 /* BudgetWardenTests */,
+				5AC1000E2FA7000000AAA001 /* BudgetWardenUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -161,6 +264,20 @@
 			buildActionMask = 2147483647;
 			files = (
 				5A7C00012FA5A10000B77777 /* budget-warden.icon in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5AC100052FA7000000AAA001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5AC1000C2FA7000000AAA001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -180,7 +297,34 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		5AC100062FA7000000AAA001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5AC1000D2FA7000000AAA001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		5AC100152FA7000000AAA001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5ABF612D2FA456980057F866 /* BudgetWarden */;
+			targetProxy = 5AC100142FA7000000AAA001 /* PBXContainerItemProxy */;
+		};
+		5AC100172FA7000000AAA001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5ABF612D2FA456980057F866 /* BudgetWarden */;
+			targetProxy = 5AC100162FA7000000AAA001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		5ABF61372FA456990057F866 /* Debug */ = {
@@ -372,6 +516,88 @@
 			};
 			name = Release;
 		};
+		5AC100082FA7000000AAA001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.4;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nikolalazarov.BudgetWardenTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BudgetWarden.app/Contents/MacOS/BudgetWarden";
+			};
+			name = Debug;
+		};
+		5AC100092FA7000000AAA001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.4;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nikolalazarov.BudgetWardenTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BudgetWarden.app/Contents/MacOS/BudgetWarden";
+			};
+			name = Release;
+		};
+		5AC1000F2FA7000000AAA001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.4;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nikolalazarov.BudgetWardenUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = BudgetWarden;
+			};
+			name = Debug;
+		};
+		5AC100102FA7000000AAA001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.4;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nikolalazarov.BudgetWardenUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = BudgetWarden;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -389,6 +615,24 @@
 			buildConfigurations = (
 				5ABF613A2FA456990057F866 /* Debug */,
 				5ABF613B2FA456990057F866 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5AC1000A2FA7000000AAA001 /* Build configuration list for PBXNativeTarget "BudgetWardenTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5AC100082FA7000000AAA001 /* Debug */,
+				5AC100092FA7000000AAA001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5AC100112FA7000000AAA001 /* Build configuration list for PBXNativeTarget "BudgetWardenUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5AC1000F2FA7000000AAA001 /* Debug */,
+				5AC100102FA7000000AAA001 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

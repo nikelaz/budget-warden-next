@@ -30,6 +30,7 @@ struct WelcomeRightColumn: View {
                                  BudgetRowView(budget: budget)
                                      .frame(maxWidth: .infinity, alignment: .leading)
                              }
+                             .accessibilityIdentifier("budget-row-\(budget.title)")
                              .contextMenu {
                                  Button {
                                      onShowInFinder(budget)

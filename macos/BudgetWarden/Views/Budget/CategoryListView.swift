@@ -127,6 +127,7 @@ private extension CategoryListView {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             TextField("Title", text: $newCategoryTitle)
                 .textFieldStyle(.roundedBorder)
+                .accessibilityIdentifier("new-category-title-field")
                 .focused($focusedNewCategoryField, equals: .title)
                 .onSubmit(saveNewCategory)
 
@@ -137,6 +138,7 @@ private extension CategoryListView {
                     TextField(column.title, text: newCategoryAmountBinding(for: column))
                         .textFieldStyle(.roundedBorder)
                         .multilineTextAlignment(.trailing)
+                        .accessibilityIdentifier("new-category-\(column.id)-field")
                         .frame(width: column.width)
                         .focused($focusedNewCategoryField, equals: .amount(column.id))
                         .onSubmit(saveNewCategory)
