@@ -7,6 +7,5 @@
 #include "transaction.h"
 #include "category.h"
 #include "budget.h"
-#include "user_preferences.h"
 
 #endif

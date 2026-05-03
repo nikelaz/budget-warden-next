@@ -111,119 +111,17 @@ final class BudgetVault {
         return vaultURL.deletingLastPathComponent()
     }
 
-    func loadBudgets() throws -> [BudgetDocument] {
-        let vaultURL = try resolveVaultURL()
-        return try access(vaultURL) {
-            let urls = try fileManager.contentsOfDirectory(
-                at: vaultURL,
-                includingPropertiesForKeys: nil,
-                options: [.skipsHiddenFiles]
-            )
+    func budgetFileURLs(in vaultURL: URL) throws -> [URL] {
+        let urls = try fileManager.contentsOfDirectory(
+            at: vaultURL,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        )
 
-            return urls
-                .filter { $0.pathExtension == "budget" }
-                .compactMap { try? BudgetCodec.readBudget(from: $0) }
-                .sorted(by: Self.sortByFileName)
-        }
+        return urls.filter { $0.pathExtension == "budget" }
     }
 
-    func saveBudget(_ draft: BudgetDraft) throws -> BudgetDocument {
-        let vaultURL = try resolveVaultURL()
-
-        return try access(vaultURL) {
-            let uniqueBudget = uniqueBudgetLocation(for: draft.title, in: vaultURL)
-            let json = try BudgetCodec.makeJSON(title: uniqueBudget.title)
-            let destination = uniqueBudget.url
-            try json.write(to: destination, atomically: true, encoding: .utf8)
-            return try BudgetCodec.readBudget(from: destination)
-        }
-    }
-
-    func addCategory(_ draft: CategoryDraft, to budget: BudgetDocument) throws -> BudgetDocument {
-        let vaultURL = try resolveVaultURL()
-
-        return try access(vaultURL) {
-            try BudgetCodec.addCategory(draft, to: budget.url)
-        }
-    }
-
-    func updateCategory(_ update: CategoryUpdate, in budget: BudgetDocument) throws -> BudgetDocument {
-        let vaultURL = try resolveVaultURL()
-
-        return try access(vaultURL) {
-            try BudgetCodec.updateCategory(update, in: budget.url)
-        }
-    }
-
-    func removeCategory(_ category: BudgetCategory, from budget: BudgetDocument) throws -> BudgetDocument {
-        let vaultURL = try resolveVaultURL()
-
-        return try access(vaultURL) {
-            try BudgetCodec.removeCategory(categoryID: category.coreID, from: budget.url)
-        }
-    }
-
-    func reorderCategories(type: BudgetCategoryType, orderedCategoryIDs: [Int], in budget: BudgetDocument) throws -> BudgetDocument {
-        let vaultURL = try resolveVaultURL()
-
-        return try access(vaultURL) {
-            try BudgetCodec.reorderCategories(type: type, orderedCategoryIDs: orderedCategoryIDs, in: budget.url)
-        }
-    }
-
-    func addTransaction(_ draft: TransactionDraft, to budget: BudgetDocument) throws -> BudgetDocument {
-        let vaultURL = try resolveVaultURL()
-
-        return try access(vaultURL) {
-            try BudgetCodec.addTransaction(draft, to: budget.url)
-        }
-    }
-
-    func updateTransaction(_ update: TransactionUpdate, in budget: BudgetDocument) throws -> BudgetDocument {
-        let vaultURL = try resolveVaultURL()
-
-        return try access(vaultURL) {
-            try BudgetCodec.updateTransaction(update, in: budget.url)
-        }
-    }
-
-    func removeTransaction(_ transaction: BudgetTransaction, from budget: BudgetDocument) throws -> BudgetDocument {
-        let vaultURL = try resolveVaultURL()
-
-        return try access(vaultURL) {
-            try BudgetCodec.removeTransaction(transaction, from: budget.url)
-        }
-    }
-
-    func removeBudget(_ budget: BudgetDocument) throws {
-        let vaultURL = try resolveVaultURL()
-
-        try access(vaultURL) {
-            guard Self.isBudgetFile(budget.url, in: vaultURL) else {
-                throw BudgetVaultError.budgetRemoveFailed(budget.url)
-            }
-
-            do {
-                var trashedURL: NSURL?
-                try fileManager.trashItem(at: budget.url, resultingItemURL: &trashedURL)
-            } catch {
-                throw BudgetVaultError.budgetRemoveFailed(budget.url)
-            }
-        }
-    }
-
-    private func access<T>(_ url: URL, operation: () throws -> T) throws -> T {
-        let didAccess = url.startAccessingSecurityScopedResource()
-        defer {
-            if didAccess {
-                url.stopAccessingSecurityScopedResource()
-            }
-        }
-
-        return try operation()
-    }
-
-    private func uniqueBudgetLocation(for title: Swift.String, in directory: URL) -> (title: Swift.String, url: URL) {
+    func uniqueBudgetLocation(for title: Swift.String, in directory: URL) -> (title: Swift.String, url: URL) {
         let baseName = Self.fileName(from: title)
         var uniqueTitle = baseName
         var candidate = directory.appendingPathComponent(uniqueTitle).appendingPathExtension("budget")
@@ -240,8 +138,28 @@ final class BudgetVault {
         return (uniqueTitle, candidate)
     }
 
-    nonisolated private static func sortByFileName(_ lhs: BudgetDocument, _ rhs: BudgetDocument) -> Bool {
-        return lhs.url.lastPathComponent.localizedStandardCompare(rhs.url.lastPathComponent) == .orderedAscending
+    func isBudgetInConfiguredVault(_ url: URL) -> Bool {
+        guard let vaultURL = try? resolveVaultURL() else {
+            return false
+        }
+
+        return Self.isBudgetFile(url, in: vaultURL)
+    }
+
+    func accessVault<T>(_ operation: () throws -> T) throws -> T {
+        let vaultURL = try resolveVaultURL()
+        return try Self.accessSecurityScopedResource(vaultURL, operation: operation)
+    }
+
+    static func accessSecurityScopedResource<T>(_ url: URL, operation: () throws -> T) throws -> T {
+        let didAccess = url.startAccessingSecurityScopedResource()
+        defer {
+            if didAccess {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        return try operation()
     }
 
     nonisolated private static func isBudgetFile(_ url: URL, in vaultURL: URL) -> Bool {

@@ -18,10 +18,13 @@ final class BudgetStore: ObservableObject {
 
     private var pendingDraft: BudgetDraft?
     private let vault: BudgetVault
+    private let repository: BudgetRepository
     private static let selectedCurrencyKey = "SelectedCurrency"
 
-    init(vault: BudgetVault? = nil) {
-        self.vault = vault ?? BudgetVault.shared
+    init(vault: BudgetVault? = nil, repository: BudgetRepository? = nil) {
+        let resolvedVault = vault ?? BudgetVault.shared
+        self.vault = resolvedVault
+        self.repository = repository ?? CoreBudgetRepository(vault: resolvedVault)
         let savedCurrency = UserDefaults.standard.string(forKey: Self.selectedCurrencyKey)
             .flatMap(AppCurrency.init(rawValue:))
         _selectedCurrency = Published(initialValue: savedCurrency ?? .eur)
@@ -85,7 +88,7 @@ final class BudgetStore: ObservableObject {
 
     func loadBudgets() {
         do {
-            let loadedBudgets = try vault.loadBudgets()
+            let loadedBudgets = try repository.loadBudgets()
             budgets = loadedBudgets
 
             if selectedBudgetID == nil || !loadedBudgets.contains(where: { $0.id == selectedBudgetID }) {
@@ -145,15 +148,8 @@ final class BudgetStore: ObservableObject {
             return false
         }
 
-        let didAccess = url.startAccessingSecurityScopedResource()
-        defer {
-            if didAccess {
-                url.stopAccessingSecurityScopedResource()
-            }
-        }
-
         do {
-            let openedBudget = try BudgetCodec.readBudget(from: url)
+            let openedBudget = try repository.openBudget(at: url)
 
             if let vaultBudget = budgets.first(where: { sameFile($0.url, openedBudget.url) }) {
                 externalBudget = nil
@@ -187,22 +183,8 @@ final class BudgetStore: ObservableObject {
                 amountAccumulated: amountAccumulated,
                 type: type
             )
-            let updated: BudgetDocument
-
-            if budgets.contains(where: { sameFile($0.url, selectedBudget.url) }) {
-                updated = try vault.addCategory(draft, to: selectedBudget)
-                budgets = try vault.loadBudgets()
-            } else {
-                let didAccess = selectedBudget.url.startAccessingSecurityScopedResource()
-                defer {
-                    if didAccess {
-                        selectedBudget.url.stopAccessingSecurityScopedResource()
-                    }
-                }
-
-                updated = try BudgetCodec.addCategory(draft, to: selectedBudget.url)
-                externalBudget = updated
-            }
+            let updated = try repository.addCategory(draft, to: selectedBudget)
+            try updateBudgetList(afterChanging: updated)
 
             selectedBudgetID = updated.id
         } catch {
@@ -216,22 +198,8 @@ final class BudgetStore: ObservableObject {
         }
 
         do {
-            let updated: BudgetDocument
-
-            if budgets.contains(where: { sameFile($0.url, selectedBudget.url) }) {
-                updated = try vault.updateCategory(update, in: selectedBudget)
-                budgets = try vault.loadBudgets()
-            } else {
-                let didAccess = selectedBudget.url.startAccessingSecurityScopedResource()
-                defer {
-                    if didAccess {
-                        selectedBudget.url.stopAccessingSecurityScopedResource()
-                    }
-                }
-
-                updated = try BudgetCodec.updateCategory(update, in: selectedBudget.url)
-                externalBudget = updated
-            }
+            let updated = try repository.updateCategory(update, in: selectedBudget)
+            try updateBudgetList(afterChanging: updated)
 
             selectedBudgetID = updated.id
         } catch {
@@ -245,22 +213,8 @@ final class BudgetStore: ObservableObject {
         }
 
         do {
-            let updated: BudgetDocument
-
-            if budgets.contains(where: { sameFile($0.url, selectedBudget.url) }) {
-                updated = try vault.removeCategory(category, from: selectedBudget)
-                budgets = try vault.loadBudgets()
-            } else {
-                let didAccess = selectedBudget.url.startAccessingSecurityScopedResource()
-                defer {
-                    if didAccess {
-                        selectedBudget.url.stopAccessingSecurityScopedResource()
-                    }
-                }
-
-                updated = try BudgetCodec.removeCategory(categoryID: category.coreID, from: selectedBudget.url)
-                externalBudget = updated
-            }
+            let updated = try repository.removeCategory(category, from: selectedBudget)
+            try updateBudgetList(afterChanging: updated)
 
             selectedBudgetID = updated.id
         } catch {
@@ -274,22 +228,8 @@ final class BudgetStore: ObservableObject {
         }
 
         do {
-            let updated: BudgetDocument
-
-            if budgets.contains(where: { sameFile($0.url, selectedBudget.url) }) {
-                updated = try vault.reorderCategories(type: type, orderedCategoryIDs: orderedCategoryIDs, in: selectedBudget)
-                budgets = try vault.loadBudgets()
-            } else {
-                let didAccess = selectedBudget.url.startAccessingSecurityScopedResource()
-                defer {
-                    if didAccess {
-                        selectedBudget.url.stopAccessingSecurityScopedResource()
-                    }
-                }
-
-                updated = try BudgetCodec.reorderCategories(type: type, orderedCategoryIDs: orderedCategoryIDs, in: selectedBudget.url)
-                externalBudget = updated
-            }
+            let updated = try repository.reorderCategories(type: type, orderedCategoryIDs: orderedCategoryIDs, in: selectedBudget)
+            try updateBudgetList(afterChanging: updated)
 
             selectedBudgetID = updated.id
         } catch {
@@ -303,22 +243,8 @@ final class BudgetStore: ObservableObject {
         }
 
         do {
-            let updated: BudgetDocument
-
-            if budgets.contains(where: { sameFile($0.url, selectedBudget.url) }) {
-                updated = try vault.addTransaction(draft, to: selectedBudget)
-                budgets = try vault.loadBudgets()
-            } else {
-                let didAccess = selectedBudget.url.startAccessingSecurityScopedResource()
-                defer {
-                    if didAccess {
-                        selectedBudget.url.stopAccessingSecurityScopedResource()
-                    }
-                }
-
-                updated = try BudgetCodec.addTransaction(draft, to: selectedBudget.url)
-                externalBudget = updated
-            }
+            let updated = try repository.addTransaction(draft, to: selectedBudget)
+            try updateBudgetList(afterChanging: updated)
 
             selectedBudgetID = updated.id
         } catch {
@@ -332,22 +258,8 @@ final class BudgetStore: ObservableObject {
         }
 
         do {
-            let updated: BudgetDocument
-
-            if budgets.contains(where: { sameFile($0.url, selectedBudget.url) }) {
-                updated = try vault.updateTransaction(update, in: selectedBudget)
-                budgets = try vault.loadBudgets()
-            } else {
-                let didAccess = selectedBudget.url.startAccessingSecurityScopedResource()
-                defer {
-                    if didAccess {
-                        selectedBudget.url.stopAccessingSecurityScopedResource()
-                    }
-                }
-
-                updated = try BudgetCodec.updateTransaction(update, in: selectedBudget.url)
-                externalBudget = updated
-            }
+            let updated = try repository.updateTransaction(update, in: selectedBudget)
+            try updateBudgetList(afterChanging: updated)
 
             selectedBudgetID = updated.id
         } catch {
@@ -361,22 +273,8 @@ final class BudgetStore: ObservableObject {
         }
 
         do {
-            let updated: BudgetDocument
-
-            if budgets.contains(where: { sameFile($0.url, selectedBudget.url) }) {
-                updated = try vault.removeTransaction(transaction, from: selectedBudget)
-                budgets = try vault.loadBudgets()
-            } else {
-                let didAccess = selectedBudget.url.startAccessingSecurityScopedResource()
-                defer {
-                    if didAccess {
-                        selectedBudget.url.stopAccessingSecurityScopedResource()
-                    }
-                }
-
-                updated = try BudgetCodec.removeTransaction(transaction, from: selectedBudget.url)
-                externalBudget = updated
-            }
+            let updated = try repository.removeTransaction(transaction, from: selectedBudget)
+            try updateBudgetList(afterChanging: updated)
 
             selectedBudgetID = updated.id
         } catch {
@@ -387,10 +285,15 @@ final class BudgetStore: ObservableObject {
     func removeBudget(_ budget: BudgetDocument) {
         do {
             let wasSelected = selectedBudgetID == budget.id
-            try vault.removeBudget(budget)
+            let wasExternal = externalBudget.map { sameFile($0.url, budget.url) } ?? false
+            try repository.removeBudget(budget)
 
-            let loadedBudgets = try vault.loadBudgets()
+            let loadedBudgets = wasExternal ? (try? repository.loadBudgets()) ?? budgets : try repository.loadBudgets()
             budgets = loadedBudgets
+
+            if wasExternal {
+                externalBudget = nil
+            }
 
             if wasSelected || !loadedBudgets.contains(where: { $0.id == selectedBudgetID }) {
                 selectedBudgetID = externalBudget?.id ?? loadedBudgets.first?.id
@@ -406,10 +309,10 @@ final class BudgetStore: ObservableObject {
         }
 
         do {
-            let saved = try vault.saveBudget(draft)
+            let saved = try repository.createBudget(draft)
             pendingDraft = nil
             isCreatingBudget = false
-            budgets = try vault.loadBudgets()
+            budgets = try repository.loadBudgets()
             externalBudget = nil
             selectedBudgetID = saved.id
         } catch {
@@ -419,5 +322,13 @@ final class BudgetStore: ObservableObject {
 
     private func sameFile(_ lhs: URL, _ rhs: URL) -> Bool {
         lhs.standardizedFileURL == rhs.standardizedFileURL
+    }
+
+    private func updateBudgetList(afterChanging updated: BudgetDocument) throws {
+        if budgets.contains(where: { sameFile($0.url, updated.url) }) {
+            budgets = try repository.loadBudgets()
+        } else {
+            externalBudget = updated
+        }
     }
 }

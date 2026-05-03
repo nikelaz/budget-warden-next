@@ -63,6 +63,7 @@ void test_budget_init() {
   result budget_res = budget_init(&budget, "Title"); 
 
   assert(budget_res == ok);
+  assert(budget.id == 0);
   assert(strcmp(budget.title.data, "Title") == 0);
   assert(budget.categories.length == 0);
   assert(budget.categories.capacity == 4);
@@ -371,6 +372,7 @@ void test_budget_json_string_round_trip() {
   Budget budget;
   result budget_res = budget_init(&budget, "January");
   assert(budget_res == ok);
+  budget.id = 9;
 
   Category category;
   result category_res = category_init(&category, "Food", 500, 375, 0, CATEGORY_EXPENSES);
@@ -394,6 +396,7 @@ void test_budget_json_string_round_trip() {
   Budget parsed;
   result parse_res = budget_from_json_str(&parsed, json.data);
   assert(parse_res == ok);
+  assert(parsed.id == 9);
   assert(strcmp(parsed.title.data, "January") == 0);
   assert(parsed.categories.length == 1);
   assert(parsed.categories.items[0].id == 10);
@@ -406,6 +409,240 @@ void test_budget_json_string_round_trip() {
   bw_string_free(&json);
   budget_free(&budget);
   printf("(Pass) budget_json_string_round_trip\n");
+}
+
+void test_budget_add_category() {
+  Budget budget;
+  result budget_res = budget_init(&budget, "January");
+  assert(budget_res == ok);
+
+  Category existing;
+  result existing_res = category_init(&existing, "Rent", 1000, 0, 0, CATEGORY_EXPENSES);
+  assert(existing_res == ok);
+  existing.id = 4;
+  existing.ordinal = 2;
+  assert(category_array_push_move(&budget.categories, existing) == ok);
+
+  Category category;
+  result category_res = category_init(&category, "Food", 500, 0, 0, CATEGORY_EXPENSES);
+  assert(category_res == ok);
+
+  assert(budget_add_category(&budget, category) == ok);
+  assert(budget.categories.length == 2);
+  assert(budget.categories.items[1].id == 5);
+  assert(budget.categories.items[1].ordinal == 3);
+
+  budget_free(&budget);
+  printf("(Pass) budget_add_category\n");
+}
+
+void test_budget_update_category() {
+  Budget budget;
+  result budget_res = budget_init(&budget, "January");
+  assert(budget_res == ok);
+
+  Category category;
+  result category_res = category_init(&category, "Old", 500, 125, 0, CATEGORY_EXPENSES);
+  assert(category_res == ok);
+  category.id = 3;
+  assert(category_array_push_move(&budget.categories, category) == ok);
+
+  CategoryUpdate invalid = { "Invalid", 600, 1 };
+  assert(budget_update_category(&budget, 3, invalid) == err);
+  assert(strcmp(budget.categories.items[0].title.data, "Old") == 0);
+
+  CategoryUpdate update = { "New", 600, 0 };
+  assert(budget_update_category(&budget, 3, update) == ok);
+  assert(strcmp(budget.categories.items[0].title.data, "New") == 0);
+  assert(budget.categories.items[0].amount_planned == 600);
+  assert(budget.categories.items[0].amount_actual == 125);
+  assert(budget.categories.items[0].amount_accumulated == 0);
+
+  budget_free(&budget);
+  printf("(Pass) budget_update_category\n");
+}
+
+void test_budget_remove_category() {
+  Budget budget;
+  result budget_res = budget_init(&budget, "January");
+  assert(budget_res == ok);
+
+  Category first;
+  assert(category_init(&first, "Food", 500, 0, 0, CATEGORY_EXPENSES) == ok);
+  first.id = 1;
+  assert(category_array_push_move(&budget.categories, first) == ok);
+
+  Category second;
+  assert(category_init(&second, "Rent", 1000, 0, 0, CATEGORY_EXPENSES) == ok);
+  second.id = 2;
+  assert(category_array_push_move(&budget.categories, second) == ok);
+
+  assert(budget_remove_category(&budget, 1) == ok);
+  assert(budget.categories.length == 1);
+  assert(budget.categories.items[0].id == 2);
+  assert(strcmp(budget.categories.items[0].title.data, "Rent") == 0);
+  assert(budget_remove_category(&budget, 99) == err);
+
+  budget_free(&budget);
+  printf("(Pass) budget_remove_category\n");
+}
+
+void test_budget_add_transaction() {
+  Budget budget;
+  assert(budget_init(&budget, "January") == ok);
+
+  Category category;
+  assert(category_init(&category, "Food", 500, 0, 0, CATEGORY_EXPENSES) == ok);
+  category.id = 2;
+  assert(category_array_push_move(&budget.categories, category) == ok);
+
+  Transaction existing;
+  assert(transaction_init(&existing, "Coffee", "Morning", test_date(), 5) == ok);
+  existing.id = 7;
+  assert(category_add_transaction(&budget.categories.items[0], existing) == ok);
+
+  Transaction transaction;
+  assert(transaction_init(&transaction, "Groceries", "Weekly shop", test_date(), 125) == ok);
+  assert(budget_add_transaction(&budget, 2, transaction) == ok);
+
+  assert(budget.categories.items[0].transactions.length == 2);
+  assert(budget.categories.items[0].transactions.items[1].id == 8);
+  assert(budget.categories.items[0].amount_actual == 130);
+
+  budget_free(&budget);
+  printf("(Pass) budget_add_transaction\n");
+}
+
+void test_budget_update_transaction_same_category() {
+  Budget budget;
+  assert(budget_init(&budget, "January") == ok);
+
+  Category category;
+  assert(category_init(&category, "Food", 500, 0, 0, CATEGORY_EXPENSES) == ok);
+  category.id = 2;
+
+  Transaction transaction;
+  assert(transaction_init(&transaction, "Groceries", "Weekly shop", test_date(), 125) == ok);
+  transaction.id = 8;
+  assert(category_add_transaction(&category, transaction) == ok);
+  assert(category_array_push_move(&budget.categories, category) == ok);
+
+  BWDate updated_date;
+  assert(bw_date_init(&updated_date, 2026, 2, 1) == ok);
+  TransactionUpdate update = { 2, "Market", "Monthly shop", updated_date, 150 };
+
+  assert(budget_update_transaction(&budget, 8, update) == ok);
+  assert(strcmp(budget.categories.items[0].transactions.items[0].title.data, "Market") == 0);
+  assert(strcmp(budget.categories.items[0].transactions.items[0].description.data, "Monthly shop") == 0);
+  assert_date_eq(budget.categories.items[0].transactions.items[0].date, updated_date);
+  assert(budget.categories.items[0].transactions.items[0].amount == 150);
+  assert(budget.categories.items[0].amount_actual == 150);
+
+  TransactionUpdate decrease = { 2, "Market", "Monthly shop", updated_date, 50 };
+  assert(budget_update_transaction(&budget, 8, decrease) == ok);
+  assert(budget.categories.items[0].transactions.items[0].amount == 50);
+  assert(budget.categories.items[0].amount_actual == 50);
+
+  budget_free(&budget);
+  printf("(Pass) budget_update_transaction_same_category\n");
+}
+
+void test_budget_update_transaction_move_category() {
+  Budget budget;
+  assert(budget_init(&budget, "January") == ok);
+
+  Category source;
+  assert(category_init(&source, "Food", 500, 0, 0, CATEGORY_EXPENSES) == ok);
+  source.id = 2;
+
+  Transaction transaction;
+  assert(transaction_init(&transaction, "Groceries", "Weekly shop", test_date(), 125) == ok);
+  transaction.id = 8;
+  assert(category_add_transaction(&source, transaction) == ok);
+  assert(category_array_push_move(&budget.categories, source) == ok);
+
+  Category target;
+  assert(category_init(&target, "Savings", 500, 10, 250, CATEGORY_SAVINGS) == ok);
+  target.id = 3;
+  assert(category_array_push_move(&budget.categories, target) == ok);
+
+  BWDate updated_date;
+  assert(bw_date_init(&updated_date, 2026, 2, 1) == ok);
+  TransactionUpdate update = { 3, "Transfer", "Emergency fund", updated_date, 50 };
+
+  assert(budget_update_transaction(&budget, 8, update) == ok);
+  assert(budget.categories.items[0].transactions.length == 0);
+  assert(budget.categories.items[0].amount_actual == 0);
+  assert(budget.categories.items[1].transactions.length == 1);
+  assert(budget.categories.items[1].transactions.items[0].id == 8);
+  assert(strcmp(budget.categories.items[1].transactions.items[0].title.data, "Transfer") == 0);
+  assert(budget.categories.items[1].amount_actual == 60);
+  assert(budget.categories.items[1].amount_accumulated == 250);
+
+  budget_free(&budget);
+  printf("(Pass) budget_update_transaction_move_category\n");
+}
+
+void test_budget_remove_transaction() {
+  Budget budget;
+  assert(budget_init(&budget, "January") == ok);
+
+  Category category;
+  assert(category_init(&category, "Food", 500, 0, 0, CATEGORY_EXPENSES) == ok);
+  category.id = 2;
+
+  Transaction transaction;
+  assert(transaction_init(&transaction, "Groceries", "Weekly shop", test_date(), 125) == ok);
+  transaction.id = 8;
+  assert(category_add_transaction(&category, transaction) == ok);
+  assert(category_array_push_move(&budget.categories, category) == ok);
+
+  assert(budget_remove_transaction(&budget, 8) == ok);
+  assert(budget.categories.items[0].transactions.length == 0);
+  assert(budget.categories.items[0].amount_actual == 0);
+  assert(budget_remove_transaction(&budget, 8) == err);
+
+  budget_free(&budget);
+  printf("(Pass) budget_remove_transaction\n");
+}
+
+void test_budget_reorder_categories() {
+  Budget budget;
+  assert(budget_init(&budget, "January") == ok);
+
+  Category first;
+  assert(category_init(&first, "First", 100, 0, 0, CATEGORY_EXPENSES) == ok);
+  first.id = 1;
+  first.ordinal = 0;
+  assert(category_array_push_move(&budget.categories, first) == ok);
+
+  Category second;
+  assert(category_init(&second, "Second", 100, 0, 0, CATEGORY_EXPENSES) == ok);
+  second.id = 2;
+  second.ordinal = 1;
+  assert(category_array_push_move(&budget.categories, second) == ok);
+
+  Category third;
+  assert(category_init(&third, "Third", 100, 0, 0, CATEGORY_EXPENSES) == ok);
+  third.id = 3;
+  third.ordinal = 2;
+  assert(category_array_push_move(&budget.categories, third) == ok);
+
+  Category income;
+  assert(category_init(&income, "Income", 100, 0, 0, CATEGORY_INCOME) == ok);
+  income.id = 4;
+  income.ordinal = 0;
+  assert(category_array_push_move(&budget.categories, income) == ok);
+
+  int ordered_ids[] = { 3, 99 };
+  assert(budget_reorder_categories(&budget, CATEGORY_EXPENSES, ordered_ids, 2) == ok);
+  assert(budget.categories.items[0].ordinal == 1);
+  assert(budget.categories.items[1].ordinal == 2);
+  assert(budget.categories.items[2].ordinal == 0);
+  assert(budget.categories.items[3].ordinal == 0);
+
+  budget_free(&budget);
+  printf("(Pass) budget_reorder_categories\n");
 }
 
 void test_json_failure_invalid_text() {
@@ -488,6 +725,14 @@ int main() {
   test_category_remove_transaction_not_found();
   test_budget_nested_free();
   test_budget_json_string_round_trip();
+  test_budget_add_category();
+  test_budget_update_category();
+  test_budget_remove_category();
+  test_budget_add_transaction();
+  test_budget_update_transaction_same_category();
+  test_budget_update_transaction_move_category();
+  test_budget_remove_transaction();
+  test_budget_reorder_categories();
   test_json_failure_invalid_text();
   test_json_failure_missing_required_fields();
   test_json_failure_invalid_date();

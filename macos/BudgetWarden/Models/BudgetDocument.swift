@@ -1,7 +1,7 @@
 import Foundation
 
 struct BudgetDocument: Identifiable {
-    let id: URL
+    let id: Int
     let url: URL
     let title: Swift.String
     let categories: [BudgetCategory]
