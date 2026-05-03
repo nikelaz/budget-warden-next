@@ -3,6 +3,7 @@ import SwiftUI
 struct CategorySectionView: View {
     let type: BudgetCategoryType
     let categories: [BudgetCategory]
+    let currency: AppCurrency
     let onAddCategory: () -> Void
 
     var body: some View {
@@ -12,7 +13,7 @@ struct CategorySectionView: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(categories) { category in
-                    CategoryRowView(category: category)
+                    CategoryRowView(category: category, currency: currency)
                 }
             }
         } header: {
@@ -32,4 +33,3 @@ struct CategorySectionView: View {
         }
     }
 }
-

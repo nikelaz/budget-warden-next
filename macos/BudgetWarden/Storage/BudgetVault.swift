@@ -179,6 +179,22 @@ final class BudgetVault {
         }
     }
 
+    func updateTransaction(_ update: TransactionUpdate, in budget: BudgetDocument) throws -> BudgetDocument {
+        let vaultURL = try resolveVaultURL()
+
+        return try access(vaultURL) {
+            try BudgetCodec.updateTransaction(update, in: budget.url)
+        }
+    }
+
+    func removeTransaction(_ transaction: BudgetTransaction, from budget: BudgetDocument) throws -> BudgetDocument {
+        let vaultURL = try resolveVaultURL()
+
+        return try access(vaultURL) {
+            try BudgetCodec.removeTransaction(transaction, from: budget.url)
+        }
+    }
+
     func removeBudget(_ budget: BudgetDocument) throws {
         let vaultURL = try resolveVaultURL()
 

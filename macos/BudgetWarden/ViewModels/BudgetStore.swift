@@ -8,13 +8,23 @@ final class BudgetStore: ObservableObject {
     @Published var selectedBudgetID: BudgetDocument.ID?
     @Published var isCreatingBudget = false
     @Published var isConfiguringVault = false
+    @Published var isShowingPreferences = false
     @Published var presentedError: Swift.String?
+    @Published var selectedCurrency: AppCurrency {
+        didSet {
+            UserDefaults.standard.set(selectedCurrency.rawValue, forKey: Self.selectedCurrencyKey)
+        }
+    }
 
     private var pendingDraft: BudgetDraft?
     private let vault: BudgetVault
+    private static let selectedCurrencyKey = "SelectedCurrency"
 
     init(vault: BudgetVault? = nil) {
         self.vault = vault ?? BudgetVault.shared
+        let savedCurrency = UserDefaults.standard.string(forKey: Self.selectedCurrencyKey)
+            .flatMap(AppCurrency.init(rawValue:))
+        _selectedCurrency = Published(initialValue: savedCurrency ?? .eur)
     }
 
     var availableBudgets: [BudgetDocument] {
@@ -54,6 +64,10 @@ final class BudgetStore: ObservableObject {
     func showVaultSetup() {
         presentedError = nil
         isConfiguringVault = true
+    }
+
+    func showPreferences() {
+        isShowingPreferences = true
     }
 
     func selectBudget(_ budget: BudgetDocument) {
@@ -156,13 +170,23 @@ final class BudgetStore: ObservableObject {
         }
     }
 
-    func addCategory(title: Swift.String, amountPlanned: UInt64, type: BudgetCategoryType) {
+    func addCategory(
+        title: Swift.String,
+        amountPlanned: UInt64,
+        amountAccumulated: UInt64,
+        type: BudgetCategoryType
+    ) {
         guard let selectedBudget else {
             return
         }
 
         do {
-            let draft = CategoryDraft(title: title, amountPlanned: amountPlanned, type: type)
+            let draft = CategoryDraft(
+                title: title,
+                amountPlanned: amountPlanned,
+                amountAccumulated: amountAccumulated,
+                type: type
+            )
             let updated: BudgetDocument
 
             if budgets.contains(where: { sameFile($0.url, selectedBudget.url) }) {
@@ -293,6 +317,64 @@ final class BudgetStore: ObservableObject {
                 }
 
                 updated = try BudgetCodec.addTransaction(draft, to: selectedBudget.url)
+                externalBudget = updated
+            }
+
+            selectedBudgetID = updated.id
+        } catch {
+            presentedError = error.localizedDescription
+        }
+    }
+
+    func updateTransaction(_ update: TransactionUpdate) {
+        guard let selectedBudget else {
+            return
+        }
+
+        do {
+            let updated: BudgetDocument
+
+            if budgets.contains(where: { sameFile($0.url, selectedBudget.url) }) {
+                updated = try vault.updateTransaction(update, in: selectedBudget)
+                budgets = try vault.loadBudgets()
+            } else {
+                let didAccess = selectedBudget.url.startAccessingSecurityScopedResource()
+                defer {
+                    if didAccess {
+                        selectedBudget.url.stopAccessingSecurityScopedResource()
+                    }
+                }
+
+                updated = try BudgetCodec.updateTransaction(update, in: selectedBudget.url)
+                externalBudget = updated
+            }
+
+            selectedBudgetID = updated.id
+        } catch {
+            presentedError = error.localizedDescription
+        }
+    }
+
+    func removeTransaction(_ transaction: BudgetTransaction) {
+        guard let selectedBudget else {
+            return
+        }
+
+        do {
+            let updated: BudgetDocument
+
+            if budgets.contains(where: { sameFile($0.url, selectedBudget.url) }) {
+                updated = try vault.removeTransaction(transaction, from: selectedBudget)
+                budgets = try vault.loadBudgets()
+            } else {
+                let didAccess = selectedBudget.url.startAccessingSecurityScopedResource()
+                defer {
+                    if didAccess {
+                        selectedBudget.url.stopAccessingSecurityScopedResource()
+                    }
+                }
+
+                updated = try BudgetCodec.removeTransaction(transaction, from: selectedBudget.url)
                 externalBudget = updated
             }
 

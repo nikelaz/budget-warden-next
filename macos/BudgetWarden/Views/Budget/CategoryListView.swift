@@ -5,7 +5,8 @@ import UniformTypeIdentifiers
 struct CategoryListView: View {
     let type: BudgetCategoryType
     let categories: [BudgetCategory]
-    let onAddCategory: (Swift.String, UInt64) -> Void
+    let currency: AppCurrency
+    let onAddCategory: (Swift.String, UInt64, UInt64) -> Void
     let onUpdateCategory: (CategoryUpdate) -> Void
     let onRemoveCategory: (BudgetCategory) -> Void
     let onReorderCategories: ([Int]) -> Void
@@ -14,11 +15,13 @@ struct CategoryListView: View {
     @State private var isCreatingCategory = false
     @State private var newCategoryTitle = ""
     @State private var newCategoryPlanned = "0"
+    @State private var newCategoryAccumulated = "0"
     @State private var editingCell: EditingCell?
     @State private var editedValue = ""
     @State private var categoryPendingRemoval: BudgetCategory?
     @State private var draggedCategoryID: Int?
     @State private var dropTargetCategoryID: Int?
+    @State private var isProgrammaticallyChangingEditingCell = false
     @FocusState private var focusedNewCategoryField: NewCategoryField?
     @FocusState private var focusedEditingCell: EditingCell?
 
@@ -64,6 +67,17 @@ struct CategoryListView: View {
             }
         } message: { category in
             Text("Delete \(category.title)? This will also remove its transactions.")
+        }
+        .onChange(of: focusedEditingCell) { _, newFocusedCell in
+            guard !isProgrammaticallyChangingEditingCell else {
+                return
+            }
+
+            guard let editingCell, newFocusedCell != editingCell else {
+                return
+            }
+
+            commitActiveEdit()
         }
     }
 }
@@ -118,18 +132,20 @@ private extension CategoryListView {
 
             Spacer()
 
-            TextField("Planned", text: $newCategoryPlanned)
-                .textFieldStyle(.roundedBorder)
-                .multilineTextAlignment(.trailing)
-                .frame(width: type.valueColumns.first?.width ?? 92)
-                .focused($focusedNewCategoryField, equals: .planned)
-                .onSubmit(saveNewCategory)
-
-            ForEach(Array(type.valueColumns.dropFirst())) { column in
-                Text(formattedAmount(0))
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .frame(width: column.width, alignment: .trailing)
+            ForEach(type.valueColumns) { column in
+                if column.isEditable {
+                    TextField(column.title, text: newCategoryAmountBinding(for: column))
+                        .textFieldStyle(.roundedBorder)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: column.width)
+                        .focused($focusedNewCategoryField, equals: .amount(column.id))
+                        .onSubmit(saveNewCategory)
+                } else {
+                    Text(formattedAmount(0))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .frame(width: column.width, alignment: .trailing)
+                }
             }
         }
         .padding(.horizontal, 5)
@@ -261,7 +277,7 @@ private extension CategoryListView {
                 }
             } else if column.isEditable {
                 ClickableTableCell(width: column.width, alignment: .trailing) {
-                    startEditing(.amount(category.coreID, column.id), value: "\(category.amount(for: column))")
+                    startEditing(.amount(category.coreID, column.id), value: category.amount(for: column).moneyAmountInputText)
                 } label: {
                     amountText(category.amount(for: column))
                 }
@@ -273,7 +289,7 @@ private extension CategoryListView {
     }
 
     func rowSeparator(for category: BudgetCategory) -> some View {
-        VStack(spacing: 0) {
+        ZStack {
             GeometryReader { proxy in
                 Rectangle()
                     .fill(progressColor(for: category))
@@ -309,19 +325,25 @@ private extension CategoryListView {
         isCreatingCategory = true
         newCategoryTitle = ""
         newCategoryPlanned = "0"
+        newCategoryAccumulated = "0"
         focusedNewCategoryField = .title
     }
 
     func saveNewCategory() {
         let title = newCategoryTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty, let planned = parsedAmount(newCategoryPlanned) else {
+        guard
+            !title.isEmpty,
+            let planned = parsedAmount(newCategoryPlanned),
+            let accumulated = parsedAmount(newCategoryAccumulated)
+        else {
             return
         }
 
-        onAddCategory(title, planned)
+        onAddCategory(title, planned, type.allowsAccumulatedAmount ? accumulated : 0)
         isCreatingCategory = false
         newCategoryTitle = ""
         newCategoryPlanned = "0"
+        newCategoryAccumulated = "0"
         focusedNewCategoryField = nil
     }
 
@@ -329,10 +351,29 @@ private extension CategoryListView {
         isCreatingCategory = false
         newCategoryTitle = ""
         newCategoryPlanned = "0"
+        newCategoryAccumulated = "0"
         focusedNewCategoryField = nil
     }
 
+    func newCategoryAmountBinding(for column: CategoryValueColumn) -> Binding<Swift.String> {
+        Binding {
+            column.id == "accumulated" ? newCategoryAccumulated : newCategoryPlanned
+        } set: { value in
+            if column.id == "accumulated" {
+                newCategoryAccumulated = value
+            } else {
+                newCategoryPlanned = value
+            }
+        }
+    }
+
     func startEditing(_ cell: EditingCell, value: Swift.String) {
+        if editingCell != nil, editingCell != cell {
+            isProgrammaticallyChangingEditingCell = true
+            commitActiveEdit()
+            isProgrammaticallyChangingEditingCell = true
+        }
+
         editingCell = cell
         editedValue = value
         focusEditingCell(cell)
@@ -341,6 +382,7 @@ private extension CategoryListView {
     func focusEditingCell(_ cell: EditingCell) {
         DispatchQueue.main.async {
             focusedEditingCell = cell
+            isProgrammaticallyChangingEditingCell = false
         }
     }
 
@@ -348,11 +390,39 @@ private extension CategoryListView {
         editingCell = nil
         editedValue = ""
         focusedEditingCell = nil
+        isProgrammaticallyChangingEditingCell = false
+    }
+
+    func commitActiveEdit() {
+        guard let editingCell else {
+            return
+        }
+
+        switch editingCell {
+        case .title(let categoryID):
+            guard let category = categories.first(where: { $0.coreID == categoryID }) else {
+                discardEdit()
+                return
+            }
+
+            commitTitleEdit(for: category)
+        case .amount(let categoryID, let columnID):
+            guard
+                let category = categories.first(where: { $0.coreID == categoryID }),
+                let column = type.valueColumns.first(where: { $0.id == columnID })
+            else {
+                discardEdit()
+                return
+            }
+
+            commitAmountEdit(for: category, column: column)
+        }
     }
 
     func commitTitleEdit(for category: BudgetCategory) {
         let title = editedValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else {
+            discardEdit()
             return
         }
 
@@ -371,6 +441,7 @@ private extension CategoryListView {
 
     func commitAmountEdit(for category: BudgetCategory, column: CategoryValueColumn) {
         guard let amount = parsedAmount(editedValue) else {
+            discardEdit()
             return
         }
 
@@ -392,11 +463,11 @@ private extension CategoryListView {
     }
 
     func parsedAmount(_ text: Swift.String) -> UInt64? {
-        UInt64(text.trimmingCharacters(in: .whitespacesAndNewlines))
+        UInt64.parseMoneyAmount(text)
     }
 
     func formattedAmount(_ amount: UInt64) -> Swift.String {
-        amount.formatted(.currency(code: "EUR").precision(.fractionLength(0)))
+        amount.formattedMoneyAmount(currency: currency)
     }
 }
 
@@ -405,9 +476,9 @@ private enum EditingCell: Hashable {
     case amount(Int, Swift.String)
 }
 
-private enum NewCategoryField {
+private enum NewCategoryField: Hashable {
     case title
-    case planned
+    case amount(Swift.String)
 }
 
 private struct CategoryDropDelegate: DropDelegate {
@@ -519,6 +590,10 @@ private extension BudgetCategory {
 }
 
 private extension BudgetCategoryType {
+    var allowsAccumulatedAmount: Bool {
+        self == .savings || self == .debt
+    }
+
     var valueColumns: [CategoryValueColumn] {
         switch self {
         case .income:

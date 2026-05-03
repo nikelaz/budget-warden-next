@@ -10,6 +10,7 @@ enum BudgetVaultError: LocalizedError {
     case transactionCreationFailed
     case transactionSaveFailed
     case transactionCategoryNotFound
+    case transactionNotFound
     case jsonCreationFailed
     case budgetReadFailed(URL)
     case budgetRemoveFailed(URL)
@@ -34,6 +35,8 @@ enum BudgetVaultError: LocalizedError {
             return "The transaction could not be saved."
         case .transactionCategoryNotFound:
             return "Choose an existing category before saving a transaction."
+        case .transactionNotFound:
+            return "Choose an existing transaction before saving transaction changes."
         case .jsonCreationFailed:
             return "The budget JSON could not be created."
         case .budgetReadFailed(let url):

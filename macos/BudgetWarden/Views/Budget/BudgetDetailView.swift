@@ -1,13 +1,12 @@
-import AppKit
-import Charts
 import SwiftUI
 
 struct BudgetDetailView: View {
     let budgets: [BudgetDocument]
     let budget: BudgetDocument
+    let currency: AppCurrency
     @Binding var selectedBudgetID: BudgetDocument.ID?
     let onCreateBudget: () -> Void
-    let onAddCategory: (Swift.String, UInt64, BudgetCategoryType) -> Void
+    let onAddCategory: (Swift.String, UInt64, UInt64, BudgetCategoryType) -> Void
     let onUpdateCategory: (CategoryUpdate) -> Void
     let onRemoveCategory: (BudgetCategory) -> Void
     let onReorderCategories: (BudgetCategoryType, [Int]) -> Void
@@ -30,23 +29,42 @@ struct BudgetDetailView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .navigationTitle("Budget")
         .toolbar {
-            BudgetTopToolbar(
-                budgets: budgets,
-                selectedBudgetID: $selectedBudgetID,
-                onCreateBudget: onCreateBudget
-            )
-            
             ToolbarItemGroup(placement: .principal) {
+                Menu {
+                    ForEach(budgets) { budget in
+                        Button {
+                            selectedBudgetID = budget.id
+                        } label: {
+                            if selectedBudgetID == budget.id {
+                                Label(budget.title, systemImage: "checkmark")
+                            } else {
+                                Text(budget.title)
+                            }
+                        }
+                    }
+
+                    Divider()
+
+                    Button {
+                        onCreateBudget()
+                    } label: {
+                        Label("New Budget", systemImage: "plus")
+                    }
+                } label: {
+                    Text(budget.title)
+                }
+                
                 Button {
+                    transactionCategoryID = nil
                     isCreatingTransaction = true
                 } label: {
-                    Text("New Transaction")
+                    Text("Transaction")
                     Image(systemName: "plus")
                 }
                 .help("Add Transaction")
                 .disabled(budget.categories.isEmpty)
             }
-
+            
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
                     isReportingExpanded.toggle()
@@ -59,7 +77,9 @@ struct BudgetDetailView: View {
         .inspector(isPresented: $isReportingExpanded) {
             BudgetReportingView(
                 budget: budget,
-                isExpanded: $isReportingExpanded
+                currency: currency,
+                isExpanded: $isReportingExpanded,
+                scope: .inspector
             )
             .inspectorColumnWidth(min: 300, ideal: 340, max: 420)
         }
@@ -84,9 +104,10 @@ struct BudgetDetailView: View {
     private func categoryList(for type: BudgetCategoryType) -> some View {
         CategoryListView(
             type: type,
-            categories: budget.categories(for: type)
-        ) { title, amountPlanned in
-            onAddCategory(title, amountPlanned, type)
+            categories: budget.categories(for: type),
+            currency: currency
+        ) { title, amountPlanned, amountAccumulated in
+            onAddCategory(title, amountPlanned, amountAccumulated, type)
         } onUpdateCategory: { update in
             onUpdateCategory(update)
         } onRemoveCategory: { category in
@@ -234,7 +255,7 @@ struct CreateTransactionView: View {
     }
 
     private var parsedAmount: UInt64? {
-        UInt64(amount.trimmingCharacters(in: .whitespacesAndNewlines))
+        UInt64.parseMoneyAmount(amount)
     }
 
     private func categories(for type: BudgetCategoryType) -> [BudgetCategory] {
@@ -267,172 +288,5 @@ struct CreateTransactionView: View {
         }
 
         return bwDate
-    }
-}
-
-private struct BudgetReportingView: View {
-    let budget: BudgetDocument
-    @Binding var isExpanded: Bool
-
-    private var typeSummaries: [CategoryTypeSummary] {
-        BudgetCategoryType.allCases.map { type in
-            let categories = budget.categories(for: type)
-
-            return CategoryTypeSummary(
-                type: type,
-                planned: categories.total(\.amountPlanned),
-                actual: categories.total(\.amountActual),
-                accumulated: categories.total(\.amountAccumulated)
-            )
-        }
-    }
-
-    private var topActualCategories: [BudgetCategory] {
-        budget.categories
-            .filter { $0.amountActual > 0 }
-            .sorted { $0.amountActual > $1.amountActual }
-            .prefix(6)
-            .map { $0 }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Label("Reporting", systemImage: "chart.pie")
-                    .font(.headline)
-
-                Spacer()
-
-                Button {
-                    isExpanded = false
-                } label: {
-                    Image(systemName: "sidebar.right")
-                }
-                .buttonStyle(.borderless)
-                .help("Hide Reporting")
-            }
-            .padding(14)
-
-            Divider()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    reportingMetricGrid
-
-                    ReportChartSection(title: "Planned vs Actual") {
-                        Chart(typeSummaries) { summary in
-                            BarMark(
-                                x: .value("Category", summary.type.title),
-                                y: .value("Amount", summary.planned)
-                            )
-                            .foregroundStyle(by: .value("Measure", "Planned"))
-
-                            BarMark(
-                                x: .value("Category", summary.type.title),
-                                y: .value("Amount", summary.actual)
-                            )
-                            .foregroundStyle(by: .value("Measure", "Actual"))
-                        }
-                        .chartLegend(position: .bottom, alignment: .leading)
-                        .frame(height: 190)
-                    }
-
-                    ReportChartSection(title: "Actual by Category") {
-                        if topActualCategories.isEmpty {
-                            emptyChartState
-                        } else {
-                            Chart(topActualCategories) { category in
-                                BarMark(
-                                    x: .value("Actual", category.amountActual),
-                                    y: .value("Category", category.title)
-                                )
-                                .foregroundStyle(by: .value("Type", category.type.title))
-                            }
-                            .chartLegend(position: .bottom, alignment: .leading)
-                            .frame(height: 220)
-                        }
-                    }
-                }
-                .padding(14)
-            }
-        }
-        .frame(maxHeight: .infinity, alignment: .top)
-    }
-
-    private var reportingMetricGrid: some View {
-        Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
-            GridRow {
-                ReportMetricView(title: "Planned", value: budget.categories.total(\.amountPlanned))
-                ReportMetricView(title: "Actual", value: budget.categories.total(\.amountActual))
-            }
-
-            GridRow {
-                ReportMetricView(title: "Saved", value: budget.categories(for: .savings).total(\.amountActual))
-                ReportMetricView(title: "Debt", value: budget.categories(for: .debt).total(\.amountActual))
-            }
-        }
-    }
-
-    private var emptyChartState: some View {
-        Text("No actual amounts yet")
-            .font(.callout)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, minHeight: 160)
-    }
-}
-
-private struct ReportChartSection<Content: View>: View {
-    let title: Swift.String
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.subheadline)
-                .fontWeight(.semibold)
-
-            content
-                .padding(10)
-                .background(Color(nsColor: .controlBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-        }
-    }
-}
-
-private struct ReportMetricView: View {
-    let title: Swift.String
-    let value: UInt64
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Text(value.formatted())
-                .font(.title3)
-                .fontWeight(.semibold)
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-private struct CategoryTypeSummary: Identifiable {
-    let type: BudgetCategoryType
-    let planned: UInt64
-    let actual: UInt64
-    let accumulated: UInt64
-
-    var id: BudgetCategoryType {
-        type
-    }
-}
-
-private extension Array where Element == BudgetCategory {
-    func total(_ keyPath: KeyPath<BudgetCategory, UInt64>) -> UInt64 {
-        reduce(0) { $0 + $1[keyPath: keyPath] }
     }
 }

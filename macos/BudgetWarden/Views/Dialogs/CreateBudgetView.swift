@@ -19,7 +19,7 @@ struct CreateBudgetView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 20) {
             Text("New Budget")
                 .font(.title2)
                 .fontWeight(.semibold)

@@ -55,7 +55,7 @@ enum BudgetCodec {
 
         var category = Category()
 
-        guard category_init(&category, draft.title, draft.amountPlanned, 0, 0, draft.type.coreType) == 0 else {
+        guard category_init(&category, draft.title, draft.amountPlanned, 0, draft.amountAccumulated, draft.type.coreType) == 0 else {
             throw BudgetVaultError.categoryCreationFailed
         }
 
@@ -238,6 +238,142 @@ enum BudgetCodec {
         return try readBudget(from: url)
     }
 
+    static func updateTransaction(_ update: TransactionUpdate, in url: URL) throws -> BudgetDocument {
+        var budget = try readCoreBudget(from: url)
+
+        defer {
+            budget_free(&budget)
+        }
+
+        guard let categories = budget.categories.items else {
+            throw BudgetVaultError.transactionCategoryNotFound
+        }
+
+        guard let source = transactionLocation(transactionID: update.transactionID, in: budget) else {
+            throw BudgetVaultError.transactionNotFound
+        }
+
+        guard let targetCategoryIndex = (0..<budget.categories.length).first(where: {
+            Int(categories[$0].id) == update.categoryID
+        }) else {
+            throw BudgetVaultError.transactionCategoryNotFound
+        }
+
+        let sourceCategory = categories.advanced(by: source.categoryIndex)
+        let sourceTransaction = sourceCategory.pointee.transactions.items.advanced(by: source.transactionIndex)
+
+        if source.categoryIndex == targetCategoryIndex {
+            var title = BWString()
+
+            guard bw_string_init(&title) == 0 else {
+                throw BudgetVaultError.transactionSaveFailed
+            }
+
+            guard bw_string_append(&title, update.title) == 0 else {
+                bw_string_free(&title)
+                throw BudgetVaultError.transactionSaveFailed
+            }
+
+            var description = BWString()
+
+            guard bw_string_init(&description) == 0 else {
+                bw_string_free(&title)
+                throw BudgetVaultError.transactionSaveFailed
+            }
+
+            guard bw_string_append(&description, update.description) == 0 else {
+                bw_string_free(&title)
+                bw_string_free(&description)
+                throw BudgetVaultError.transactionSaveFailed
+            }
+
+            let oldAmount = sourceTransaction.pointee.amount
+
+            if update.amount >= oldAmount {
+                let increase = update.amount - oldAmount
+                guard UInt64.max - sourceCategory.pointee.amount_actual >= increase else {
+                    bw_string_free(&title)
+                    bw_string_free(&description)
+                    throw BudgetVaultError.transactionSaveFailed
+                }
+
+                sourceCategory.pointee.amount_actual += increase
+            } else {
+                let decrease = oldAmount - update.amount
+                guard sourceCategory.pointee.amount_actual >= decrease else {
+                    bw_string_free(&title)
+                    bw_string_free(&description)
+                    throw BudgetVaultError.transactionSaveFailed
+                }
+
+                sourceCategory.pointee.amount_actual -= decrease
+            }
+
+            var previousTitle = sourceTransaction.pointee.title
+            var previousDescription = sourceTransaction.pointee.description
+            bw_string_free(&previousTitle)
+            bw_string_free(&previousDescription)
+
+            sourceTransaction.pointee.title = title
+            sourceTransaction.pointee.description = description
+            sourceTransaction.pointee.date = update.date
+            sourceTransaction.pointee.amount = update.amount
+        } else {
+            var replacement = Transaction()
+
+            guard transaction_init(
+                &replacement,
+                update.title,
+                update.description,
+                update.date,
+                update.amount
+            ) == 0 else {
+                throw BudgetVaultError.transactionCreationFailed
+            }
+
+            replacement.id = Int32(update.transactionID)
+
+            guard category_remove_transaction(sourceCategory, sourceTransaction) == 0 else {
+                transaction_free(&replacement)
+                throw BudgetVaultError.transactionSaveFailed
+            }
+
+            guard category_add_transaction(categories.advanced(by: targetCategoryIndex), replacement) == 0 else {
+                transaction_free(&replacement)
+                throw BudgetVaultError.transactionSaveFailed
+            }
+        }
+
+        try writeBudget(&budget, to: url)
+        return try readBudget(from: url)
+    }
+
+    static func removeTransaction(_ transaction: BudgetTransaction, from url: URL) throws -> BudgetDocument {
+        var budget = try readCoreBudget(from: url)
+
+        defer {
+            budget_free(&budget)
+        }
+
+        guard let source = transactionLocation(transactionID: transaction.coreID, in: budget) else {
+            throw BudgetVaultError.transactionNotFound
+        }
+
+        guard let categories = budget.categories.items else {
+            throw BudgetVaultError.transactionCategoryNotFound
+        }
+
+        let category = categories.advanced(by: source.categoryIndex)
+        let item = category.pointee.transactions.items.advanced(by: source.transactionIndex)
+
+        guard category_remove_transaction(category, item) == 0 else {
+            throw BudgetVaultError.transactionSaveFailed
+        }
+
+        try writeBudget(&budget, to: url)
+        return try readBudget(from: url)
+    }
+
     private static func writeBudget(_ budget: inout Budget, to url: URL) throws {
         var jsonString = budget_to_json_str(&budget)
 
@@ -375,4 +511,25 @@ enum BudgetCodec {
 
         return maxID + 1
     }
+
+    private static func transactionLocation(transactionID: Int, in budget: Budget) -> (categoryIndex: Int, transactionIndex: Int)? {
+        guard let categories = budget.categories.items else {
+            return nil
+        }
+
+        for categoryIndex in 0..<budget.categories.length {
+            guard let transactions = categories[categoryIndex].transactions.items else {
+                continue
+            }
+
+            if let transactionIndex = (0..<categories[categoryIndex].transactions.length).first(where: {
+                Int(transactions[$0].id) == transactionID
+            }) {
+                return (categoryIndex, transactionIndex)
+            }
+        }
+
+        return nil
+    }
+
 }

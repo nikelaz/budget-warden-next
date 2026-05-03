@@ -1,12 +1,12 @@
 import SwiftUI
 
-struct ContentView: View {
+struct MainLayoutView: View {
     @ObservedObject var store: BudgetStore
-    @State private var selectedSection: BudgetSidebarSection = .budget
+    @State private var selectedSection: SidebarSection = .budget
 
     var body: some View {
         NavigationSplitView {
-            BudgetSidebarView(
+            SidebarView(
                 selectedSection: $selectedSection
             )
         } detail: {
@@ -16,6 +16,7 @@ struct ContentView: View {
                     BudgetDetailView(
                         budgets: store.availableBudgets,
                         budget: selectedBudget,
+                        currency: store.selectedCurrency,
                         selectedBudgetID: $store.selectedBudgetID,
                         onCreateBudget: store.showCreateBudget,
                         onAddCategory: store.addCategory,
@@ -24,13 +25,25 @@ struct ContentView: View {
                         onReorderCategories: store.reorderCategories,
                         onAddTransaction: store.addTransaction
                     )
+                case .reporting:
+                    ReportingView(
+                        budgets: store.availableBudgets,
+                        budget: selectedBudget,
+                        currency: store.selectedCurrency,
+                        selectedBudgetID: $store.selectedBudgetID,
+                        onCreateBudget: store.showCreateBudget,
+                        onAddTransaction: store.addTransaction
+                    )
                 case .transactions:
                     TransactionsView(
                         budgets: store.availableBudgets,
                         budget: selectedBudget,
+                        currency: store.selectedCurrency,
                         selectedBudgetID: $store.selectedBudgetID,
                         onCreateBudget: store.showCreateBudget,
-                        onAddTransaction: store.addTransaction
+                        onAddTransaction: store.addTransaction,
+                        onUpdateTransaction: store.updateTransaction,
+                        onRemoveTransaction: store.removeTransaction
                     )
                 }
             } else {
@@ -44,6 +57,13 @@ struct ContentView: View {
                             store.showCreateBudget()
                         } label: {
                             Label("Create New Budget", systemImage: "plus")
+                        }
+                    }
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            store.showPreferences()
+                        } label: {
+                            Label("Preferences", systemImage: "gearshape")
                         }
                     }
                 }
@@ -71,6 +91,15 @@ struct ContentView: View {
             }
             .frame(minWidth: 440)
         }
+        .sheet(isPresented: $store.isShowingPreferences) {
+            PreferencesView(
+                selectedCurrency: $store.selectedCurrency,
+                onClose: {
+                    store.isShowingPreferences = false
+                }
+            )
+            .frame(minWidth: 360)
+        }
         .alert(
             "Budget Warden",
             isPresented: errorBinding
@@ -91,8 +120,4 @@ struct ContentView: View {
             }
         )
     }
-}
-
-#Preview {
-    ContentView(store: BudgetStore())
 }

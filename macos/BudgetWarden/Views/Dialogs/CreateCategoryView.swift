@@ -9,7 +9,7 @@ struct CreateCategoryView: View {
     @State private var plannedAmount = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 20) {
             Text("New \(type.title) Category")
                 .font(.headline)
 
@@ -42,12 +42,6 @@ struct CreateCategoryView: View {
     }
 
     private var parsedPlannedAmount: UInt64? {
-        let trimmedAmount = plannedAmount.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !trimmedAmount.isEmpty else {
-            return 0
-        }
-
-        return UInt64(trimmedAmount)
+        UInt64.parseMoneyAmount(plannedAmount, emptyValue: 0)
     }
 }

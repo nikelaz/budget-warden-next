@@ -1,6 +1,9 @@
 import AppKit
 import SwiftUI
 
+let WINDOW_WIDTH: CGFloat = 760
+let WINDOW_HEIGHT: CGFloat = 420
+
 struct WelcomeView: View {
     @ObservedObject var store: BudgetStore
     @Environment(\.dismiss) private var dismiss
@@ -10,16 +13,40 @@ struct WelcomeView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            leftColumn
-            rightColumn
+            WelcomeLeftColumn(
+                onCreateBudget: {
+                    shouldOpenWorkspaceAfterCreate = true
+                    store.showCreateBudget()
+                },
+                onOpenBudget: {
+                    if store.openBudgetInPlace() {
+                        openWorkspace()
+                    }
+                },
+                onConfigureVault: {
+                    shouldOpenWorkspaceAfterCreate = false
+                    store.showVaultSetup()
+                }
+            )
+            WelcomeRightColumn(
+                budgets: store.budgets,
+                onSelectBudget: { budget in
+                    store.selectBudget(budget)
+                    openWorkspace()
+                },
+                onShowInFinder: showInFinder,
+                onRemoveBudget: { budget in
+                    budgetPendingRemoval = budget
+                }
+            )
         }
         .frame(
-            minWidth: 760,
-            idealWidth: 760,
-            maxWidth: 760,
-            minHeight: 420,
-            idealHeight: 420,
-            maxHeight: 420
+            minWidth: WINDOW_WIDTH,
+            idealWidth: WINDOW_WIDTH,
+            maxWidth: WINDOW_WIDTH,
+            minHeight: WINDOW_HEIGHT,
+            idealHeight: WINDOW_HEIGHT,
+            maxHeight: WINDOW_HEIGHT
         )
         .background(WelcomeWindowConfigurator())
         .task {
@@ -53,6 +80,15 @@ struct WelcomeView: View {
             }
             .frame(minWidth: 440)
         }
+        .sheet(isPresented: $store.isShowingPreferences) {
+            PreferencesView(
+                selectedCurrency: $store.selectedCurrency,
+                onClose: {
+                    store.isShowingPreferences = false
+                }
+            )
+            .frame(minWidth: 360)
+        }
         .alert(
             "Budget Warden",
             isPresented: errorBinding
@@ -77,91 +113,6 @@ struct WelcomeView: View {
         } message: { budget in
             Text("Move \(budget.url.lastPathComponent) to Trash?")
         }
-    }
-
-    private var leftColumn: some View {
-        VStack(alignment: .center, spacing: 20) {
-            Image(nsImage: NSApp.applicationIconImage)
-                .resizable()
-                .frame(width: 130, height: 130)
-                .accessibilityHidden(true)
-            
-            Text("Budget Warden")
-                .font(.largeTitle)
-                .fontWeight(.semibold)
-            
-            VStack(alignment: .center, spacing: 10) {
-                Button("Create New Budget", systemImage: "plus") {
-                    shouldOpenWorkspaceAfterCreate = true
-                    store.showCreateBudget()
-                }
-                
-                Button("Open Budget", systemImage: "folder") {
-                    if store.openBudgetInPlace() {
-                        openWorkspace()
-                    }
-                }
-                
-                Button("Configure Vault", systemImage: "externaldrive") {
-                    shouldOpenWorkspaceAfterCreate = false
-                    store.showVaultSetup()
-                }
-            }
-            
-            Spacer()
-        }
-        .padding(20)
-        .frame(maxWidth: .infinity)
-    }
-
-    private var rightColumn: some View {
-        VStack(alignment: .center, spacing: 10) {
-            Spacer()
-            
-            Text("Budgets in Vault")
-                .font(.headline)
-
-            if store.budgets.isEmpty {
-                ContentUnavailableView(
-                    "No Budgets",
-                    systemImage: "tray",
-                    description: Text("Create a new budget to get starteds")
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ScrollView {
-                     VStack(spacing: 5) {
-                         ForEach(store.budgets) { budget in
-                             Button {
-                                 store.selectBudget(budget)
-                                 openWorkspace()
-                             } label: {
-                                 BudgetRowView(budget: budget)
-                                     .frame(maxWidth: .infinity, alignment: .leading)
-                             }
-                             .contextMenu {
-                                 Button {
-                                     showInFinder(budget)
-                                 } label: {
-                                     Label("Show in Finder", systemImage: "folder")
-                                 }
-
-                                 Button(role: .destructive) {
-                                     budgetPendingRemoval = budget
-                                 } label: {
-                                     Label("Remove from Vault", systemImage: "trash")
-                                 }
-                             }
-                         }
-                     }
-                 }
-                .padding(.bottom, 30)
-            }
-            
-            Spacer()
-        }
-        .padding(20)
-        .frame(maxWidth: .infinity)
     }
 
     private func openWorkspaceIfPossible() {
@@ -211,12 +162,8 @@ struct WelcomeView: View {
     }
 }
 
-#Preview {
-    WelcomeView(store: BudgetStore())
-}
-
 private struct WelcomeWindowConfigurator: NSViewRepresentable {
-    private static let contentSize = NSSize(width: 760, height: 420)
+    private static let contentSize = NSSize(width: WINDOW_WIDTH, height: WINDOW_HEIGHT)
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
