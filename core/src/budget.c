@@ -1,6 +1,8 @@
 #include "budget.h"
+#include "bwstring.h"
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 static cJSON *json_get_string(cJSON *json, const char *name)
 {
@@ -242,6 +244,66 @@ result budget_init(
   budget->id = 0;
   budget->title = title_str;
   budget->categories = categories;
+  return ok;
+}
+
+result budget_init_from_template(
+  Budget *budget,
+  const char *template_path
+)
+{
+  if (budget == NULL)
+  {
+    return err;
+  }
+
+  FILE *file = fopen(template_path, "rb");
+
+  if (file == NULL)
+  {
+    return err;
+  }
+
+  BWString template_file_contents;
+  bw_string_init(&template_file_contents);
+
+  char buffer[4096];
+
+  while(1)
+  {
+    size_t bytes_read = fread(buffer, 1, sizeof buffer, file);
+
+    if (bytes_read > 0)
+    {
+      bw_string_append(&template_file_contents, buffer);
+    }
+
+    if (bytes_read < sizeof buffer)
+    {
+      if (feof(file))
+      {
+        break;
+      }
+
+      if (ferror(file))
+      {
+        bw_string_free(&template_file_contents);
+        fclose(file);
+        return err;
+      }
+    }
+  }
+
+  result budget_from_json_res = budget_from_json_str(budget, template_file_contents.data);
+
+  bw_string_free(&template_file_contents);
+  fclose(file);
+
+  if (budget_from_json_res == err)
+  {
+    return err;
+  }
+
   return ok;
 }
 

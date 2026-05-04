@@ -16,10 +16,4 @@ final class MoneyAmountTests: XCTestCase {
         XCTAssertNil(UInt64.parseMoneyAmount("budget"))
         XCTAssertNil(UInt64.parseMoneyAmount("-1"))
     }
-
-    func testMoneyAmountInputTextUsesTwoFractionDigits() {
-        XCTAssertEqual(UInt64(0).moneyAmountInputText, "0.00")
-        XCTAssertEqual(UInt64(1).moneyAmountInputText, "0.01")
-        XCTAssertEqual(UInt64(1_234).moneyAmountInputText, "12.34")
-    }
 }

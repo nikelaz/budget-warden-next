@@ -47,11 +47,11 @@ struct WelcomeRightColumn: View {
                          }
                      }
                  }
-                .padding(.bottom, 30)
             }
             
             Spacer()
         }
+        .background(.thinMaterial)
         .padding(20)
         .frame(maxWidth: .infinity)
     }
