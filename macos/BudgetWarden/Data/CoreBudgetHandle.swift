@@ -1,7 +1,7 @@
 import Foundation
 
 final class CoreBudgetHandle {
-    private var budget = Budget()
+    var budget = Budget()
 
     init(title: Swift.String) throws {
         guard budget_init(&budget, title) == 0 else {

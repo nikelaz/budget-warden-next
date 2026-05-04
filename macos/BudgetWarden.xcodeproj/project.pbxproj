@@ -16,11 +16,26 @@
 		5AFE11A22FA4AB32002CB713 /* transaction.c in Sources */ = {isa = PBXBuildFile; fileRef = 5AFE119E2FA4AB32002CB713 /* transaction.c */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		5AC100142FA7000000AAA001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5ABF61262FA456980057F866 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5ABF612D2FA456980057F866;
+			remoteInfo = BudgetWarden;
+		};
+		5AC100162FA7000000AAA001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5ABF61262FA456980057F866 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5ABF612D2FA456980057F866;
+			remoteInfo = BudgetWarden;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		5A7C00002FA5A10000B77777 /* budget-warden.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = "budget-warden.icon"; sourceTree = "<group>"; };
 		5ABF612E2FA456980057F866 /* BudgetWarden.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BudgetWarden.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		5AC100002FA7000000AAA001 /* BudgetWardenTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BudgetWardenTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		5AC100012FA7000000AAA001 /* BudgetWardenUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BudgetWardenUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		5ABF613D2FA460000057F866 /* budget.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = budget.c; sourceTree = "<group>"; };
 		5ABF61402FA460000057F866 /* budget.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = budget.h; sourceTree = "<group>"; };
 		5ABF61432FA460000057F866 /* result.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = result.h; sourceTree = "<group>"; };
@@ -28,6 +43,8 @@
 		5ABF614C2FA45C180057F866 /* bwdate.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = bwdate.c; sourceTree = "<group>"; };
 		5ABF614D2FA45C180057F866 /* bwstring.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bwstring.h; sourceTree = "<group>"; };
 		5ABF614E2FA45C180057F866 /* bwstring.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = bwstring.c; sourceTree = "<group>"; };
+		5AC100002FA7000000AAA001 /* BudgetWardenTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BudgetWardenTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		5AC100012FA7000000AAA001 /* BudgetWardenUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BudgetWardenUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		5AFE11972FA4AB32002CB713 /* budget_warden_core.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = budget_warden_core.h; sourceTree = "<group>"; };
 		5AFE11982FA4AB32002CB713 /* category.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = category.h; sourceTree = "<group>"; };
 		5AFE11992FA4AB32002CB713 /* category.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = category.c; sourceTree = "<group>"; };
@@ -127,23 +144,6 @@
 			sourceTree = SOURCE_ROOT;
 		};
 /* End PBXGroup section */
-
-/* Begin PBXContainerItemProxy section */
-		5AC100142FA7000000AAA001 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 5ABF61262FA456980057F866 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 5ABF612D2FA456980057F866;
-			remoteInfo = BudgetWarden;
-		};
-		5AC100162FA7000000AAA001 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 5ABF61262FA456980057F866 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 5ABF612D2FA456980057F866;
-			remoteInfo = BudgetWarden;
-		};
-/* End PBXContainerItemProxy section */
 
 /* Begin PBXNativeTarget section */
 		5ABF612D2FA456980057F866 /* BudgetWarden */ = {

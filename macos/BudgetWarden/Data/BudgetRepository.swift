@@ -40,9 +40,28 @@ final class CoreBudgetRepository: BudgetRepository {
             let uniqueBudget = vault.uniqueBudgetLocation(for: draft.title, in: vaultURL)
             let handle = try CoreBudgetHandle(title: uniqueBudget.title)
             let budgetID = try nextBudgetID(in: vaultURL)
+
+            if !draft.templateUrl.isEmpty {
+                let templateResult = draft.templateUrl.withCString {
+                    budget_init_from_template(&handle.budget, $0)
+                }
+
+                guard templateResult == 0 else {
+                    throw BudgetVaultError.budgetCreationFailed
+                }
+                
+                var newTitle = BWString()
+                bw_string_init(&newTitle)
+                let _ = uniqueBudget.title.withCString {
+                    bw_string_append(&newTitle, $0)
+                }
+                handle.budget.title = newTitle
+            }
+
             handle.withUnsafeMutableBudget { budget in
                 budget.id = Int32(budgetID)
             }
+
             try fileStore.writeText(handle.jsonString(), to: uniqueBudget.url)
             return try readBudget(at: uniqueBudget.url)
         }

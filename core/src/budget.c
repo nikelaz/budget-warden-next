@@ -252,7 +252,7 @@ result budget_init_from_template(
   const char *template_path
 )
 {
-  if (budget == NULL)
+  if (budget == NULL || template_path == NULL)
   {
     return err;
   }
@@ -265,7 +265,12 @@ result budget_init_from_template(
   }
 
   BWString template_file_contents;
-  bw_string_init(&template_file_contents);
+
+  if (bw_string_init(&template_file_contents) == err)
+  {
+    fclose(file);
+    return err;
+  }
 
   char buffer[4096];
 
@@ -275,7 +280,12 @@ result budget_init_from_template(
 
     if (bytes_read > 0)
     {
-      bw_string_append(&template_file_contents, buffer);
+      if (bw_string_append_len(&template_file_contents, buffer, bytes_read) == err)
+      {
+        bw_string_free(&template_file_contents);
+        fclose(file);
+        return err;
+      }
     }
 
     if (bytes_read < sizeof buffer)
@@ -294,7 +304,8 @@ result budget_init_from_template(
     }
   }
 
-  result budget_from_json_res = budget_from_json_str(budget, template_file_contents.data);
+  Budget template_budget = {0};
+  result budget_from_json_res = budget_from_json_str(&template_budget, template_file_contents.data);
 
   bw_string_free(&template_file_contents);
   fclose(file);
@@ -304,6 +315,8 @@ result budget_init_from_template(
     return err;
   }
 
+  budget_free(budget);
+  *budget = template_budget;
   return ok;
 }
 

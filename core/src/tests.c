@@ -411,6 +411,37 @@ void test_budget_json_string_round_trip() {
   printf("(Pass) budget_json_string_round_trip\n");
 }
 
+void test_budget_init_from_template() {
+  Budget budget;
+  result budget_res = budget_init(&budget, "Draft");
+  assert(budget_res == ok);
+
+  result template_res = budget_init_from_template(&budget, "./src/new-user-experience.budget");
+  assert(template_res == ok);
+  assert(strcmp(budget.title.data, "New User Experience") == 0);
+  assert(budget.categories.length == 13);
+  assert(strcmp(budget.categories.items[0].title.data, "Salary") == 0);
+  assert(budget.categories.items[0].amount_planned == 480000);
+  assert(budget.categories.items[12].category_type == CATEGORY_SAVINGS);
+
+  budget_free(&budget);
+  printf("(Pass) budget_init_from_template\n");
+}
+
+void test_budget_init_from_template_missing_file_keeps_budget() {
+  Budget budget;
+  result budget_res = budget_init(&budget, "Draft");
+  assert(budget_res == ok);
+
+  result template_res = budget_init_from_template(&budget, "./src/missing-template.budget");
+  assert(template_res == err);
+  assert(strcmp(budget.title.data, "Draft") == 0);
+  assert(budget.categories.length == 0);
+
+  budget_free(&budget);
+  printf("(Pass) budget_init_from_template_missing_file_keeps_budget\n");
+}
+
 void test_budget_add_category() {
   Budget budget;
   result budget_res = budget_init(&budget, "January");
@@ -725,6 +756,8 @@ int main() {
   test_category_remove_transaction_not_found();
   test_budget_nested_free();
   test_budget_json_string_round_trip();
+  test_budget_init_from_template();
+  test_budget_init_from_template_missing_file_keeps_budget();
   test_budget_add_category();
   test_budget_update_category();
   test_budget_remove_category();

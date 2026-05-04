@@ -74,6 +74,7 @@ struct MainLayoutView: View {
         }
         .sheet(isPresented: $store.isCreatingBudget) {
             CreateBudgetView(
+                store: store,
                 onSave: store.createBudget,
                 onCancel: store.cancelCreateBudget
             )

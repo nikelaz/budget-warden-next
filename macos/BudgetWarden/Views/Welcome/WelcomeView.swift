@@ -54,6 +54,7 @@ struct WelcomeView: View {
         }
         .sheet(isPresented: $store.isCreatingBudget) {
             CreateBudgetView(
+                store: store, 
                 onSave: { draft in
                     store.createBudget(draft)
                     openWorkspaceIfPossible()

@@ -2,27 +2,35 @@ import Foundation
 import SwiftUI
 
 struct CreateBudgetView: View {
+    @ObservedObject var store: BudgetStore
     let onSave: (BudgetDraft) -> Void
     let onCancel: () -> Void
+    var basicTemplateUrl: String;
 
     @State private var title: Swift.String
 
-    enum BudgetTemplate: String, CaseIterable, Identifiable {
-        case basic, blank
-        var id: Self { self }
-    }
-
-    @State private var selectedTemplate: BudgetTemplate = .basic 
+    @State private var selectedTemplate: String = "TemplateBasic"
 
     private var isValid: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    init(onSave: @escaping (BudgetDraft) -> Void, onCancel: @escaping () -> Void) {
+    init(store: BudgetStore, onSave: @escaping (BudgetDraft) -> Void, onCancel: @escaping () -> Void) {
         let defaults = BudgetDefaults.currentMonth()
+        self.store = store
         self.onSave = onSave
         self.onCancel = onCancel
         self._title = State(initialValue: defaults.title)
+        self.basicTemplateUrl = ""
+        self.basicTemplateUrl = getBasicTemplateUrl()
+    }
+
+    private func getBasicTemplateUrl() -> String {
+        guard let url = Bundle.main.url(forResource: "basic-budget", withExtension: "budget") else {
+            return ""
+        }
+
+        return url.path
     }
 
     var body: some View {
@@ -31,19 +39,28 @@ struct CreateBudgetView: View {
                 .font(.title2)
                 .fontWeight(.semibold)
 
-            // Todo(Niki): Finish the template implementation
-            // Todo(Niki) 2: Add previous budgets in vault as templates in the dropdown
             Form {
                 TextField("Title", text: $title)
                     .accessibilityIdentifier("budget-title-field")
                     .padding(.bottom, 10);
 
                 Picker(selection: $selectedTemplate, content: {
-                    Text("Basic Budget")
-                        .tag(BudgetTemplate.basic)
+                    Text("Templates") 
+                        .selectionDisabled(true)
 
-                    Text("Blank Budget")
-                        .tag(BudgetTemplate.blank)
+                    Text("Basic budget (recommended)")
+                        .tag("TemplateBasic")
+
+                    Text("Blank budget")
+                        .tag("TemplateBlank")
+
+                    Text("Previous budget") 
+                        .selectionDisabled(true)
+
+                    ForEach(store.budgets) { budget in
+                        Text(budget.title)
+                            .tag(budget.url.path)
+                    }
                 }, label: {
                     Text("Template")
                 })
@@ -69,6 +86,16 @@ struct CreateBudgetView: View {
 
     private func saveBudget() {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        onSave(BudgetDraft(title: trimmedTitle))
+        
+        var template = ""
+        
+        if (selectedTemplate == "TemplateBasic") {
+            template = basicTemplateUrl
+        }
+        else if (selectedTemplate != "TemplateBlank" && selectedTemplate != "") {
+            template = selectedTemplate
+        }
+        
+        onSave(BudgetDraft(title: trimmedTitle, templateUrl: template))
     }
 }
