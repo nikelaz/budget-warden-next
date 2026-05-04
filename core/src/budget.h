@@ -13,13 +13,15 @@ typedef struct {
   CategoryArray categories;
 } Budget;
 
-typedef struct {
+// Todo(Niki): This alternative swift name is because I need better namespacing of the 
+// core library structs & functions
+typedef struct __attribute__((swift_name("CoreCategoryUpdate"))) {
   const char *title;
   uint64_t amount_planned;
   uint64_t amount_accumulated;
 } CategoryUpdate;
 
-typedef struct {
+typedef struct __attribute__((swift_name("CoreTransactionUpdate"))) {
   int category_id;
   const char *title;
   const char *description;

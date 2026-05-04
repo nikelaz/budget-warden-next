@@ -7,6 +7,13 @@ struct CreateBudgetView: View {
 
     @State private var title: Swift.String
 
+    enum BudgetTemplate: String, CaseIterable, Identifiable {
+        case basic, blank
+        var id: Self { self }
+    }
+
+    @State private var selectedTemplate: BudgetTemplate = .basic 
+
     private var isValid: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -24,9 +31,22 @@ struct CreateBudgetView: View {
                 .font(.title2)
                 .fontWeight(.semibold)
 
+            // Todo(Niki): Finish the template implementation
+            // Todo(Niki) 2: Add previous budgets in vault as templates in the dropdown
             Form {
                 TextField("Title", text: $title)
                     .accessibilityIdentifier("budget-title-field")
+                    .padding(.bottom, 10);
+
+                Picker(selection: $selectedTemplate, content: {
+                    Text("Basic Budget")
+                        .tag(BudgetTemplate.basic)
+
+                    Text("Blank Budget")
+                        .tag(BudgetTemplate.blank)
+                }, label: {
+                    Text("Template")
+                })
             }
 
             HStack {
