@@ -1,19 +1,19 @@
-#include "bwdate.h"
-#include "bwstring.h"
+#include "bw-date.h"
+#include "bw-string.h"
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 
-result bw_date_init(BWDate *date, int year, int month, int day)
+BWResult bw_date_init(BWDate *date, int year, int month, int day)
 {
   if (date == NULL)
   {
-    return err;
+    return BWResult_ERR;
   }
   date->year = year;
   date->month = month;
   date->day = day;
-  return ok;
+  return BWResult_OK;
 }
 
 BWString bw_date_to_string(const BWDate *date)
@@ -54,16 +54,16 @@ BWString bw_date_to_string(const BWDate *date)
   return date_str;
 }
 
-result bw_date_from_string(BWDate *date, const char *date_str)
+BWResult bw_date_from_string(BWDate *date, const char *date_str)
 {
   if (date == NULL || date_str == NULL)
   {
-    return err;
+    return BWResult_ERR;
   }
 
   if (strlen(date_str) != 10)
   {
-    return err;
+    return BWResult_ERR;
   }
 
   if (
@@ -79,7 +79,7 @@ result bw_date_from_string(BWDate *date, const char *date_str)
     !isdigit((unsigned char)date_str[9])
   )
   {
-    return err;
+    return BWResult_ERR;
   }
 
   int year =
@@ -92,11 +92,11 @@ result bw_date_from_string(BWDate *date, const char *date_str)
 
   BWDate parsed;
 
-  if (bw_date_init(&parsed, year, month, day) == err)
+  if (bw_date_init(&parsed, year, month, day) == BWResult_ERR)
   {
-    return err;
+    return BWResult_ERR;
   }
 
   *date = parsed;
-  return ok;
+  return BWResult_OK;
 }

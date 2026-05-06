@@ -1,5 +1,5 @@
-#ifndef BWSTRING_H
-#define BWSTRING_H
+#ifndef BW_STRING_H
+#define BW_STRING_H
 
 #include <stdlib.h>
 

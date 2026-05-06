@@ -1,0 +1,5 @@
+-I./src
+-I./vendor/cjson
+-std=c17
+-Wall
+-Wextra

@@ -1,30 +1,30 @@
 #include <stdio.h>
 #include <string.h>
-#include "bwstring.h"
-#include "result.h"
+#include "bw-string.h"
+#include "bw-result.h"
 
-result bw_string_init(BWString *s)
+BWResult bw_string_init(BWString *s)
 {
     s->capacity = 16;
     s->length = 0;
     s->data = malloc(s->capacity);
 
     if (s->data == NULL) {
-        return err;
+        return BWResult_ERR;
     }
 
     s->data[0] = '\0';
-    return ok;
+    return BWResult_OK;
 }
 
-result bw_string_append(BWString *s, const char *text)
+BWResult bw_string_append(BWString *s, const char *text)
 {
     size_t text_len = strlen(text);
 
     return bw_string_append_len(s, text, text_len);
 }
 
-result bw_string_append_len(BWString *s, const char *text, size_t text_len)
+BWResult bw_string_append_len(BWString *s, const char *text, size_t text_len)
 {
     size_t required = s->length + text_len + 1;
 
@@ -38,7 +38,7 @@ result bw_string_append_len(BWString *s, const char *text, size_t text_len)
         char *new_data = realloc(s->data, new_capacity);
 
         if (new_data == NULL) {
-            return err;
+            return BWResult_ERR;
         }
 
         s->data = new_data;
@@ -49,7 +49,7 @@ result bw_string_append_len(BWString *s, const char *text, size_t text_len)
     s->length += text_len;
     s->data[s->length] = '\0';
 
-    return ok;
+    return BWResult_OK;
 }
 
 void bw_string_free(BWString *s)

@@ -1,4 +1,4 @@
-#include "transaction.h"
+#include "bw-transaction.h"
 
 #define TRANSACTION_ARRAY_INITIAL_CAPACITY 4
 #define JSON_SAFE_INTEGER_MAX 9007199254740991ULL
@@ -15,41 +15,41 @@ static cJSON *json_get_string(cJSON *json, const char *name)
   return item;
 }
 
-static result json_get_uint64(cJSON *json, const char *name, uint64_t *value)
+static BWResult json_get_uint64(cJSON *json, const char *name, uint64_t *value)
 {
   cJSON *item = cJSON_GetObjectItemCaseSensitive(json, name);
 
   if (!cJSON_IsNumber(item) || item->valuedouble < 0 || item->valuedouble > (double)JSON_SAFE_INTEGER_MAX)
   {
-    return err;
+    return BWResult_ERR;
   }
 
   uint64_t integer_value = (uint64_t)item->valuedouble;
 
   if ((double)integer_value != item->valuedouble)
   {
-    return err;
+    return BWResult_ERR;
   }
 
   *value = integer_value;
-  return ok;
+  return BWResult_OK;
 }
 
-static result json_get_int(cJSON *json, const char *name, int *value)
+static BWResult json_get_int(cJSON *json, const char *name, int *value)
 {
   uint64_t unsigned_value;
 
-  if (json_get_uint64(json, name, &unsigned_value) == err || unsigned_value > INT32_MAX)
+  if (json_get_uint64(json, name, &unsigned_value) == BWResult_ERR || unsigned_value > INT32_MAX)
   {
-    return err;
+    return BWResult_ERR;
   }
 
   *value = (int)unsigned_value;
-  return ok;
+  return BWResult_OK;
 }
 
-result transaction_init(
-  Transaction *transaction,
+BWResult bw_transaction_init(
+  BWTransaction *transaction,
   const char *title,
   const char *description,
   BWDate date,
@@ -58,35 +58,35 @@ result transaction_init(
 {
   if (transaction == NULL || title == NULL || description == NULL)
   {
-    return err;
+    return BWResult_ERR;
   }
 
   BWString title_str;
   
-  if (bw_string_init(&title_str) == err)
+  if (bw_string_init(&title_str) == BWResult_ERR)
   {
-    return err;
+    return BWResult_ERR;
   }
 
-  if (bw_string_append(&title_str, title) == err)
+  if (bw_string_append(&title_str, title) == BWResult_ERR)
   {
     bw_string_free(&title_str);
-    return err;
+    return BWResult_ERR;
   }
 
   BWString description_str;
 
-  if (bw_string_init(&description_str) == err)
+  if (bw_string_init(&description_str) == BWResult_ERR)
   {
     bw_string_free(&title_str);
-    return err;
+    return BWResult_ERR;
   }
 
-  if (bw_string_append(&description_str, description) == err)
+  if (bw_string_append(&description_str, description) == BWResult_ERR)
   {
     bw_string_free(&title_str);
     bw_string_free(&description_str);
-    return err;
+    return BWResult_ERR;
   }
 
   transaction->title = title_str;
@@ -94,16 +94,16 @@ result transaction_init(
   transaction->id = 0;
   transaction->amount = amount;
   transaction->date = date;
-  return ok;
+  return BWResult_OK;
 }
 
-void transaction_free(Transaction *transaction)
+void bw_transaction_free(BWTransaction *transaction)
 {
   bw_string_free(&transaction->title);
   bw_string_free(&transaction->description);
 }
 
-cJSON *transaction_to_json(Transaction *transaction)
+cJSON *bw_transaction_to_json(BWTransaction *transaction)
 {
   if (transaction == NULL)
   {
@@ -141,11 +141,11 @@ cJSON *transaction_to_json(Transaction *transaction)
   return json;
 }
 
-result transaction_from_json(Transaction *transaction, cJSON *json)
+BWResult bw_transaction_from_json(BWTransaction *transaction, cJSON *json)
 {
   if (transaction == NULL || !cJSON_IsObject(json))
   {
-    return err;
+    return BWResult_ERR;
   }
 
   int id;
@@ -159,49 +159,49 @@ result transaction_from_json(Transaction *transaction, cJSON *json)
     title == NULL ||
     description == NULL ||
     date_json == NULL ||
-    json_get_int(json, "id", &id) == err ||
-    json_get_uint64(json, "amount", &amount) == err ||
-    bw_date_from_string(&date, date_json->valuestring) == err
+    json_get_int(json, "id", &id) == BWResult_ERR ||
+    json_get_uint64(json, "amount", &amount) == BWResult_ERR ||
+    bw_date_from_string(&date, date_json->valuestring) == BWResult_ERR
   )
   {
-    return err;
+    return BWResult_ERR;
   }
 
-  if (transaction_init(transaction, title->valuestring, description->valuestring, date, amount) == err)
+  if (bw_transaction_init(transaction, title->valuestring, description->valuestring, date, amount) == BWResult_ERR)
   {
-    return err;
+    return BWResult_ERR;
   }
 
   transaction->id = id;
-  return ok;
+  return BWResult_OK;
 }
 
-result transaction_array_init(TransactionArray *array)
+BWResult bw_transaction_array_init(BWTransactionArray *array)
 {
-  array->items = malloc(sizeof(Transaction) * TRANSACTION_ARRAY_INITIAL_CAPACITY);
+  array->items = malloc(sizeof(BWTransaction) * TRANSACTION_ARRAY_INITIAL_CAPACITY);
 
   if (array->items == NULL)
   {
     array->length = 0;
     array->capacity = 0;
-    return err;
+    return BWResult_ERR;
   }
 
   array->length = 0;
   array->capacity = TRANSACTION_ARRAY_INITIAL_CAPACITY;
-  return ok;
+  return BWResult_OK;
 }
 
-result transaction_array_push_move(TransactionArray *array, Transaction transaction)
+BWResult bw_transaction_array_push_move(BWTransactionArray *array, BWTransaction transaction)
 {
   if (array->length == array->capacity)
   {
     size_t new_capacity = array->capacity * 2;
-    Transaction *new_items = realloc(array->items, sizeof(Transaction) * new_capacity);
+    BWTransaction *new_items = realloc(array->items, sizeof(BWTransaction) * new_capacity);
 
     if (new_items == NULL)
     {
-      return err;
+      return BWResult_ERR;
     }
 
     array->items = new_items;
@@ -210,14 +210,14 @@ result transaction_array_push_move(TransactionArray *array, Transaction transact
 
   array->items[array->length] = transaction;
   array->length++;
-  return ok;
+  return BWResult_OK;
 }
 
-void transaction_array_free(TransactionArray *array)
+void bw_transaction_array_free(BWTransactionArray *array)
 {
   for (size_t i = 0; i < array->length; i++)
   {
-    transaction_free(&array->items[i]);
+    bw_transaction_free(&array->items[i]);
   }
 
   free(array->items);

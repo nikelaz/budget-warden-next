@@ -1,5 +1,5 @@
-#include "budget.h"
-#include "bwstring.h"
+#include "bw-budget.h"
+#include "bw-string.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -16,12 +16,12 @@ static cJSON *json_get_string(cJSON *json, const char *name)
   return item;
 }
 
-static int category_type_supports_accumulated(CategoryType category_type)
+static int category_type_supports_accumulated(BWCategoryType category_type)
 {
   return category_type == CATEGORY_SAVINGS || category_type == CATEGORY_DEBT;
 }
 
-static Category *budget_find_category(Budget *budget, int category_id)
+static BWCategory *bw_budget_find_category(BWBudget *budget, int category_id)
 {
   if (budget == NULL || budget->categories.items == NULL)
   {
@@ -39,16 +39,16 @@ static Category *budget_find_category(Budget *budget, int category_id)
   return NULL;
 }
 
-static result budget_find_transaction(Budget *budget, int transaction_id, Category **category, Transaction **transaction)
+static BWResult bw_budget_find_transaction(BWBudget *budget, int transaction_id, BWCategory **category, BWTransaction **transaction)
 {
   if (budget == NULL || budget->categories.items == NULL || category == NULL || transaction == NULL)
   {
-    return err;
+    return BWResult_ERR;
   }
 
   for (size_t category_index = 0; category_index < budget->categories.length; category_index++)
   {
-    Category *current_category = &budget->categories.items[category_index];
+    BWCategory *current_category = &budget->categories.items[category_index];
 
     if (current_category->transactions.items == NULL)
     {
@@ -61,15 +61,15 @@ static result budget_find_transaction(Budget *budget, int transaction_id, Catego
       {
         *category = current_category;
         *transaction = &current_category->transactions.items[transaction_index];
-        return ok;
+        return BWResult_OK;
       }
     }
   }
 
-  return err;
+  return BWResult_ERR;
 }
 
-static int budget_next_category_id(Budget *budget)
+static int bw_budget_next_category_id(BWBudget *budget)
 {
   int max_id = 0;
 
@@ -89,7 +89,7 @@ static int budget_next_category_id(Budget *budget)
   return max_id + 1;
 }
 
-static int budget_next_category_ordinal(Budget *budget, CategoryType category_type)
+static int bw_budget_next_category_ordinal(BWBudget *budget, BWCategoryType category_type)
 {
   int max_ordinal = -1;
 
@@ -100,7 +100,7 @@ static int budget_next_category_ordinal(Budget *budget, CategoryType category_ty
 
   for (size_t i = 0; i < budget->categories.length; i++)
   {
-    Category *category = &budget->categories.items[i];
+    BWCategory *category = &budget->categories.items[i];
 
     if (category->category_type == category_type && category->ordinal > max_ordinal)
     {
@@ -111,7 +111,7 @@ static int budget_next_category_ordinal(Budget *budget, CategoryType category_ty
   return max_ordinal + 1;
 }
 
-static int budget_next_transaction_id(Budget *budget)
+static int bw_budget_next_transaction_id(BWBudget *budget)
 {
   int max_id = 0;
 
@@ -122,7 +122,7 @@ static int budget_next_transaction_id(Budget *budget)
 
   for (size_t category_index = 0; category_index < budget->categories.length; category_index++)
   {
-    TransactionArray *transactions = &budget->categories.items[category_index].transactions;
+    BWTransactionArray *transactions = &budget->categories.items[category_index].transactions;
 
     if (transactions->items == NULL)
     {
@@ -141,36 +141,37 @@ static int budget_next_transaction_id(Budget *budget)
   return max_id + 1;
 }
 
-static result bw_string_replace(BWString *target, const char *text)
+// Todo(Niki): This static method should not be here
+static BWResult bw_string_replace(BWString *target, const char *text)
 {
   if (target == NULL || text == NULL)
   {
-    return err;
+    return BWResult_ERR;
   }
 
   BWString replacement;
 
-  if (bw_string_init(&replacement) == err)
+  if (bw_string_init(&replacement) == BWResult_ERR)
   {
-    return err;
+    return BWResult_ERR;
   }
 
-  if (bw_string_append(&replacement, text) == err)
+  if (bw_string_append(&replacement, text) == BWResult_ERR)
   {
     bw_string_free(&replacement);
-    return err;
+    return BWResult_ERR;
   }
 
   bw_string_free(target);
   *target = replacement;
-  return ok;
+  return BWResult_OK;
 }
 
-static result category_update_actual_amount(Category *category, uint64_t old_amount, uint64_t new_amount)
+static BWResult category_update_actual_amount(BWCategory *category, uint64_t old_amount, uint64_t new_amount)
 {
   if (category == NULL)
   {
-    return err;
+    return BWResult_ERR;
   }
 
   if (new_amount >= old_amount)
@@ -179,22 +180,22 @@ static result category_update_actual_amount(Category *category, uint64_t old_amo
 
     if (UINT64_MAX - category->amount_actual < increase)
     {
-      return err;
+      return BWResult_ERR;
     }
 
     category->amount_actual += increase;
-    return ok;
+    return BWResult_OK;
   }
 
   uint64_t decrease = old_amount - new_amount;
 
   if (category->amount_actual < decrease)
   {
-    return err;
+    return BWResult_ERR;
   }
 
   category->amount_actual -= decrease;
-  return ok;
+  return BWResult_OK;
 }
 
 static int int_array_contains(const int *items, size_t count, int value)
@@ -210,66 +211,66 @@ static int int_array_contains(const int *items, size_t count, int value)
   return 0;
 }
 
-result budget_init(
-    Budget *budget,
+BWResult bw_budget_init(
+    BWBudget *budget,
     const char *title
 )
 {
   if (budget == NULL || title == NULL)
   {
-    return err;
+    return BWResult_ERR;
   }
 
   BWString title_str;
 
-  if (bw_string_init(&title_str) == err)
+  if (bw_string_init(&title_str) == BWResult_ERR)
   {
-    return err;
+    return BWResult_ERR;
   }
 
-  if (bw_string_append(&title_str, title) == err)
+  if (bw_string_append(&title_str, title) == BWResult_ERR)
   {
     bw_string_free(&title_str);
-    return err;
+    return BWResult_ERR;
   }
 
-  CategoryArray categories;
+  BWCategoryArray categories;
 
-  if (category_array_init(&categories) == err)
+  if (bw_category_array_init(&categories) == BWResult_ERR)
   {
     bw_string_free(&title_str);
-    return err;
+    return BWResult_ERR;
   }
 
   budget->id = 0;
   budget->title = title_str;
   budget->categories = categories;
-  return ok;
+  return BWResult_OK;
 }
 
-result budget_init_from_template(
-  Budget *budget,
+BWResult bw_budget_init_from_template(
+  BWBudget *budget,
   const char *template_path
 )
 {
   if (budget == NULL || template_path == NULL)
   {
-    return err;
+    return BWResult_ERR;
   }
 
   FILE *file = fopen(template_path, "rb");
 
   if (file == NULL)
   {
-    return err;
+    return BWResult_ERR;
   }
 
   BWString template_file_contents;
 
-  if (bw_string_init(&template_file_contents) == err)
+  if (bw_string_init(&template_file_contents) == BWResult_ERR)
   {
     fclose(file);
-    return err;
+    return BWResult_ERR;
   }
 
   char buffer[4096];
@@ -280,11 +281,11 @@ result budget_init_from_template(
 
     if (bytes_read > 0)
     {
-      if (bw_string_append_len(&template_file_contents, buffer, bytes_read) == err)
+      if (bw_string_append_len(&template_file_contents, buffer, bytes_read) == BWResult_ERR)
       {
         bw_string_free(&template_file_contents);
         fclose(file);
-        return err;
+        return BWResult_ERR;
       }
     }
 
@@ -299,34 +300,34 @@ result budget_init_from_template(
       {
         bw_string_free(&template_file_contents);
         fclose(file);
-        return err;
+        return BWResult_ERR;
       }
     }
   }
 
-  Budget template_budget = {0};
-  result budget_from_json_res = budget_from_json_str(&template_budget, template_file_contents.data);
+  BWBudget template_budget = {0};
+  BWResult budget_from_json_res = bw_budget_from_json_str(&template_budget, template_file_contents.data);
 
   bw_string_free(&template_file_contents);
   fclose(file);
 
-  if (budget_from_json_res == err)
+  if (budget_from_json_res == BWResult_ERR)
   {
-    return err;
+    return BWResult_ERR;
   }
 
-  budget_free(budget);
+  bw_budget_free(budget);
   *budget = template_budget;
-  return ok;
+  return BWResult_OK;
 }
 
-void budget_free(Budget *budget)
+void bw_budget_free(BWBudget *budget)
 {
-  category_array_free(&budget->categories);
+  bw_category_array_free(&budget->categories);
   bw_string_free(&budget->title);
 }
 
-cJSON *budget_to_json(Budget *budget)
+cJSON *bw_budget_to_json(BWBudget *budget)
 {
   if (budget == NULL)
   {
@@ -358,7 +359,7 @@ cJSON *budget_to_json(Budget *budget)
 
   for (size_t i = 0; i < budget->categories.length; i++)
   {
-    cJSON *category = category_to_json(&budget->categories.items[i]);
+    cJSON *category = bw_category_to_json(&budget->categories.items[i]);
 
     if (category == NULL || !cJSON_AddItemToArray(cJSON_GetObjectItemCaseSensitive(json, "categories"), category))
     {
@@ -371,12 +372,12 @@ cJSON *budget_to_json(Budget *budget)
   return json;
 }
 
-BWString budget_to_json_str(Budget *budget)
+BWString bw_budget_to_json_str(BWBudget *budget)
 {
   BWString budget_json;
   bw_string_init(&budget_json);
 
-  cJSON *json = budget_to_json(budget);
+  cJSON *json = bw_budget_to_json(budget);
 
   if (json == NULL)
   {
@@ -395,11 +396,11 @@ BWString budget_to_json_str(Budget *budget)
   return budget_json;
 }
 
-result budget_from_json(Budget *budget, cJSON *json)
+BWResult bw_budget_from_json(BWBudget *budget, cJSON *json)
 {
   if (budget == NULL || !cJSON_IsObject(json))
   {
-    return err;
+    return BWResult_ERR;
   }
 
   cJSON *title = json_get_string(json, "title");
@@ -409,10 +410,10 @@ result budget_from_json(Budget *budget, cJSON *json)
   if (
     title == NULL ||
     !cJSON_IsArray(categories) ||
-    budget_init(budget, title->valuestring) == err
+    bw_budget_init(budget, title->valuestring) == BWResult_ERR
   )
   {
-    return err;
+    return BWResult_ERR;
   }
 
   if (id_json != NULL)
@@ -426,8 +427,8 @@ result budget_from_json(Budget *budget, cJSON *json)
       (double)(int)id_json->valuedouble != id_json->valuedouble
     )
     {
-      budget_free(budget);
-      return err;
+      bw_budget_free(budget);
+      return BWResult_ERR;
     }
 
     id = (uint64_t)id_json->valuedouble;
@@ -437,94 +438,94 @@ result budget_from_json(Budget *budget, cJSON *json)
   cJSON *category_json = NULL;
   cJSON_ArrayForEach(category_json, categories)
   {
-    Category category = {0};
+    BWCategory category = {0};
 
     if (
-      category_from_json(&category, category_json) == err ||
-      category_array_push_move(&budget->categories, category) == err
+      bw_category_from_json(&category, category_json) == BWResult_ERR ||
+      bw_category_array_push_move(&budget->categories, category) == BWResult_ERR
     )
     {
       if (category.title.data != NULL)
       {
-        category_free(&category);
+        bw_category_free(&category);
       }
 
-      budget_free(budget);
-      return err;
+      bw_budget_free(budget);
+      return BWResult_ERR;
     }
   }
 
-  return ok;
+  return BWResult_OK;
 }
 
-result budget_from_json_str(Budget *budget, const char *budget_json)
+BWResult bw_budget_from_json_str(BWBudget *budget, const char *budget_json)
 {
   if (budget == NULL || budget_json == NULL)
   {
-    return err;
+    return BWResult_ERR;
   }
 
   cJSON *json = cJSON_Parse(budget_json);
 
   if (json == NULL)
   {
-    return err;
+    return BWResult_ERR;
   }
 
-  result res = budget_from_json(budget, json);
+  BWResult res = bw_budget_from_json(budget, json);
   cJSON_Delete(json);
   return res;
 }
 
-result budget_add_category(Budget *budget, Category category)
+BWResult bw_budget_add_category(BWBudget *budget, BWCategory category)
 {
   if (budget == NULL)
   {
-    return err;
+    return BWResult_ERR;
   }
 
-  category.id = budget_next_category_id(budget);
-  category.ordinal = budget_next_category_ordinal(budget, category.category_type);
+  category.id = bw_budget_next_category_id(budget);
+  category.ordinal = bw_budget_next_category_ordinal(budget, category.category_type);
 
-  return category_array_push_move(&budget->categories, category);
+  return bw_category_array_push_move(&budget->categories, category);
 }
 
-result budget_update_category(Budget *budget, int category_id, CategoryUpdate category_update)
+BWResult bw_budget_update_category(BWBudget *budget, int category_id, BWCategoryUpdate category_update)
 {
-  Category *category = budget_find_category(budget, category_id);
+  BWCategory *category = bw_budget_find_category(budget, category_id);
 
   if (category == NULL || category_update.title == NULL)
   {
-    return err;
+    return BWResult_ERR;
   }
 
   if (!category_type_supports_accumulated(category->category_type) && category_update.amount_accumulated != 0)
   {
-    return err;
+    return BWResult_ERR;
   }
 
-  if (bw_string_replace(&category->title, category_update.title) == err)
+  if (bw_string_replace(&category->title, category_update.title) == BWResult_ERR)
   {
-    return err;
+    return BWResult_ERR;
   }
 
   category->amount_planned = category_update.amount_planned;
   category->amount_accumulated = category_update.amount_accumulated;
-  return ok;
+  return BWResult_OK;
 }
 
-result budget_remove_category(Budget *budget, int category_id)
+BWResult bw_budget_remove_category(BWBudget *budget, int category_id)
 {
   if (budget == NULL || budget->categories.items == NULL)
   {
-    return err;
+    return BWResult_ERR;
   }
 
   for (size_t i = 0; i < budget->categories.length; i++)
   {
     if (budget->categories.items[i].id == category_id)
     {
-      category_free(&budget->categories.items[i]);
+      bw_category_free(&budget->categories.items[i]);
 
       for (size_t j = i; j + 1 < budget->categories.length; j++)
       {
@@ -532,40 +533,40 @@ result budget_remove_category(Budget *budget, int category_id)
       }
 
       budget->categories.length--;
-      return ok;
+      return BWResult_OK;
     }
   }
 
-  return err;
+  return BWResult_ERR;
 }
 
-result budget_add_transaction(Budget *budget, int category_id, Transaction transaction)
+BWResult bw_budget_add_transaction(BWBudget *budget, int category_id, BWTransaction transaction)
 {
-  Category *category = budget_find_category(budget, category_id);
+  BWCategory *category = bw_budget_find_category(budget, category_id);
 
   if (category == NULL)
   {
-    return err;
+    return BWResult_ERR;
   }
 
-  transaction.id = budget_next_transaction_id(budget);
-  return category_add_transaction(category, transaction);
+  transaction.id = bw_budget_next_transaction_id(budget);
+  return bw_category_add_transaction(category, transaction);
 }
 
-result budget_update_transaction(Budget *budget, int transaction_id, TransactionUpdate transaction_update)
+BWResult bw_budget_update_transaction(BWBudget *budget, int transaction_id, BWTransactionUpdate transaction_update)
 {
-  Category *source_category = NULL;
-  Transaction *source_transaction = NULL;
-  Category *target_category = budget_find_category(budget, transaction_update.category_id);
+  BWCategory *source_category = NULL;
+  BWTransaction *source_transaction = NULL;
+  BWCategory *target_category = bw_budget_find_category(budget, transaction_update.category_id);
 
   if (
     target_category == NULL ||
     transaction_update.title == NULL ||
     transaction_update.description == NULL ||
-    budget_find_transaction(budget, transaction_id, &source_category, &source_transaction) == err
+    bw_budget_find_transaction(budget, transaction_id, &source_category, &source_transaction) == BWResult_ERR
   )
   {
-    return err;
+    return BWResult_ERR;
   }
 
   if (source_category == target_category)
@@ -573,35 +574,35 @@ result budget_update_transaction(Budget *budget, int transaction_id, Transaction
     BWString title;
     BWString description;
 
-    if (bw_string_init(&title) == err)
+    if (bw_string_init(&title) == BWResult_ERR)
     {
-      return err;
+      return BWResult_ERR;
     }
 
-    if (bw_string_append(&title, transaction_update.title) == err)
-    {
-      bw_string_free(&title);
-      return err;
-    }
-
-    if (bw_string_init(&description) == err)
+    if (bw_string_append(&title, transaction_update.title) == BWResult_ERR)
     {
       bw_string_free(&title);
-      return err;
+      return BWResult_ERR;
     }
 
-    if (bw_string_append(&description, transaction_update.description) == err)
+    if (bw_string_init(&description) == BWResult_ERR)
     {
       bw_string_free(&title);
-      bw_string_free(&description);
-      return err;
+      return BWResult_ERR;
     }
 
-    if (category_update_actual_amount(source_category, source_transaction->amount, transaction_update.amount) == err)
+    if (bw_string_append(&description, transaction_update.description) == BWResult_ERR)
     {
       bw_string_free(&title);
       bw_string_free(&description);
-      return err;
+      return BWResult_ERR;
+    }
+
+    if (category_update_actual_amount(source_category, source_transaction->amount, transaction_update.amount) == BWResult_ERR)
+    {
+      bw_string_free(&title);
+      bw_string_free(&description);
+      return BWResult_ERR;
     }
 
     bw_string_free(&source_transaction->title);
@@ -611,59 +612,64 @@ result budget_update_transaction(Budget *budget, int transaction_id, Transaction
     source_transaction->description = description;
     source_transaction->date = transaction_update.date;
     source_transaction->amount = transaction_update.amount;
-    return ok;
+    return BWResult_OK;
   }
 
-  Transaction replacement;
+  BWTransaction replacement;
 
   if (
-    transaction_init(
+    bw_transaction_init(
       &replacement,
       transaction_update.title,
       transaction_update.description,
       transaction_update.date,
       transaction_update.amount
-    ) == err
+    ) == BWResult_ERR
   )
   {
-    return err;
+    return BWResult_ERR;
   }
 
   replacement.id = transaction_id;
 
-  if (category_remove_transaction(source_category, source_transaction) == err)
+  if (bw_category_remove_transaction(source_category, source_transaction) == BWResult_ERR)
   {
-    transaction_free(&replacement);
-    return err;
+    bw_transaction_free(&replacement);
+    return BWResult_ERR;
   }
 
-  if (category_add_transaction(target_category, replacement) == err)
+  if (bw_category_add_transaction(target_category, replacement) == BWResult_ERR)
   {
-    transaction_free(&replacement);
-    return err;
+    bw_transaction_free(&replacement);
+    return BWResult_ERR;
   }
 
-  return ok;
+  return BWResult_OK;
 }
 
-result budget_remove_transaction(Budget *budget, int transaction_id)
+BWResult bw_budget_remove_transaction(BWBudget *budget, int transaction_id)
 {
-  Category *category = NULL;
-  Transaction *transaction = NULL;
+  BWCategory *category = NULL;
+  BWTransaction *transaction = NULL;
 
-  if (budget_find_transaction(budget, transaction_id, &category, &transaction) == err)
+  if (bw_budget_find_transaction(budget, transaction_id, &category, &transaction) == BWResult_ERR)
   {
-    return err;
+    return BWResult_ERR;
   }
 
-  return category_remove_transaction(category, transaction);
+  return bw_category_remove_transaction(category, transaction);
 }
 
-result budget_reorder_categories(Budget *budget, CategoryType category_type, const int *ordered_category_ids, size_t ordered_category_ids_count)
+BWResult bw_budget_reorder_categories(
+  BWBudget *budget,
+  BWCategoryType category_type,
+  const int *ordered_category_ids,
+  size_t ordered_category_ids_count
+)
 {
   if (budget == NULL || budget->categories.items == NULL || (ordered_category_ids_count > 0 && ordered_category_ids == NULL))
   {
-    return err;
+    return BWResult_ERR;
   }
 
   int ordinal = 0;
@@ -672,7 +678,7 @@ result budget_reorder_categories(Budget *budget, CategoryType category_type, con
   {
     for (size_t category_index = 0; category_index < budget->categories.length; category_index++)
     {
-      Category *category = &budget->categories.items[category_index];
+      BWCategory *category = &budget->categories.items[category_index];
 
       if (category->category_type == category_type && category->id == ordered_category_ids[id_index])
       {
@@ -688,12 +694,12 @@ result budget_reorder_categories(Budget *budget, CategoryType category_type, con
 
   if (remaining_indices == NULL && budget->categories.length > 0)
   {
-    return err;
+    return BWResult_ERR;
   }
 
   for (size_t category_index = 0; category_index < budget->categories.length; category_index++)
   {
-    Category *category = &budget->categories.items[category_index];
+    BWCategory *category = &budget->categories.items[category_index];
 
     if (
       category->category_type == category_type &&
@@ -709,8 +715,8 @@ result budget_reorder_categories(Budget *budget, CategoryType category_type, con
   {
     for (size_t j = i + 1; j < remaining_count; j++)
     {
-      Category *lhs = &budget->categories.items[remaining_indices[i]];
-      Category *rhs = &budget->categories.items[remaining_indices[j]];
+      BWCategory *lhs = &budget->categories.items[remaining_indices[i]];
+      BWCategory *rhs = &budget->categories.items[remaining_indices[j]];
 
       if (
         rhs->ordinal < lhs->ordinal ||
@@ -731,5 +737,5 @@ result budget_reorder_categories(Budget *budget, CategoryType category_type, con
   }
 
   free(remaining_indices);
-  return ok;
+  return BWResult_OK;
 }
