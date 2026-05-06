@@ -1,4 +1,5 @@
 #include "bw-budget.h"
+#include "bw-arena.h"
 #include "bw-string.h"
 #include <stdint.h>
 #include <stdlib.h>

@@ -5,12 +5,14 @@
 #include "bw-result.h"
 #include "bw-category.h"
 #include "cJSON.h"
+#include "bw-arena.h"
 #include <stddef.h>
 
 typedef struct {
   int id;
   BWString title;
   BWCategoryArray categories;
+  BWArena arena;
 } BWBudget;
 
 // Todo(Niki): I don't like this object, I think it shouldn't exist
@@ -20,6 +22,7 @@ typedef struct {
   uint64_t amount_accumulated;
 } BWCategoryUpdate;
 
+// Todo(Niki): Same as BWCategoryUpdate - it shouldn't exist
 typedef struct {
   int category_id;
   const char *title;
