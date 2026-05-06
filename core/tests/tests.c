@@ -12,6 +12,13 @@ static BWArena test_arena(void)
   return arena;
 }
 
+static void fill_text(char *text, size_t length, char value)
+{
+  assert(length > 0);
+  memset(text, value, length - 1);
+  text[length - 1] = '\0';
+}
+
 static BWDate test_date(void)
 {
   BWDate date;
@@ -161,6 +168,57 @@ void test_transaction_array_push_move(void)
 
   bw_arena_destroy(&arena);
   printf("(Pass) transaction_array_push_move\n");
+}
+
+void test_arena_grows_string_allocation(void)
+{
+  BWArena arena;
+  BWString text;
+  char long_text[256];
+
+  fill_text(long_text, sizeof long_text, 'a');
+
+  assert(bw_arena_init(&arena, 32) == BWResult_OK);
+  assert(bw_string_init(&text, &arena) == BWResult_OK);
+  assert(bw_string_append(&text, long_text) == BWResult_OK);
+  assert(text.length == strlen(long_text));
+  assert(strcmp(text.data, long_text) == 0);
+  assert(arena.first != arena.current);
+  assert(arena.current->capacity >= 1024 * 1024);
+
+  bw_arena_destroy(&arena);
+  printf("(Pass) arena_grows_string_allocation\n");
+}
+
+void test_arena_grows_without_invalidating_existing_arrays(void)
+{
+  BWArena arena;
+  BWCategoryArray categories;
+  BWCategory first;
+  BWCategory second;
+  BWTransaction transaction;
+  char title[256];
+
+  fill_text(title, sizeof title, 'b');
+
+  assert(bw_arena_init(&arena, 128) == BWResult_OK);
+  assert(bw_category_array_init(&categories, &arena) == BWResult_OK);
+  assert(bw_category_init(&first, "Food", 100, 0, 0, CATEGORY_EXPENSES, &arena) == BWResult_OK);
+  assert(bw_category_array_push_move(&categories, first) == BWResult_OK);
+  assert(bw_category_init(&second, title, 200, 0, 0, CATEGORY_EXPENSES, &arena) == BWResult_OK);
+  assert(bw_category_array_push_move(&categories, second) == BWResult_OK);
+  assert(bw_transaction_init(&transaction, title, title, test_date(), 50, &arena) == BWResult_OK);
+  assert(bw_category_add_transaction(&categories.items[0], transaction) == BWResult_OK);
+
+  assert(categories.length == 2);
+  assert(strcmp(categories.items[0].title.data, "Food") == 0);
+  assert(strcmp(categories.items[1].title.data, title) == 0);
+  assert(categories.items[0].transactions.length == 1);
+  assert(strcmp(categories.items[0].transactions.items[0].title.data, title) == 0);
+  assert(arena.first != arena.current);
+
+  bw_arena_destroy(&arena);
+  printf("(Pass) arena_grows_without_invalidating_existing_arrays\n");
 }
 
 void test_category_array_push_move(void)
@@ -325,6 +383,34 @@ void test_budget_json_string_round_trip(void)
   printf("(Pass) budget_json_string_round_trip\n");
 }
 
+void test_budget_json_string_grows_json_arena(void)
+{
+  BWBudget budget;
+  BWBudget parsed;
+  BWArena json_arena;
+  BWCategory category;
+  char title[2048];
+
+  fill_text(title, sizeof title, 'c');
+
+  assert(bw_budget_init(&budget, "January") == BWResult_OK);
+  assert(bw_category_init(&category, title, 500, 0, 0, CATEGORY_EXPENSES, &budget.arena) == BWResult_OK);
+  assert(bw_category_array_push_move(&budget.categories, category) == BWResult_OK);
+  assert(bw_arena_init(&json_arena, 64) == BWResult_OK);
+
+  BWString json = bw_budget_to_json_str(&budget, &json_arena);
+  assert(json.length > 64);
+  assert(json_arena.first != json_arena.current);
+  assert(bw_budget_from_json_str(&parsed, json.data) == BWResult_OK);
+  assert(parsed.categories.length == 1);
+  assert(strcmp(parsed.categories.items[0].title.data, title) == 0);
+
+  bw_budget_free(&parsed);
+  bw_arena_destroy(&json_arena);
+  bw_budget_free(&budget);
+  printf("(Pass) budget_json_string_grows_json_arena\n");
+}
+
 void test_budget_init_from_template(void)
 {
   BWBudget budget;
@@ -375,6 +461,37 @@ void test_budget_add_category(void)
 
   bw_budget_free(&budget);
   printf("(Pass) budget_add_category\n");
+}
+
+void test_budget_add_category_values(void)
+{
+  BWBudget budget;
+  BWCategory existing;
+
+  assert(bw_budget_init(&budget, "January") == BWResult_OK);
+  assert(bw_category_init(&existing, "Rent", 1000, 0, 0, CATEGORY_EXPENSES, &budget.arena) == BWResult_OK);
+  existing.id = 4;
+  existing.ordinal = 2;
+  assert(bw_category_array_push_move(&budget.categories, existing) == BWResult_OK);
+  assert(
+    bw_budget_add_category_values(
+      &budget,
+      "Food",
+      500,
+      0,
+      0,
+      CATEGORY_EXPENSES
+    ) == BWResult_OK
+  );
+  assert(budget.categories.length == 2);
+  assert(budget.categories.items[1].id == 5);
+  assert(budget.categories.items[1].ordinal == 3);
+  assert(strcmp(budget.categories.items[1].title.data, "Food") == 0);
+  assert(budget.categories.items[1].title.arena == &budget.arena);
+  assert(budget.categories.items[1].transactions.arena == &budget.arena);
+
+  bw_budget_free(&budget);
+  printf("(Pass) budget_add_category_values\n");
 }
 
 void test_budget_update_category(void)
@@ -449,6 +566,41 @@ void test_budget_add_transaction(void)
 
   bw_budget_free(&budget);
   printf("(Pass) budget_add_transaction\n");
+}
+
+void test_budget_add_transaction_values(void)
+{
+  BWBudget budget;
+  BWCategory category;
+  BWTransaction existing;
+
+  assert(bw_budget_init(&budget, "January") == BWResult_OK);
+  assert(bw_category_init(&category, "Food", 500, 0, 0, CATEGORY_EXPENSES, &budget.arena) == BWResult_OK);
+  category.id = 2;
+  assert(bw_category_array_push_move(&budget.categories, category) == BWResult_OK);
+  assert(bw_transaction_init(&existing, "Coffee", "Morning", test_date(), 5, &budget.arena) == BWResult_OK);
+  existing.id = 7;
+  assert(bw_category_add_transaction(&budget.categories.items[0], existing) == BWResult_OK);
+  assert(
+    bw_budget_add_transaction_values(
+      &budget,
+      2,
+      "Groceries",
+      "Weekly shop",
+      test_date(),
+      125
+    ) == BWResult_OK
+  );
+  assert(budget.categories.items[0].transactions.length == 2);
+  assert(budget.categories.items[0].transactions.items[1].id == 8);
+  assert(strcmp(budget.categories.items[0].transactions.items[1].title.data, "Groceries") == 0);
+  assert(strcmp(budget.categories.items[0].transactions.items[1].description.data, "Weekly shop") == 0);
+  assert(budget.categories.items[0].amount_actual == 130);
+  assert(budget.categories.items[0].transactions.items[1].title.arena == &budget.arena);
+  assert(budget.categories.items[0].transactions.items[1].description.arena == &budget.arena);
+
+  bw_budget_free(&budget);
+  printf("(Pass) budget_add_transaction_values\n");
 }
 
 void test_budget_update_transaction_same_category(void)
@@ -641,6 +793,8 @@ int main(void)
   test_category_init_with_accumulated();
   test_transaction_init();
   test_transaction_array_push_move();
+  test_arena_grows_string_allocation();
+  test_arena_grows_without_invalidating_existing_arrays();
   test_category_array_push_move();
   test_category_add_transaction();
   test_category_remove_transaction();
@@ -648,12 +802,15 @@ int main(void)
   test_category_remove_transaction_not_found();
   test_budget_nested_free();
   test_budget_json_string_round_trip();
+  test_budget_json_string_grows_json_arena();
   test_budget_init_from_template();
   test_budget_init_from_template_missing_file_keeps_budget();
   test_budget_add_category();
+  test_budget_add_category_values();
   test_budget_update_category();
   test_budget_remove_category();
   test_budget_add_transaction();
+  test_budget_add_transaction_values();
   test_budget_update_transaction_same_category();
   test_budget_update_transaction_move_category();
   test_budget_remove_transaction();

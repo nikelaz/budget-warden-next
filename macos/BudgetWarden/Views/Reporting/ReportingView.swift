@@ -4,8 +4,9 @@ struct ReportingView: View {
     let budgets: [BudgetDocument]
     let budget: BudgetDocument
     let currency: AppCurrency
-    @Binding var selectedBudgetID: BudgetDocument.ID?
+    let selectedBudgetID: BudgetDocument.ID?
     let onCreateBudget: () -> Void
+    let onSelectBudget: (BudgetDocument) -> Void
     let onAddTransaction: (TransactionDraft) -> Void
 
     @State private var isCreatingTransaction = false
@@ -23,7 +24,7 @@ struct ReportingView: View {
                 Menu {
                     ForEach(budgets) { budget in
                         Button {
-                            selectedBudgetID = budget.id
+                            onSelectBudget(budget)
                         } label: {
                             if selectedBudgetID == budget.id {
                                 Label(budget.title, systemImage: "checkmark")

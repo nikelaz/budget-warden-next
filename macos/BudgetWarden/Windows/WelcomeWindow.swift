@@ -14,11 +14,10 @@ struct WelcomeWindow: Scene {
             .commands {
                 CommandGroup(replacing: .appSettings) {
                     Button("Preferences...") {
-                        store.showPreferences()
+                        store.showPreferences(from: .welcome)
                     }
                     .keyboardShortcut(",", modifiers: .command)
                 }
             }
     }
 }
-

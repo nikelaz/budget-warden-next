@@ -1,52 +1,66 @@
 import Foundation
 
-enum AppCurrency: Swift.String, CaseIterable, Identifiable {
-    case eur = "EUR"
-    case usd = "USD"
-    case gbp = "GBP"
-    case bgn = "BGN"
-    case chf = "CHF"
-    case jpy = "JPY"
+nonisolated struct AppCurrency: RawRepresentable, CaseIterable, Hashable, Identifiable {
+    let rawValue: Swift.String
+
+    static var allCases: [AppCurrency] {
+        Locale.Currency.isoCurrencies
+            .map(AppCurrency.init(currency:))
+            .sorted { firstCurrency, secondCurrency in
+                firstCurrency.sortTitle.localizedStandardCompare(secondCurrency.sortTitle) == .orderedAscending
+            }
+    }
+
+    static let eur = AppCurrency(rawValue: "EUR")!
+
+    init?(rawValue: Swift.String) {
+        let normalizedRawValue = rawValue
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased(with: Locale(identifier: "en_US_POSIX"))
+
+        guard Self.availableCurrencyCodes.contains(normalizedRawValue) else {
+            return nil
+        }
+
+        self.rawValue = normalizedRawValue
+    }
 
     var id: Swift.String {
         rawValue
     }
 
     var title: Swift.String {
-        switch self {
-        case .eur:
-            return "Euro"
-        case .usd:
-            return "US Dollar"
-        case .gbp:
-            return "British Pound"
-        case .bgn:
-            return "Bulgarian Lev"
-        case .chf:
-            return "Swiss Franc"
-        case .jpy:
-            return "Japanese Yen"
-        }
+        Locale.current.localizedString(forCurrencyCode: rawValue) ?? rawValue
     }
 
     var symbol: Swift.String {
-        switch self {
-        case .eur:
-            return "€"
-        case .usd:
-            return "$"
-        case .gbp:
-            return "£"
-        case .bgn:
-            return "лв"
-        case .chf:
-            return "CHF"
-        case .jpy:
-            return "¥"
+        let formatter = NumberFormatter()
+        formatter.locale = .current
+        formatter.numberStyle = .currency
+        formatter.currencyCode = rawValue
+
+        guard
+            let currencySymbol = formatter.currencySymbol,
+            !currencySymbol.isEmpty,
+            currencySymbol != "¤"
+        else {
+            return rawValue
         }
+
+        return currencySymbol
     }
 
     var displayName: Swift.String {
-        "\(title) (\(symbol))"
+        symbol == rawValue ? "\(title) (\(rawValue))" : "\(title) (\(rawValue), \(symbol))"
+    }
+
+    private static let availableCurrencyCodes = Set(Locale.Currency.isoCurrencies.map(\.identifier))
+
+    private init(currency: Locale.Currency) {
+        rawValue = currency.identifier
+    }
+
+    private var sortTitle: Swift.String {
+        "\(title) \(rawValue)"
     }
 }

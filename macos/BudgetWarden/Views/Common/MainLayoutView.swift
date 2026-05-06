@@ -3,6 +3,7 @@ import SwiftUI
 struct MainLayoutView: View {
     @ObservedObject var store: BudgetStore
     @State private var selectedSection: SidebarSection = .budget
+    private let dialogHost = BudgetDialogHost.workspace
 
     var body: some View {
         NavigationSplitView {
@@ -17,8 +18,9 @@ struct MainLayoutView: View {
                         budgets: store.availableBudgets,
                         budget: selectedBudget,
                         currency: store.selectedCurrency,
-                        selectedBudgetID: $store.selectedBudgetID,
-                        onCreateBudget: store.showCreateBudget,
+                        selectedBudgetID: store.selectedBudgetID,
+                        onCreateBudget: showCreateBudget,
+                        onSelectBudget: store.selectBudget,
                         onAddCategory: store.addCategory,
                         onUpdateCategory: store.updateCategory,
                         onRemoveCategory: store.removeCategory,
@@ -30,8 +32,9 @@ struct MainLayoutView: View {
                         budgets: store.availableBudgets,
                         budget: selectedBudget,
                         currency: store.selectedCurrency,
-                        selectedBudgetID: $store.selectedBudgetID,
-                        onCreateBudget: store.showCreateBudget,
+                        selectedBudgetID: store.selectedBudgetID,
+                        onCreateBudget: showCreateBudget,
+                        onSelectBudget: store.selectBudget,
                         onAddTransaction: store.addTransaction
                     )
                 case .transactions:
@@ -39,8 +42,9 @@ struct MainLayoutView: View {
                         budgets: store.availableBudgets,
                         budget: selectedBudget,
                         currency: store.selectedCurrency,
-                        selectedBudgetID: $store.selectedBudgetID,
-                        onCreateBudget: store.showCreateBudget,
+                        selectedBudgetID: store.selectedBudgetID,
+                        onCreateBudget: showCreateBudget,
+                        onSelectBudget: store.selectBudget,
                         onAddTransaction: store.addTransaction,
                         onUpdateTransaction: store.updateTransaction,
                         onRemoveTransaction: store.removeTransaction
@@ -54,14 +58,14 @@ struct MainLayoutView: View {
                 .toolbar {
                     ToolbarItem(placement: .primaryAction) {
                         Button {
-                            store.showCreateBudget()
+                            showCreateBudget()
                         } label: {
                             Label("Create New Budget", systemImage: "plus")
                         }
                     }
                     ToolbarItem(placement: .primaryAction) {
                         Button {
-                            store.showPreferences()
+                            store.showPreferences(from: dialogHost)
                         } label: {
                             Label("Preferences", systemImage: "gearshape")
                         }
@@ -72,7 +76,7 @@ struct MainLayoutView: View {
         .task {
             store.loadBudgets()
         }
-        .sheet(isPresented: $store.isCreatingBudget) {
+        .sheet(isPresented: dialogBinding(\.isCreatingBudget, dismiss: store.cancelCreateBudget)) {
             CreateBudgetView(
                 store: store,
                 onSave: store.createBudget,
@@ -80,7 +84,7 @@ struct MainLayoutView: View {
             )
             .frame(minWidth: 420)
         }
-        .sheet(isPresented: $store.isConfiguringVault) {
+        .sheet(isPresented: dialogBinding(\.isConfiguringVault, dismiss: store.cancelVaultSetup)) {
             VaultSetupView(
                 initialLocalParentURL: store.configuredLocalVaultParentURL
             ) {
@@ -92,11 +96,11 @@ struct MainLayoutView: View {
             }
             .frame(minWidth: 440)
         }
-        .sheet(isPresented: $store.isShowingPreferences) {
+        .sheet(isPresented: dialogBinding(\.isShowingPreferences, dismiss: store.closePreferences)) {
             PreferencesView(
                 selectedCurrency: $store.selectedCurrency,
                 onClose: {
-                    store.isShowingPreferences = false
+                    store.closePreferences()
                 }
             )
             .frame(minWidth: 360)
@@ -109,6 +113,26 @@ struct MainLayoutView: View {
         } message: {
             Text(store.presentedError ?? "")
         }
+    }
+
+    private func showCreateBudget() {
+        store.showCreateBudget(from: dialogHost)
+    }
+
+    private func dialogBinding(
+        _ keyPath: KeyPath<BudgetStore, Bool>,
+        dismiss: @escaping () -> Void
+    ) -> Binding<Bool> {
+        Binding(
+            get: {
+                store[keyPath: keyPath] && store.dialogHost == dialogHost
+            },
+            set: { isPresented in
+                if !isPresented && store.dialogHost == dialogHost {
+                    dismiss()
+                }
+            }
+        )
     }
 
     private var errorBinding: Binding<Bool> {

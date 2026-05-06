@@ -39,6 +39,14 @@ void bw_budget_free(BWBudget *budget);
 
 // Categories
 BWResult bw_budget_add_category(BWBudget *budget, BWCategory category);
+BWResult bw_budget_add_category_values(
+  BWBudget *budget,
+  const char *title,
+  uint64_t amount_planned,
+  uint64_t amount_actual,
+  uint64_t amount_accumulated,
+  BWCategoryType category_type
+);
 BWResult bw_budget_update_category(
   BWBudget *budget, int category_id,
   BWCategoryUpdate category_update
@@ -55,6 +63,14 @@ BWResult bw_budget_reorder_categories(
 BWResult bw_budget_add_transaction(
   BWBudget *budget, int category_id,
   BWTransaction transaction
+);
+BWResult bw_budget_add_transaction_values(
+  BWBudget *budget,
+  int category_id,
+  const char *title,
+  const char *description,
+  BWDate date,
+  uint64_t amount
 );
 BWResult bw_budget_update_transaction(
   BWBudget *budget,

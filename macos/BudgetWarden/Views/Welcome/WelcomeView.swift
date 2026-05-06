@@ -10,13 +10,14 @@ struct WelcomeView: View {
     @Environment(\.openWindow) private var openWindow
     @State private var shouldOpenWorkspaceAfterCreate = false
     @State private var budgetPendingRemoval: BudgetDocument?
+    private let dialogHost = BudgetDialogHost.welcome
 
     var body: some View {
         HStack(spacing: 0) {
             WelcomeLeftColumn(
                 onCreateBudget: {
                     shouldOpenWorkspaceAfterCreate = true
-                    store.showCreateBudget()
+                    store.showCreateBudget(from: dialogHost)
                 },
                 onOpenBudget: {
                     if store.openBudgetInPlace() {
@@ -25,7 +26,7 @@ struct WelcomeView: View {
                 },
                 onConfigureVault: {
                     shouldOpenWorkspaceAfterCreate = false
-                    store.showVaultSetup()
+                    store.showVaultSetup(from: dialogHost)
                 }
             )
             WelcomeRightColumn(
@@ -52,7 +53,7 @@ struct WelcomeView: View {
         .task {
             store.loadBudgets()
         }
-        .sheet(isPresented: $store.isCreatingBudget) {
+        .sheet(isPresented: dialogBinding(\.isCreatingBudget, dismiss: store.cancelCreateBudget)) {
             CreateBudgetView(
                 store: store, 
                 onSave: { draft in
@@ -66,7 +67,7 @@ struct WelcomeView: View {
             )
             .frame(minWidth: 420)
         }
-        .sheet(isPresented: $store.isConfiguringVault) {
+        .sheet(isPresented: dialogBinding(\.isConfiguringVault, dismiss: store.cancelVaultSetup)) {
             VaultSetupView(
                 initialLocalParentURL: store.configuredLocalVaultParentURL
             ) {
@@ -81,11 +82,11 @@ struct WelcomeView: View {
             }
             .frame(minWidth: 440)
         }
-        .sheet(isPresented: $store.isShowingPreferences) {
+        .sheet(isPresented: dialogBinding(\.isShowingPreferences, dismiss: store.closePreferences)) {
             PreferencesView(
                 selectedCurrency: $store.selectedCurrency,
                 onClose: {
-                    store.isShowingPreferences = false
+                    store.closePreferences()
                 }
             )
             .frame(minWidth: 360)
@@ -138,6 +139,22 @@ struct WelcomeView: View {
 
     private func showInFinder(_ budget: BudgetDocument) {
         NSWorkspace.shared.activateFileViewerSelecting([budget.url])
+    }
+
+    private func dialogBinding(
+        _ keyPath: KeyPath<BudgetStore, Bool>,
+        dismiss: @escaping () -> Void
+    ) -> Binding<Bool> {
+        Binding(
+            get: {
+                store[keyPath: keyPath] && store.dialogHost == dialogHost
+            },
+            set: { isPresented in
+                if !isPresented && store.dialogHost == dialogHost {
+                    dismiss()
+                }
+            }
+        )
     }
 
     private var errorBinding: Binding<Bool> {

@@ -8,10 +8,19 @@
 #include <assert.h>
 #include "bw-result.h"
 
+typedef struct BWArenaBlock {
+  unsigned char *buffer;
+  size_t capacity;
+  size_t offset;
+  struct BWArenaBlock *next;
+} BWArenaBlock;
+
 typedef struct {
   unsigned char *buffer;
   size_t capacity;
   size_t offset;
+  BWArenaBlock *first;
+  BWArenaBlock *current;
 } BWArena;
 
 BWResult bw_arena_init(BWArena *arena, size_t capacity);

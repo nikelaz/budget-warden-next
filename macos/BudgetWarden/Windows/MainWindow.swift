@@ -18,16 +18,15 @@ struct MainWindow: Scene {
     private var windowCommands: some Commands {
         CommandGroup(replacing: .appSettings) {
             Button("Preferences...") {
-                store.showPreferences()
+                store.showPreferences(from: .workspace)
             }
             .keyboardShortcut(",", modifiers: .command)
         }
         
         CommandGroup(after: .newItem) {
             Button("Configure Vault...") {
-                store.showVaultSetup()
+                store.showVaultSetup(from: .workspace)
             }
         }
     }
 }
-

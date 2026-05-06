@@ -2,7 +2,7 @@
 #define BW_STRING_H
 
 #include <stdlib.h>
-#include <bw-arena.h>
+#include "bw-arena.h"
 
 typedef struct {
     char *data;

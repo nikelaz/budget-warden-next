@@ -8,12 +8,14 @@
 
 /* Begin PBXBuildFile section */
 		5A7C00012FA5A10000B77777 /* budget-warden.icon in Resources */ = {isa = PBXBuildFile; fileRef = 5A7C00002FA5A10000B77777 /* budget-warden.icon */; };
-		5ABF61442FA460000057F866 /* budget.c in Sources */ = {isa = PBXBuildFile; fileRef = 5ABF613D2FA460000057F866 /* budget.c */; };
-		5ABF614F2FA45C180057F866 /* bwstring.c in Sources */ = {isa = PBXBuildFile; fileRef = 5ABF614E2FA45C180057F866 /* bwstring.c */; };
-		5ABF61502FA45C180057F866 /* bwdate.c in Sources */ = {isa = PBXBuildFile; fileRef = 5ABF614C2FA45C180057F866 /* bwdate.c */; };
-		5AFE11A02FA4AB32002CB713 /* cjson.c in Sources */ = {isa = PBXBuildFile; fileRef = 5AFE119B2FA4AB32002CB713 /* cjson.c */; };
-		5AFE11A12FA4AB32002CB713 /* category.c in Sources */ = {isa = PBXBuildFile; fileRef = 5AFE11992FA4AB32002CB713 /* category.c */; };
-		5AFE11A22FA4AB32002CB713 /* transaction.c in Sources */ = {isa = PBXBuildFile; fileRef = 5AFE119E2FA4AB32002CB713 /* transaction.c */; };
+		5AECF5BE2FAB6D6C00223E29 /* bw-budget.c in Sources */ = {isa = PBXBuildFile; fileRef = 5AECF5B12FAB6D6C00223E29 /* bw-budget.c */; };
+		5AECF5BF2FAB6D6C00223E29 /* bw-transaction.c in Sources */ = {isa = PBXBuildFile; fileRef = 5AECF5BD2FAB6D6C00223E29 /* bw-transaction.c */; };
+		5AECF5C02FAB6D6C00223E29 /* bw-arena.c in Sources */ = {isa = PBXBuildFile; fileRef = 5AECF5AF2FAB6D6C00223E29 /* bw-arena.c */; };
+		5AECF5C12FAB6D6C00223E29 /* bw-budget-json.c in Sources */ = {isa = PBXBuildFile; fileRef = 5AECF5B32FAB6D6C00223E29 /* bw-budget-json.c */; };
+		5AECF5C22FAB6D6C00223E29 /* bw-date.c in Sources */ = {isa = PBXBuildFile; fileRef = 5AECF5B82FAB6D6C00223E29 /* bw-date.c */; };
+		5AECF5C32FAB6D6C00223E29 /* bw-string.c in Sources */ = {isa = PBXBuildFile; fileRef = 5AECF5BB2FAB6D6C00223E29 /* bw-string.c */; };
+		5AECF5C42FAB6D6C00223E29 /* bw-category.c in Sources */ = {isa = PBXBuildFile; fileRef = 5AECF5B52FAB6D6C00223E29 /* bw-category.c */; };
+		5AECF5C52FAB6D6C00223E29 /* ../vendor/cJSON/cJSON.c in Sources */ = {isa = PBXBuildFile; fileRef = 5AECF5C72FAB6D6C00223E29 /* ../vendor/cJSON/cJSON.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -36,23 +38,26 @@
 /* Begin PBXFileReference section */
 		5A7C00002FA5A10000B77777 /* budget-warden.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = "budget-warden.icon"; sourceTree = "<group>"; };
 		5ABF612E2FA456980057F866 /* BudgetWarden.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BudgetWarden.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		5ABF613D2FA460000057F866 /* budget.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = budget.c; sourceTree = "<group>"; };
-		5ABF61402FA460000057F866 /* budget.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = budget.h; sourceTree = "<group>"; };
-		5ABF61432FA460000057F866 /* result.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = result.h; sourceTree = "<group>"; };
-		5ABF614B2FA45C180057F866 /* bwdate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bwdate.h; sourceTree = "<group>"; };
-		5ABF614C2FA45C180057F866 /* bwdate.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = bwdate.c; sourceTree = "<group>"; };
-		5ABF614D2FA45C180057F866 /* bwstring.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bwstring.h; sourceTree = "<group>"; };
-		5ABF614E2FA45C180057F866 /* bwstring.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = bwstring.c; sourceTree = "<group>"; };
 		5AC100002FA7000000AAA001 /* BudgetWardenTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BudgetWardenTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		5AC100012FA7000000AAA001 /* BudgetWardenUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BudgetWardenUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		5AFE11972FA4AB32002CB713 /* budget_warden_core.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = budget_warden_core.h; sourceTree = "<group>"; };
-		5AFE11982FA4AB32002CB713 /* category.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = category.h; sourceTree = "<group>"; };
-		5AFE11992FA4AB32002CB713 /* category.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = category.c; sourceTree = "<group>"; };
-		5AFE119A2FA4AB32002CB713 /* cjson.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = cjson.h; sourceTree = "<group>"; };
-		5AFE119B2FA4AB32002CB713 /* cjson.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = cjson.c; sourceTree = "<group>"; };
-		5AFE119D2FA4AB32002CB713 /* transaction.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = transaction.h; sourceTree = "<group>"; };
-		5AFE119E2FA4AB32002CB713 /* transaction.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = transaction.c; sourceTree = "<group>"; };
-		5AFE119F2FA4AB32002CB713 /* user_preferences.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = user_preferences.h; sourceTree = "<group>"; };
+		5AECF5AE2FAB6D6C00223E29 /* bw-arena.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "bw-arena.h"; sourceTree = "<group>"; };
+		5AECF5AF2FAB6D6C00223E29 /* bw-arena.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "bw-arena.c"; sourceTree = "<group>"; };
+		5AECF5B02FAB6D6C00223E29 /* bw-budget.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "bw-budget.h"; sourceTree = "<group>"; };
+		5AECF5B12FAB6D6C00223E29 /* bw-budget.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "bw-budget.c"; sourceTree = "<group>"; };
+		5AECF5B22FAB6D6C00223E29 /* bw-budget-json.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "bw-budget-json.h"; sourceTree = "<group>"; };
+		5AECF5B32FAB6D6C00223E29 /* bw-budget-json.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "bw-budget-json.c"; sourceTree = "<group>"; };
+		5AECF5B42FAB6D6C00223E29 /* bw-category.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "bw-category.h"; sourceTree = "<group>"; };
+		5AECF5B52FAB6D6C00223E29 /* bw-category.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "bw-category.c"; sourceTree = "<group>"; };
+		5AECF5B62FAB6D6C00223E29 /* bw-core.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "bw-core.h"; sourceTree = "<group>"; };
+		5AECF5B72FAB6D6C00223E29 /* bw-date.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "bw-date.h"; sourceTree = "<group>"; };
+		5AECF5B82FAB6D6C00223E29 /* bw-date.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "bw-date.c"; sourceTree = "<group>"; };
+		5AECF5B92FAB6D6C00223E29 /* bw-result.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "bw-result.h"; sourceTree = "<group>"; };
+		5AECF5BA2FAB6D6C00223E29 /* bw-string.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "bw-string.h"; sourceTree = "<group>"; };
+		5AECF5BB2FAB6D6C00223E29 /* bw-string.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "bw-string.c"; sourceTree = "<group>"; };
+		5AECF5BC2FAB6D6C00223E29 /* bw-transaction.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "bw-transaction.h"; sourceTree = "<group>"; };
+		5AECF5BD2FAB6D6C00223E29 /* bw-transaction.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "bw-transaction.c"; sourceTree = "<group>"; };
+		5AECF5C62FAB6D6C00223E29 /* ../vendor/cJSON/cJSON.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ../vendor/cJSON/cJSON.h; sourceTree = "<group>"; };
+		5AECF5C72FAB6D6C00223E29 /* ../vendor/cJSON/cJSON.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ../vendor/cJSON/cJSON.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -123,21 +128,24 @@
 		5ABF613C2FA460000057F866 /* Core */ = {
 			isa = PBXGroup;
 			children = (
-				5AFE11972FA4AB32002CB713 /* budget_warden_core.h */,
-				5AFE11982FA4AB32002CB713 /* category.h */,
-				5AFE11992FA4AB32002CB713 /* category.c */,
-				5AFE119A2FA4AB32002CB713 /* cjson.h */,
-				5AFE119B2FA4AB32002CB713 /* cjson.c */,
-				5AFE119D2FA4AB32002CB713 /* transaction.h */,
-				5AFE119E2FA4AB32002CB713 /* transaction.c */,
-				5AFE119F2FA4AB32002CB713 /* user_preferences.h */,
-				5ABF614B2FA45C180057F866 /* bwdate.h */,
-				5ABF614C2FA45C180057F866 /* bwdate.c */,
-				5ABF614D2FA45C180057F866 /* bwstring.h */,
-				5ABF614E2FA45C180057F866 /* bwstring.c */,
-				5ABF613D2FA460000057F866 /* budget.c */,
-				5ABF61402FA460000057F866 /* budget.h */,
-				5ABF61432FA460000057F866 /* result.h */,
+				5AECF5AE2FAB6D6C00223E29 /* bw-arena.h */,
+				5AECF5AF2FAB6D6C00223E29 /* bw-arena.c */,
+				5AECF5B02FAB6D6C00223E29 /* bw-budget.h */,
+				5AECF5B12FAB6D6C00223E29 /* bw-budget.c */,
+				5AECF5B22FAB6D6C00223E29 /* bw-budget-json.h */,
+				5AECF5B32FAB6D6C00223E29 /* bw-budget-json.c */,
+				5AECF5B42FAB6D6C00223E29 /* bw-category.h */,
+				5AECF5B52FAB6D6C00223E29 /* bw-category.c */,
+				5AECF5B62FAB6D6C00223E29 /* bw-core.h */,
+				5AECF5B72FAB6D6C00223E29 /* bw-date.h */,
+				5AECF5B82FAB6D6C00223E29 /* bw-date.c */,
+				5AECF5B92FAB6D6C00223E29 /* bw-result.h */,
+				5AECF5BA2FAB6D6C00223E29 /* bw-string.h */,
+				5AECF5BB2FAB6D6C00223E29 /* bw-string.c */,
+				5AECF5BC2FAB6D6C00223E29 /* bw-transaction.h */,
+				5AECF5BD2FAB6D6C00223E29 /* bw-transaction.c */,
+				5AECF5C62FAB6D6C00223E29 /* ../vendor/cJSON/cJSON.h */,
+				5AECF5C72FAB6D6C00223E29 /* ../vendor/cJSON/cJSON.c */,
 			);
 			name = Core;
 			path = ../core/src;
@@ -288,12 +296,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				5ABF61442FA460000057F866 /* budget.c in Sources */,
-				5ABF614F2FA45C180057F866 /* bwstring.c in Sources */,
-				5ABF61502FA45C180057F866 /* bwdate.c in Sources */,
-				5AFE11A02FA4AB32002CB713 /* cjson.c in Sources */,
-				5AFE11A12FA4AB32002CB713 /* category.c in Sources */,
-				5AFE11A22FA4AB32002CB713 /* transaction.c in Sources */,
+				5AECF5BE2FAB6D6C00223E29 /* bw-budget.c in Sources */,
+				5AECF5BF2FAB6D6C00223E29 /* bw-transaction.c in Sources */,
+				5AECF5C02FAB6D6C00223E29 /* bw-arena.c in Sources */,
+				5AECF5C12FAB6D6C00223E29 /* bw-budget-json.c in Sources */,
+				5AECF5C22FAB6D6C00223E29 /* bw-date.c in Sources */,
+				5AECF5C32FAB6D6C00223E29 /* bw-string.c in Sources */,
+				5AECF5C42FAB6D6C00223E29 /* bw-category.c in Sources */,
+				5AECF5C52FAB6D6C00223E29 /* ../vendor/cJSON/cJSON.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -458,7 +468,10 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
-				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/../core/src";
+				HEADER_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/../core/src",
+					"$(PROJECT_DIR)/../core/vendor/cJSON",
+				);
 				INFOPLIST_KEY_CFBundleDisplayName = "Budget Warden";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -493,7 +506,10 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
-				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/../core/src";
+				HEADER_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/../core/src",
+					"$(PROJECT_DIR)/../core/vendor/cJSON",
+				);
 				INFOPLIST_KEY_CFBundleDisplayName = "Budget Warden";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";

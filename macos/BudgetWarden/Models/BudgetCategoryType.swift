@@ -23,7 +23,7 @@ enum BudgetCategoryType: CaseIterable, Identifiable {
         }
     }
 
-    var coreType: CategoryType {
+    var coreType: BWCategoryType {
         switch self {
         case .income:
             return CATEGORY_INCOME
@@ -36,7 +36,7 @@ enum BudgetCategoryType: CaseIterable, Identifiable {
         }
     }
 
-    init?(coreType: CategoryType) {
+    init?(coreType: BWCategoryType) {
         switch coreType {
         case CATEGORY_INCOME:
             self = .income

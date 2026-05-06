@@ -1,6 +1,11 @@
 import Foundation
 import Combine
 
+enum BudgetDialogHost {
+    case welcome
+    case workspace
+}
+
 @MainActor
 final class BudgetStore: ObservableObject {
     @Published var budgets: [BudgetDocument] = []
@@ -9,6 +14,7 @@ final class BudgetStore: ObservableObject {
     @Published var isCreatingBudget = false
     @Published var isConfiguringVault = false
     @Published var isShowingPreferences = false
+    @Published var dialogHost: BudgetDialogHost?
     @Published var presentedError: Swift.String?
     @Published var selectedCurrency: AppCurrency {
         didSet {
@@ -59,31 +65,47 @@ final class BudgetStore: ObservableObject {
         vault.configuredLocalParentURL()
     }
 
-    func showCreateBudget() {
+    func showCreateBudget(from host: BudgetDialogHost) {
         presentedError = nil
+        dialogHost = host
         isCreatingBudget = true
     }
 
-    func showVaultSetup() {
+    func showVaultSetup(from host: BudgetDialogHost) {
         presentedError = nil
+        dialogHost = host
         isConfiguringVault = true
     }
 
-    func showPreferences() {
+    func showPreferences(from host: BudgetDialogHost) {
+        dialogHost = host
         isShowingPreferences = true
     }
 
     func selectBudget(_ budget: BudgetDocument) {
-        selectedBudgetID = budget.id
+        do {
+            let activated = try repository.activateBudget(budget)
+            replaceBudgetSnapshot(activated)
+            selectedBudgetID = activated.id
+        } catch {
+            presentedError = error.localizedDescription
+        }
     }
 
     func cancelCreateBudget() {
         isCreatingBudget = false
+        clearDialogHostIfIdle()
     }
 
     func cancelVaultSetup() {
         pendingDraft = nil
         isConfiguringVault = false
+        clearDialogHostIfIdle()
+    }
+
+    func closePreferences() {
+        isShowingPreferences = false
+        clearDialogHostIfIdle()
     }
 
     func loadBudgets() {
@@ -91,12 +113,15 @@ final class BudgetStore: ObservableObject {
             let loadedBudgets = try repository.loadBudgets()
             budgets = loadedBudgets
 
-            if selectedBudgetID == nil || !loadedBudgets.contains(where: { $0.id == selectedBudgetID }) {
+            if selectedBudgetID == nil || !availableBudgets.contains(where: { $0.id == selectedBudgetID }) {
                 selectedBudgetID = externalBudget?.id ?? loadedBudgets.first?.id
             }
+
+            activateCurrentSelection()
         } catch BudgetVaultError.vaultNotConfigured {
             budgets = []
             selectedBudgetID = externalBudget?.id
+            activateCurrentSelection()
         } catch {
             presentedError = error.localizedDescription
         }
@@ -133,6 +158,7 @@ final class BudgetStore: ObservableObject {
             isConfiguringVault = false
 
             if pendingDraft == nil {
+                clearDialogHostIfIdle()
                 loadBudgets()
             } else {
                 savePendingBudget()
@@ -153,7 +179,9 @@ final class BudgetStore: ObservableObject {
 
             if let vaultBudget = budgets.first(where: { sameFile($0.url, openedBudget.url) }) {
                 externalBudget = nil
-                selectedBudgetID = vaultBudget.id
+                let activated = try repository.activateBudget(vaultBudget)
+                replaceBudgetSnapshot(activated)
+                selectedBudgetID = activated.id
             } else {
                 externalBudget = openedBudget
                 selectedBudgetID = openedBudget.id
@@ -298,6 +326,8 @@ final class BudgetStore: ObservableObject {
             if wasSelected || !loadedBudgets.contains(where: { $0.id == selectedBudgetID }) {
                 selectedBudgetID = externalBudget?.id ?? loadedBudgets.first?.id
             }
+
+            activateCurrentSelection()
         } catch {
             presentedError = error.localizedDescription
         }
@@ -315,6 +345,8 @@ final class BudgetStore: ObservableObject {
             budgets = try repository.loadBudgets()
             externalBudget = nil
             selectedBudgetID = saved.id
+            replaceBudgetSnapshot(saved)
+            clearDialogHostIfIdle()
         } catch {
             presentedError = error.localizedDescription
         }
@@ -327,8 +359,38 @@ final class BudgetStore: ObservableObject {
     private func updateBudgetList(afterChanging updated: BudgetDocument) throws {
         if budgets.contains(where: { sameFile($0.url, updated.url) }) {
             budgets = try repository.loadBudgets()
+            replaceBudgetSnapshot(updated)
         } else {
             externalBudget = updated
+        }
+    }
+
+    private func activateCurrentSelection() {
+        guard let selectedBudget else {
+            repository.closeActiveBudget()
+            return
+        }
+
+        do {
+            let activated = try repository.activateBudget(selectedBudget)
+            replaceBudgetSnapshot(activated)
+            selectedBudgetID = activated.id
+        } catch {
+            presentedError = error.localizedDescription
+        }
+    }
+
+    private func replaceBudgetSnapshot(_ budget: BudgetDocument) {
+        if let index = budgets.firstIndex(where: { sameFile($0.url, budget.url) }) {
+            budgets[index] = budget
+        } else if externalBudget.map({ sameFile($0.url, budget.url) }) ?? false {
+            externalBudget = budget
+        }
+    }
+
+    private func clearDialogHostIfIdle() {
+        if !isCreatingBudget && !isConfiguringVault && !isShowingPreferences {
+            dialogHost = nil
         }
     }
 }

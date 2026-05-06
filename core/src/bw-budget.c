@@ -444,6 +444,43 @@ BWResult bw_budget_add_category(BWBudget *budget, BWCategory category)
   return bw_category_array_push_move(&budget->categories, stored);
 }
 
+BWResult bw_budget_add_category_values(
+  BWBudget *budget,
+  const char *title,
+  uint64_t amount_planned,
+  uint64_t amount_actual,
+  uint64_t amount_accumulated,
+  BWCategoryType category_type
+)
+{
+  if (budget == NULL || title == NULL)
+  {
+    return BWResult_ERR;
+  }
+
+  BWCategory stored = {0};
+
+  if (
+    bw_category_init(
+      &stored,
+      title,
+      amount_planned,
+      amount_actual,
+      amount_accumulated,
+      category_type,
+      &budget->arena
+    ) == BWResult_ERR
+  )
+  {
+    return BWResult_ERR;
+  }
+
+  stored.id = bw_budget_next_category_id(budget);
+  stored.ordinal = bw_budget_next_category_ordinal(budget, category_type);
+
+  return bw_category_array_push_move(&budget->categories, stored);
+}
+
 BWResult bw_budget_update_category(BWBudget *budget, int category_id, BWCategoryUpdate category_update)
 {
   BWCategory *category = bw_budget_find_category(budget, category_id);
@@ -509,6 +546,38 @@ BWResult bw_budget_add_transaction(BWBudget *budget, int category_id, BWTransact
     return BWResult_ERR;
   }
 
+  return bw_category_add_transaction(category, stored);
+}
+
+BWResult bw_budget_add_transaction_values(
+  BWBudget *budget,
+  int category_id,
+  const char *title,
+  const char *description,
+  BWDate date,
+  uint64_t amount
+)
+{
+  BWCategory *category = bw_budget_find_category(budget, category_id);
+
+  if (budget == NULL || category == NULL || title == NULL || description == NULL)
+  {
+    return BWResult_ERR;
+  }
+
+  if (UINT64_MAX - category->amount_actual < amount)
+  {
+    return BWResult_ERR;
+  }
+
+  BWTransaction stored = {0};
+
+  if (bw_transaction_init(&stored, title, description, date, amount, &budget->arena) == BWResult_ERR)
+  {
+    return BWResult_ERR;
+  }
+
+  stored.id = bw_budget_next_transaction_id(budget);
   return bw_category_add_transaction(category, stored);
 }
 
