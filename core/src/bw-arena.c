@@ -12,7 +12,7 @@ static uintptr_t align_forward(uintptr_t ptr, size_t align) {
     return p;
 }
 
-BWResult arena_init(BWArena *arena, size_t capacity)
+BWResult bw_arena_init(BWArena *arena, size_t capacity)
 { 
     if (arena == NULL)
     {
@@ -31,18 +31,18 @@ BWResult arena_init(BWArena *arena, size_t capacity)
     return BWResult_OK;
 }
 
-void arena_destroy(BWArena *arena) {
+void bw_arena_destroy(BWArena *arena) {
     free(arena->buffer);
     arena->buffer = NULL;
     arena->capacity = 0;
     arena->offset = 0;
 }
 
-void arena_reset(BWArena *arena) {
+void bw_arena_reset(BWArena *arena) {
     arena->offset = 0;
 }
 
-void *arena_alloc_aligned(BWArena *arena, size_t size, size_t align) {
+void *bw_arena_alloc_aligned(BWArena *arena, size_t size, size_t align) {
     uintptr_t base = (uintptr_t)arena->buffer;
     uintptr_t current = base + arena->offset;
     uintptr_t aligned = align_forward(current, align);

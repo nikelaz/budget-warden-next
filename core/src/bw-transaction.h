@@ -6,7 +6,7 @@
 #include "bw-string.h"
 #include "bw-result.h"
 #include "bw-date.h"
-#include "cJSON.h"
+#include "bw-arena.h"
 
 typedef struct {
   int id;
@@ -20,6 +20,7 @@ typedef struct {
   BWTransaction *items;
   size_t length;
   size_t capacity;
+  BWArena *arena;
 } BWTransactionArray;
 
 BWResult bw_transaction_init(
@@ -27,15 +28,14 @@ BWResult bw_transaction_init(
   const char *title,
   const char *description,
   BWDate date,
-  uint64_t amount
+  uint64_t amount,
+  BWArena *arena
 );
 
-void bw_transaction_free(BWTransaction *transaction);
-cJSON *bw_transaction_to_json(BWTransaction *transaction);
-BWResult bw_transaction_from_json(BWTransaction *transaction, cJSON *json);
+void bw_transaction_clear(BWTransaction *transaction);
 
-BWResult bw_transaction_array_init(BWTransactionArray *array);
+BWResult bw_transaction_array_init(BWTransactionArray *array, BWArena *arena);
 BWResult bw_transaction_array_push_move(BWTransactionArray *array, BWTransaction transaction);
-void bw_transaction_array_free(BWTransactionArray *array);
+void bw_transaction_array_clear(BWTransactionArray *array);
 
 #endif

@@ -16,11 +16,14 @@ BWResult bw_date_init(BWDate *date, int year, int month, int day)
   return BWResult_OK;
 }
 
-BWString bw_date_to_string(const BWDate *date)
+BWString bw_date_to_string(const BWDate *date, BWArena *arena)
 {
-  BWString date_str;
+  BWString date_str = {0};
   
-  bw_string_init(&date_str);
+  if (date == NULL || bw_string_init(&date_str, arena) == BWResult_ERR)
+  {
+    return date_str;
+  }
 
   char year_str[5];
   snprintf(year_str, sizeof(year_str), "%d", date->year);

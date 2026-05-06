@@ -4,7 +4,6 @@
 #include "bw-string.h"
 #include "bw-result.h"
 #include "bw-category.h"
-#include "cJSON.h"
 #include "bw-arena.h"
 #include <stddef.h>
 
@@ -37,12 +36,6 @@ BWResult bw_budget_init_from_template(BWBudget *budget, const char *template_pat
 
 // Dealloc
 void bw_budget_free(BWBudget *budget);
-
-// JSON Serialization/Deserialization
-cJSON *bw_budget_to_json(BWBudget *budget);
-BWString bw_budget_to_json_str(BWBudget *budget);
-BWResult bw_budget_from_json(BWBudget *budget, cJSON *json);
-BWResult bw_budget_from_json_str(BWBudget *budget, const char *budget_json);
 
 // Categories
 BWResult bw_budget_add_category(BWBudget *budget, BWCategory category);

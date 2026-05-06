@@ -1,21 +1,11 @@
 #include "bw-budget.h"
-#include "bw-arena.h"
+#include "bw-budget-json.h"
 #include "bw-string.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 
-static cJSON *json_get_string(cJSON *json, const char *name)
-{
-  cJSON *item = cJSON_GetObjectItemCaseSensitive(json, name);
-
-  if (!cJSON_IsString(item) || item->valuestring == NULL)
-  {
-    return NULL;
-  }
-
-  return item;
-}
+#define BUDGET_ARENA_CAPACITY (1024 * 1024)
 
 static int category_type_supports_accumulated(BWCategoryType category_type)
 {
@@ -142,29 +132,92 @@ static int bw_budget_next_transaction_id(BWBudget *budget)
   return max_id + 1;
 }
 
-// Todo(Niki): This static method should not be here
-static BWResult bw_string_replace(BWString *target, const char *text)
+static BWResult bw_string_replace(BWString *target, const char *text, BWArena *arena)
 {
-  if (target == NULL || text == NULL)
+  if (target == NULL || text == NULL || arena == NULL)
   {
     return BWResult_ERR;
   }
 
   BWString replacement;
 
-  if (bw_string_init(&replacement) == BWResult_ERR)
+  if (bw_string_init(&replacement, arena) == BWResult_ERR)
   {
     return BWResult_ERR;
   }
 
   if (bw_string_append(&replacement, text) == BWResult_ERR)
   {
-    bw_string_free(&replacement);
     return BWResult_ERR;
   }
 
-  bw_string_free(target);
   *target = replacement;
+  return BWResult_OK;
+}
+
+static BWResult bw_budget_clone_transaction(BWBudget *budget, const BWTransaction *source, BWTransaction *target)
+{
+  if (budget == NULL || source == NULL || target == NULL)
+  {
+    return BWResult_ERR;
+  }
+
+  if (
+    bw_transaction_init(
+      target,
+      source->title.data,
+      source->description.data,
+      source->date,
+      source->amount,
+      &budget->arena
+    ) == BWResult_ERR
+  )
+  {
+    return BWResult_ERR;
+  }
+
+  target->id = source->id;
+  return BWResult_OK;
+}
+
+static BWResult bw_budget_clone_category(BWBudget *budget, const BWCategory *source, BWCategory *target)
+{
+  if (budget == NULL || source == NULL || target == NULL)
+  {
+    return BWResult_ERR;
+  }
+
+  if (
+    bw_category_init(
+      target,
+      source->title.data,
+      source->amount_planned,
+      source->amount_actual,
+      source->amount_accumulated,
+      source->category_type,
+      &budget->arena
+    ) == BWResult_ERR
+  )
+  {
+    return BWResult_ERR;
+  }
+
+  target->id = source->id;
+  target->ordinal = source->ordinal;
+
+  for (size_t i = 0; i < source->transactions.length; i++)
+  {
+    BWTransaction transaction = {0};
+
+    if (
+      bw_budget_clone_transaction(budget, &source->transactions.items[i], &transaction) == BWResult_ERR ||
+      bw_transaction_array_push_move(&target->transactions, transaction) == BWResult_ERR
+    )
+    {
+      return BWResult_ERR;
+    }
+  }
+
   return BWResult_OK;
 }
 
@@ -212,49 +265,83 @@ static int int_array_contains(const int *items, size_t count, int value)
   return 0;
 }
 
-BWResult bw_budget_init(
-    BWBudget *budget,
-    const char *title
-)
+static void bw_budget_rebind_arena(BWBudget *budget)
+{
+  if (budget == NULL)
+  {
+    return;
+  }
+
+  budget->title.arena = &budget->arena;
+  budget->categories.arena = &budget->arena;
+
+  for (size_t category_index = 0; category_index < budget->categories.length; category_index++)
+  {
+    BWCategory *category = &budget->categories.items[category_index];
+    category->title.arena = &budget->arena;
+    category->transactions.arena = &budget->arena;
+
+    for (size_t transaction_index = 0; transaction_index < category->transactions.length; transaction_index++)
+    {
+      BWTransaction *transaction = &category->transactions.items[transaction_index];
+      transaction->title.arena = &budget->arena;
+      transaction->description.arena = &budget->arena;
+    }
+  }
+}
+
+BWResult bw_budget_init(BWBudget *budget, const char *title)
 {
   if (budget == NULL || title == NULL)
   {
     return BWResult_ERR;
   }
 
+  BWArena arena;
+  if (bw_arena_init(&arena, BUDGET_ARENA_CAPACITY) == BWResult_ERR)
+  {
+    return BWResult_ERR;
+  }
+
+  budget->id = 0;
+  budget->arena = arena;
+
   BWString title_str;
 
-  if (bw_string_init(&title_str) == BWResult_ERR)
+  if (bw_string_init(&title_str, &budget->arena) == BWResult_ERR)
   {
+    bw_arena_destroy(&budget->arena);
     return BWResult_ERR;
   }
 
   if (bw_string_append(&title_str, title) == BWResult_ERR)
   {
-    bw_string_free(&title_str);
+    bw_arena_destroy(&budget->arena);
     return BWResult_ERR;
   }
 
   BWCategoryArray categories;
 
-  if (bw_category_array_init(&categories) == BWResult_ERR)
+  if (bw_category_array_init(&categories, &budget->arena) == BWResult_ERR)
   {
-    bw_string_free(&title_str);
+    bw_arena_destroy(&budget->arena);
     return BWResult_ERR;
   }
 
-  budget->id = 0;
   budget->title = title_str;
   budget->categories = categories;
   return BWResult_OK;
 }
 
-BWResult bw_budget_init_from_template(
-  BWBudget *budget,
-  const char *template_path
-)
+BWResult bw_budget_init_from_template(BWBudget *budget, const char *template_path)
 {
   if (budget == NULL || template_path == NULL)
+  {
+    return BWResult_ERR;
+  }
+
+  BWArena json_arena;
+  if (bw_arena_init(&json_arena, BUDGET_ARENA_CAPACITY) == BWResult_ERR)
   {
     return BWResult_ERR;
   }
@@ -263,20 +350,22 @@ BWResult bw_budget_init_from_template(
 
   if (file == NULL)
   {
+    bw_arena_destroy(&json_arena);
     return BWResult_ERR;
   }
 
   BWString template_file_contents;
 
-  if (bw_string_init(&template_file_contents) == BWResult_ERR)
+  if (bw_string_init(&template_file_contents, &json_arena) == BWResult_ERR)
   {
     fclose(file);
+    bw_arena_destroy(&json_arena);
     return BWResult_ERR;
   }
 
   char buffer[4096];
 
-  while(1)
+  while (1)
   {
     size_t bytes_read = fread(buffer, 1, sizeof buffer, file);
 
@@ -284,8 +373,8 @@ BWResult bw_budget_init_from_template(
     {
       if (bw_string_append_len(&template_file_contents, buffer, bytes_read) == BWResult_ERR)
       {
-        bw_string_free(&template_file_contents);
         fclose(file);
+        bw_arena_destroy(&json_arena);
         return BWResult_ERR;
       }
     }
@@ -299,8 +388,8 @@ BWResult bw_budget_init_from_template(
 
       if (ferror(file))
       {
-        bw_string_free(&template_file_contents);
         fclose(file);
+        bw_arena_destroy(&json_arena);
         return BWResult_ERR;
       }
     }
@@ -309,8 +398,8 @@ BWResult bw_budget_init_from_template(
   BWBudget template_budget = {0};
   BWResult budget_from_json_res = bw_budget_from_json_str(&template_budget, template_file_contents.data);
 
-  bw_string_free(&template_file_contents);
   fclose(file);
+  bw_arena_destroy(&json_arena);
 
   if (budget_from_json_res == BWResult_ERR)
   {
@@ -319,163 +408,21 @@ BWResult bw_budget_init_from_template(
 
   bw_budget_free(budget);
   *budget = template_budget;
+  bw_budget_rebind_arena(budget);
   return BWResult_OK;
 }
 
 void bw_budget_free(BWBudget *budget)
 {
-  bw_category_array_free(&budget->categories);
-  bw_string_free(&budget->title);
-}
-
-cJSON *bw_budget_to_json(BWBudget *budget)
-{
   if (budget == NULL)
   {
-    return NULL;
+    return;
   }
 
-  cJSON *json = cJSON_CreateObject();
-  cJSON *categories = cJSON_CreateArray();
-
-  if (json == NULL || categories == NULL)
-  {
-    cJSON_Delete(json);
-    cJSON_Delete(categories);
-    return NULL;
-  }
-
-  if (
-    cJSON_AddNumberToObject(json, "id", budget->id) == NULL ||
-    cJSON_AddStringToObject(json, "title", budget->title.data) == NULL ||
-    !cJSON_AddItemToObject(json, "categories", categories)
-  )
-  {
-    cJSON_Delete(json);
-    cJSON_Delete(categories);
-    return NULL;
-  }
-
-  categories = NULL;
-
-  for (size_t i = 0; i < budget->categories.length; i++)
-  {
-    cJSON *category = bw_category_to_json(&budget->categories.items[i]);
-
-    if (category == NULL || !cJSON_AddItemToArray(cJSON_GetObjectItemCaseSensitive(json, "categories"), category))
-    {
-      cJSON_Delete(category);
-      cJSON_Delete(json);
-      return NULL;
-    }
-  }
-
-  return json;
-}
-
-BWString bw_budget_to_json_str(BWBudget *budget)
-{
-  BWString budget_json;
-  bw_string_init(&budget_json);
-
-  cJSON *json = bw_budget_to_json(budget);
-
-  if (json == NULL)
-  {
-    return budget_json;
-  }
-
-  char *printed = cJSON_PrintUnformatted(json);
-
-  if (printed != NULL)
-  {
-    bw_string_append(&budget_json, printed);
-    cJSON_free(printed);
-  }
-
-  cJSON_Delete(json);
-  return budget_json;
-}
-
-BWResult bw_budget_from_json(BWBudget *budget, cJSON *json)
-{
-  if (budget == NULL || !cJSON_IsObject(json))
-  {
-    return BWResult_ERR;
-  }
-
-  cJSON *title = json_get_string(json, "title");
-  cJSON *categories = cJSON_GetObjectItemCaseSensitive(json, "categories");
-  cJSON *id_json = cJSON_GetObjectItemCaseSensitive(json, "id");
-
-  if (
-    title == NULL ||
-    !cJSON_IsArray(categories) ||
-    bw_budget_init(budget, title->valuestring) == BWResult_ERR
-  )
-  {
-    return BWResult_ERR;
-  }
-
-  if (id_json != NULL)
-  {
-    uint64_t id;
-
-    if (
-      !cJSON_IsNumber(id_json) ||
-      id_json->valuedouble < 0 ||
-      id_json->valuedouble > (double)INT32_MAX ||
-      (double)(int)id_json->valuedouble != id_json->valuedouble
-    )
-    {
-      bw_budget_free(budget);
-      return BWResult_ERR;
-    }
-
-    id = (uint64_t)id_json->valuedouble;
-    budget->id = (int)id;
-  }
-
-  cJSON *category_json = NULL;
-  cJSON_ArrayForEach(category_json, categories)
-  {
-    BWCategory category = {0};
-
-    if (
-      bw_category_from_json(&category, category_json) == BWResult_ERR ||
-      bw_category_array_push_move(&budget->categories, category) == BWResult_ERR
-    )
-    {
-      if (category.title.data != NULL)
-      {
-        bw_category_free(&category);
-      }
-
-      bw_budget_free(budget);
-      return BWResult_ERR;
-    }
-  }
-
-  return BWResult_OK;
-}
-
-BWResult bw_budget_from_json_str(BWBudget *budget, const char *budget_json)
-{
-  if (budget == NULL || budget_json == NULL)
-  {
-    return BWResult_ERR;
-  }
-
-  cJSON *json = cJSON_Parse(budget_json);
-
-  if (json == NULL)
-  {
-    return BWResult_ERR;
-  }
-
-  BWResult res = bw_budget_from_json(budget, json);
-  cJSON_Delete(json);
-  return res;
+  bw_arena_destroy(&budget->arena);
+  budget->id = 0;
+  bw_string_clear(&budget->title);
+  bw_category_array_clear(&budget->categories);
 }
 
 BWResult bw_budget_add_category(BWBudget *budget, BWCategory category)
@@ -485,17 +432,23 @@ BWResult bw_budget_add_category(BWBudget *budget, BWCategory category)
     return BWResult_ERR;
   }
 
+  BWCategory stored = {0};
   category.id = bw_budget_next_category_id(budget);
   category.ordinal = bw_budget_next_category_ordinal(budget, category.category_type);
 
-  return bw_category_array_push_move(&budget->categories, category);
+  if (bw_budget_clone_category(budget, &category, &stored) == BWResult_ERR)
+  {
+    return BWResult_ERR;
+  }
+
+  return bw_category_array_push_move(&budget->categories, stored);
 }
 
 BWResult bw_budget_update_category(BWBudget *budget, int category_id, BWCategoryUpdate category_update)
 {
   BWCategory *category = bw_budget_find_category(budget, category_id);
 
-  if (category == NULL || category_update.title == NULL)
+  if (budget == NULL || category == NULL || category_update.title == NULL)
   {
     return BWResult_ERR;
   }
@@ -505,7 +458,7 @@ BWResult bw_budget_update_category(BWBudget *budget, int category_id, BWCategory
     return BWResult_ERR;
   }
 
-  if (bw_string_replace(&category->title, category_update.title) == BWResult_ERR)
+  if (bw_string_replace(&category->title, category_update.title, &budget->arena) == BWResult_ERR)
   {
     return BWResult_ERR;
   }
@@ -526,8 +479,6 @@ BWResult bw_budget_remove_category(BWBudget *budget, int category_id)
   {
     if (budget->categories.items[i].id == category_id)
     {
-      bw_category_free(&budget->categories.items[i]);
-
       for (size_t j = i; j + 1 < budget->categories.length; j++)
       {
         budget->categories.items[j] = budget->categories.items[j + 1];
@@ -545,13 +496,20 @@ BWResult bw_budget_add_transaction(BWBudget *budget, int category_id, BWTransact
 {
   BWCategory *category = bw_budget_find_category(budget, category_id);
 
-  if (category == NULL)
+  if (budget == NULL || category == NULL)
   {
     return BWResult_ERR;
   }
 
+  BWTransaction stored = {0};
   transaction.id = bw_budget_next_transaction_id(budget);
-  return bw_category_add_transaction(category, transaction);
+
+  if (bw_budget_clone_transaction(budget, &transaction, &stored) == BWResult_ERR)
+  {
+    return BWResult_ERR;
+  }
+
+  return bw_category_add_transaction(category, stored);
 }
 
 BWResult bw_budget_update_transaction(BWBudget *budget, int transaction_id, BWTransactionUpdate transaction_update)
@@ -561,6 +519,7 @@ BWResult bw_budget_update_transaction(BWBudget *budget, int transaction_id, BWTr
   BWCategory *target_category = bw_budget_find_category(budget, transaction_update.category_id);
 
   if (
+    budget == NULL ||
     target_category == NULL ||
     transaction_update.title == NULL ||
     transaction_update.description == NULL ||
@@ -575,39 +534,30 @@ BWResult bw_budget_update_transaction(BWBudget *budget, int transaction_id, BWTr
     BWString title;
     BWString description;
 
-    if (bw_string_init(&title) == BWResult_ERR)
+    if (bw_string_init(&title, &budget->arena) == BWResult_ERR)
     {
       return BWResult_ERR;
     }
 
     if (bw_string_append(&title, transaction_update.title) == BWResult_ERR)
     {
-      bw_string_free(&title);
       return BWResult_ERR;
     }
 
-    if (bw_string_init(&description) == BWResult_ERR)
+    if (bw_string_init(&description, &budget->arena) == BWResult_ERR)
     {
-      bw_string_free(&title);
       return BWResult_ERR;
     }
 
     if (bw_string_append(&description, transaction_update.description) == BWResult_ERR)
     {
-      bw_string_free(&title);
-      bw_string_free(&description);
       return BWResult_ERR;
     }
 
     if (category_update_actual_amount(source_category, source_transaction->amount, transaction_update.amount) == BWResult_ERR)
     {
-      bw_string_free(&title);
-      bw_string_free(&description);
       return BWResult_ERR;
     }
-
-    bw_string_free(&source_transaction->title);
-    bw_string_free(&source_transaction->description);
 
     source_transaction->title = title;
     source_transaction->description = description;
@@ -624,7 +574,8 @@ BWResult bw_budget_update_transaction(BWBudget *budget, int transaction_id, BWTr
       transaction_update.title,
       transaction_update.description,
       transaction_update.date,
-      transaction_update.amount
+      transaction_update.amount,
+      &budget->arena
     ) == BWResult_ERR
   )
   {
@@ -633,15 +584,18 @@ BWResult bw_budget_update_transaction(BWBudget *budget, int transaction_id, BWTr
 
   replacement.id = transaction_id;
 
+  if (UINT64_MAX - target_category->amount_actual < replacement.amount)
+  {
+    return BWResult_ERR;
+  }
+
   if (bw_category_remove_transaction(source_category, source_transaction) == BWResult_ERR)
   {
-    bw_transaction_free(&replacement);
     return BWResult_ERR;
   }
 
   if (bw_category_add_transaction(target_category, replacement) == BWResult_ERR)
   {
-    bw_transaction_free(&replacement);
     return BWResult_ERR;
   }
 

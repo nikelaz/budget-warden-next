@@ -14,12 +14,12 @@ typedef struct {
   size_t offset;
 } BWArena;
 
-BWResult arena_init(BWArena *arena, size_t capacity); 
-void arena_destroy(BWArena *arena);
-void arena_reset(BWArena *arena);
-void *arena_alloc_aligned(BWArena *arena, size_t size, size_t align);
+BWResult bw_arena_init(BWArena *arena, size_t capacity);
+void bw_arena_destroy(BWArena *arena);
+void bw_arena_reset(BWArena *arena);
+void *bw_arena_alloc_aligned(BWArena *arena, size_t size, size_t align);
 
-#define arena_alloc(arena, type, count) \
-    (type *)arena_alloc_aligned((arena), sizeof(type) * (count), _Alignof(type))
+#define bw_arena_alloc(arena, type, count) \
+    (type *)bw_arena_alloc_aligned((arena), sizeof(type) * (count), _Alignof(type))
 
 #endif

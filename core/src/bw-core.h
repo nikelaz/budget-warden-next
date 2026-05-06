@@ -7,5 +7,6 @@
 #include "bw-transaction.h"
 #include "bw-category.h"
 #include "bw-budget.h"
+#include "bw-budget-json.h"
 
 #endif

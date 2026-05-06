@@ -6,7 +6,6 @@
 #include "bw-string.h"
 #include "bw-result.h"
 #include "bw-transaction.h"
-#include "cJSON.h"
 
 typedef enum {
     CATEGORY_INCOME,
@@ -32,12 +31,11 @@ BWResult bw_category_init(
   uint64_t amount_planned,
   uint64_t amount_actual,
   uint64_t amount_accumulated,
-  BWCategoryType category_type
+  BWCategoryType category_type,
+  BWArena *arena
 );
 
-void bw_category_free(BWCategory *category);
-cJSON *bw_category_to_json(BWCategory *category);
-BWResult bw_category_from_json(BWCategory *category, cJSON *json);
+void bw_category_clear(BWCategory *category);
 BWResult bw_category_add_transaction(BWCategory *category, BWTransaction transaction);
 BWResult bw_category_remove_transaction(BWCategory *category, BWTransaction *transaction);
 
@@ -45,10 +43,11 @@ typedef struct {
   BWCategory *items;
   size_t length;
   size_t capacity;
+  BWArena *arena;
 } BWCategoryArray;
 
-BWResult bw_category_array_init(BWCategoryArray *array);
+BWResult bw_category_array_init(BWCategoryArray *array, BWArena *arena);
 BWResult bw_category_array_push_move(BWCategoryArray *array, BWCategory category);
-void bw_category_array_free(BWCategoryArray *array);
+void bw_category_array_clear(BWCategoryArray *array);
 
 #endif

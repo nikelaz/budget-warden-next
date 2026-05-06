@@ -16,7 +16,7 @@ BWResult bw_string_init(BWString *s, BWArena *arena)
     s->length = 0;
     s->arena = arena;
 
-    s->data = arena_alloc(arena, char, s->capacity);
+    s->data = bw_arena_alloc(arena, char, s->capacity);
 
     if (s->data == NULL) {
         return BWResult_ERR;
@@ -59,7 +59,7 @@ static BWResult bw_string_reserve(BWString *s, size_t required)
         new_capacity *= 2;
     }
 
-    char *new_data = arena_alloc(s->arena, char, new_capacity);
+    char *new_data = bw_arena_alloc(s->arena, char, new_capacity);
 
     if (new_data == NULL) {
         return BWResult_ERR;
@@ -75,6 +75,19 @@ static BWResult bw_string_reserve(BWString *s, size_t required)
     s->capacity = new_capacity;
 
     return BWResult_OK;
+}
+
+void bw_string_clear(BWString *s)
+{
+    if (s == NULL)
+    {
+        return;
+    }
+
+    s->data = NULL;
+    s->length = 0;
+    s->capacity = 0;
+    s->arena = NULL;
 }
 
 BWResult bw_string_append_len(BWString *s, const char *text, size_t text_len)
