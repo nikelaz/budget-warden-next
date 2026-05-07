@@ -1,5 +1,10 @@
 import Foundation
 
+struct BudgetDraft {
+    let title: Swift.String
+    let templateURL: URL?
+}
+
 struct CategoryDraft {
     let title: Swift.String
     let amountPlanned: UInt64

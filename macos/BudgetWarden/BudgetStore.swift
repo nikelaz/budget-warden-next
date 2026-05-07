@@ -10,7 +10,7 @@ enum BudgetDialogHost {
 final class BudgetStore: ObservableObject {
     @Published var budgets: [BudgetDocument] = []
     @Published var externalBudget: BudgetDocument?
-    @Published var selectedBudgetID: BudgetDocument.ID?
+    @Published var selectedBudgetURL: URL?
     @Published var isCreatingBudget = false
     @Published var isConfiguringVault = false
     @Published var isShowingPreferences = false
@@ -30,10 +30,10 @@ final class BudgetStore: ObservableObject {
     init(vault: BudgetVault? = nil, repository: BudgetRepository? = nil) {
         let resolvedVault = vault ?? BudgetVault.shared
         self.vault = resolvedVault
-        self.repository = repository ?? CoreBudgetRepository(vault: resolvedVault)
+        self.repository = repository ?? BudgetRepository(vault: resolvedVault)
         let savedCurrency = UserDefaults.standard.string(forKey: Self.selectedCurrencyKey)
             .flatMap(AppCurrency.init(rawValue:))
-        _selectedCurrency = Published(initialValue: savedCurrency ?? .eur)
+        _selectedCurrency = Published(initialValue: savedCurrency ?? .defaultCurrency)
     }
 
     var availableBudgets: [BudgetDocument] {
@@ -41,8 +41,7 @@ final class BudgetStore: ObservableObject {
             return budgets
         }
 
-        // check if external budget is a part of the budgets vault
-        if !budgets.contains(where: { sameFile($0.url, unwrappedExternalBudget.url) }) {
+        if budgets.contains(where: { sameFile($0.url, unwrappedExternalBudget.url) }) {
             return budgets
         }
 
@@ -50,12 +49,12 @@ final class BudgetStore: ObservableObject {
     }
 
     var selectedBudget: BudgetDocument? {
-        if let selectedBudgetID {
-            if let budget = budgets.first(where: { $0.id == selectedBudgetID }) {
+        if let selectedBudgetURL {
+            if let budget = budgets.first(where: { sameFile($0.url, selectedBudgetURL) }) {
                 return budget
             }
 
-            if externalBudget?.id == selectedBudgetID {
+            if externalBudget.map({ sameFile($0.url, selectedBudgetURL) }) ?? false {
                 return externalBudget
             }
         }
@@ -85,13 +84,7 @@ final class BudgetStore: ObservableObject {
     }
 
     func selectBudget(_ budget: BudgetDocument) {
-        do {
-            let activated = try repository.activateBudget(budget)
-            updateStoredBudgetIfPresent(activated)
-            selectedBudgetID = activated.id
-        } catch {
-            presentedError = error.localizedDescription
-        }
+        selectedBudgetURL = budget.url
     }
 
     func cancelCreateBudget() {
@@ -115,15 +108,12 @@ final class BudgetStore: ObservableObject {
             let loadedBudgets = try repository.loadBudgets()
             budgets = loadedBudgets
 
-            if selectedBudgetID == nil || !availableBudgets.contains(where: { $0.id == selectedBudgetID }) {
-                selectedBudgetID = externalBudget?.id ?? loadedBudgets.first?.id
+            if !hasAvailableBudget(at: selectedBudgetURL) {
+                selectedBudgetURL = externalBudget?.url ?? loadedBudgets.first?.url
             }
-
-            activateCurrentSelection()
-        } catch BudgetVaultError.vaultNotConfigured {
+        } catch BudgetError.vaultNotConfigured {
             budgets = []
-            selectedBudgetID = externalBudget?.id
-            activateCurrentSelection()
+            selectedBudgetURL = externalBudget?.url
         } catch {
             presentedError = error.localizedDescription
         }
@@ -135,7 +125,7 @@ final class BudgetStore: ObservableObject {
         do {
             _ = try vault.resolveVaultURL()
             savePendingBudget()
-        } catch BudgetVaultError.vaultNotConfigured {
+        } catch BudgetError.vaultNotConfigured {
             isCreatingBudget = false
 
             DispatchQueue.main.async {
@@ -181,12 +171,10 @@ final class BudgetStore: ObservableObject {
 
             if let vaultBudget = budgets.first(where: { sameFile($0.url, openedBudget.url) }) {
                 externalBudget = nil
-                let activated = try repository.activateBudget(vaultBudget)
-                updateStoredBudgetIfPresent(activated)
-                selectedBudgetID = activated.id
+                selectedBudgetURL = vaultBudget.url
             } else {
                 externalBudget = openedBudget
-                selectedBudgetID = openedBudget.id
+                selectedBudgetURL = openedBudget.url
             }
 
             return true
@@ -202,119 +190,56 @@ final class BudgetStore: ObservableObject {
         amountAccumulated: UInt64,
         type: BudgetCategoryType
     ) {
-        guard let selectedBudget else {
-            return
-        }
-
-        do {
+        mutateSelectedBudget { selectedBudget in
             let draft = CategoryDraft(
                 title: title,
                 amountPlanned: amountPlanned,
                 amountAccumulated: amountAccumulated,
                 type: type
             )
-            let updated = try repository.addCategory(draft, to: selectedBudget)
-            try updateBudgetList(afterChanging: updated)
-
-            selectedBudgetID = updated.id
-        } catch {
-            presentedError = error.localizedDescription
+            return try repository.addCategory(draft, to: selectedBudget)
         }
     }
 
     func updateCategory(_ update: CategoryUpdate) {
-        guard let selectedBudget else {
-            return
-        }
-
-        do {
-            let updated = try repository.updateCategory(update, in: selectedBudget)
-            try updateBudgetList(afterChanging: updated)
-
-            selectedBudgetID = updated.id
-        } catch {
-            presentedError = error.localizedDescription
+        mutateSelectedBudget { selectedBudget in
+            try repository.updateCategory(update, in: selectedBudget)
         }
     }
 
     func removeCategory(_ category: BudgetCategory) {
-        guard let selectedBudget else {
-            return
-        }
-
-        do {
-            let updated = try repository.removeCategory(category, from: selectedBudget)
-            try updateBudgetList(afterChanging: updated)
-
-            selectedBudgetID = updated.id
-        } catch {
-            presentedError = error.localizedDescription
+        mutateSelectedBudget { selectedBudget in
+            try repository.removeCategory(category, from: selectedBudget)
         }
     }
 
     func reorderCategories(type: BudgetCategoryType, orderedCategoryIDs: [Int]) {
-        guard let selectedBudget else {
-            return
-        }
-
-        do {
-            let updated = try repository.reorderCategories(type: type, orderedCategoryIDs: orderedCategoryIDs, in: selectedBudget)
-            try updateBudgetList(afterChanging: updated)
-
-            selectedBudgetID = updated.id
-        } catch {
-            presentedError = error.localizedDescription
+        mutateSelectedBudget { selectedBudget in
+            try repository.reorderCategories(type: type, orderedCategoryIDs: orderedCategoryIDs, in: selectedBudget)
         }
     }
 
     func addTransaction(_ draft: TransactionDraft) {
-        guard let selectedBudget else {
-            return
-        }
-
-        do {
-            let updated = try repository.addTransaction(draft, to: selectedBudget)
-            try updateBudgetList(afterChanging: updated)
-
-            selectedBudgetID = updated.id
-        } catch {
-            presentedError = error.localizedDescription
+        mutateSelectedBudget { selectedBudget in
+            try repository.addTransaction(draft, to: selectedBudget)
         }
     }
 
     func updateTransaction(_ update: TransactionUpdate) {
-        guard let selectedBudget else {
-            return
-        }
-
-        do {
-            let updated = try repository.updateTransaction(update, in: selectedBudget)
-            try updateBudgetList(afterChanging: updated)
-
-            selectedBudgetID = updated.id
-        } catch {
-            presentedError = error.localizedDescription
+        mutateSelectedBudget { selectedBudget in
+            try repository.updateTransaction(update, in: selectedBudget)
         }
     }
 
     func removeTransaction(_ transaction: BudgetTransaction) {
-        guard let selectedBudget else {
-            return
-        }
-
-        do {
-            let updated = try repository.removeTransaction(transaction, from: selectedBudget)
-            try updateBudgetList(afterChanging: updated)
-
-            selectedBudgetID = updated.id
-        } catch {
-            presentedError = error.localizedDescription
+        mutateSelectedBudget { selectedBudget in
+            try repository.removeTransaction(transaction, from: selectedBudget)
         }
     }
 
     func removeBudget(_ budget: BudgetDocument) {
         do {
-            let wasSelected = selectedBudgetID == budget.id
+            let wasSelected = selectedBudgetURL.map { sameFile($0, budget.url) } ?? false
             let wasExternal = externalBudget.map { sameFile($0.url, budget.url) } ?? false
             try repository.removeBudget(budget)
 
@@ -325,11 +250,9 @@ final class BudgetStore: ObservableObject {
                 externalBudget = nil
             }
 
-            if wasSelected || !loadedBudgets.contains(where: { $0.id == selectedBudgetID }) {
-                selectedBudgetID = externalBudget?.id ?? loadedBudgets.first?.id
+            if wasSelected || !hasBudget(in: loadedBudgets, at: selectedBudgetURL) {
+                selectedBudgetURL = externalBudget?.url ?? loadedBudgets.first?.url
             }
-
-            activateCurrentSelection()
         } catch {
             presentedError = error.localizedDescription
         }
@@ -346,7 +269,7 @@ final class BudgetStore: ObservableObject {
             isCreatingBudget = false
             budgets = try repository.loadBudgets()
             externalBudget = nil
-            selectedBudgetID = saved.id
+            selectedBudgetURL = saved.url
             updateStoredBudgetIfPresent(saved)
             clearDialogHostIfIdle()
         } catch {
@@ -358,6 +281,22 @@ final class BudgetStore: ObservableObject {
         lhs.standardizedFileURL == rhs.standardizedFileURL
     }
 
+    private func hasAvailableBudget(at url: URL?) -> Bool {
+        guard let url else {
+            return false
+        }
+
+        return availableBudgets.contains { sameFile($0.url, url) }
+    }
+
+    private func hasBudget(in budgets: [BudgetDocument], at url: URL?) -> Bool {
+        guard let url else {
+            return false
+        }
+
+        return budgets.contains { sameFile($0.url, url) }
+    }
+
     private func updateBudgetList(afterChanging updated: BudgetDocument) throws {
         if budgets.contains(where: { sameFile($0.url, updated.url) }) {
             budgets = try repository.loadBudgets()
@@ -367,16 +306,15 @@ final class BudgetStore: ObservableObject {
         }
     }
 
-    private func activateCurrentSelection() {
+    private func mutateSelectedBudget(_ mutation: (BudgetDocument) throws -> BudgetDocument) {
         guard let selectedBudget else {
-            repository.closeActiveBudget()
             return
         }
 
         do {
-            let activated = try repository.activateBudget(selectedBudget)
-            updateStoredBudgetIfPresent(activated)
-            selectedBudgetID = activated.id
+            let updated = try mutation(selectedBudget)
+            try updateBudgetList(afterChanging: updated)
+            selectedBudgetURL = updated.url
         } catch {
             presentedError = error.localizedDescription
         }

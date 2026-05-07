@@ -12,7 +12,7 @@ struct IncomeVsAllocationChart: View {
             VStack(alignment: .leading, spacing: 10) {
                 Chart(segments) { segment in
                     BarMark(
-                        x: .value("Amount", segment.amount.majorUnitValue),
+                        x: .value("Amount", chartAmount(segment.amount)),
                         y: .value("Measure", segment.rowTitle)
                     )
                     .foregroundStyle(segment.tint)
@@ -103,7 +103,7 @@ struct AllocationBreakdownSection: View {
     private var doughnutChart: some View {
         Chart(selectedSegments) { segment in
             SectorMark(
-                angle: .value("Amount", segment.amount.majorUnitValue),
+                angle: .value("Amount", chartAmount(segment.amount)),
                 innerRadius: .ratio(0.58),
                 angularInset: 1.5
             )
@@ -166,7 +166,7 @@ struct CategoryBreakdownSection: View {
     private var doughnutChart: some View {
         Chart(selectedSegments) { segment in
             SectorMark(
-                angle: .value("Amount", segment.amount.majorUnitValue),
+                angle: .value("Amount", chartAmount(segment.amount)),
                 innerRadius: .ratio(0.58),
                 angularInset: 1.5
             )
@@ -194,4 +194,8 @@ private func emptyState(_ title: Swift.String) -> some View {
         .font(.callout)
         .foregroundStyle(.secondary)
         .frame(maxWidth: .infinity, minHeight: 180)
+}
+
+private func chartAmount(_ amount: UInt64) -> Double {
+    Double(amount) / 100
 }

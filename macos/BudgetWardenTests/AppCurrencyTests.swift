@@ -22,11 +22,16 @@ final class AppCurrencyTests: XCTestCase {
     }
 
     func testRawValueInitializesKnownCurrencyCodes() {
-        XCTAssertEqual(AppCurrency(rawValue: "eur"), .eur)
+        XCTAssertEqual(AppCurrency(rawValue: "eur")?.rawValue, "EUR")
         XCTAssertEqual(AppCurrency(rawValue: " USD ")?.rawValue, "USD")
     }
 
     func testRawValueRejectsUnknownCurrencyCodes() {
         XCTAssertNil(AppCurrency(rawValue: "not-a-currency"))
+    }
+
+    func testDefaultCurrencyUsesLocaleCurrency() {
+        XCTAssertEqual(AppCurrency.defaultCurrency(for: Locale(identifier: "en_US")).rawValue, "USD")
+        XCTAssertEqual(AppCurrency.defaultCurrency(for: Locale(identifier: "de_DE")).rawValue, "EUR")
     }
 }

@@ -19,7 +19,7 @@ struct BudgetRowView: View {
 #Preview {
     BudgetRowView(
         budget: BudgetDocument(
-            id: 1,
+            coreID: 1,
             url: URL(filePath: "/tmp/May 2026.budget"),
             title: "May 2026",
             categories: []

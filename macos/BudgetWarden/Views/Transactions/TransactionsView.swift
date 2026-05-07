@@ -4,7 +4,7 @@ struct TransactionsView: View {
     let budgets: [BudgetDocument]
     let budget: BudgetDocument
     let currency: AppCurrency
-    let selectedBudgetID: BudgetDocument.ID?
+    let selectedBudgetURL: URL?
     let onCreateBudget: () -> Void
     let onSelectBudget: (BudgetDocument) -> Void
     let onAddTransaction: (TransactionDraft) -> Void
@@ -102,7 +102,7 @@ struct TransactionsView: View {
                         Button {
                             onSelectBudget(budget)
                         } label: {
-                            if selectedBudgetID == budget.id {
+                            if selectedBudgetURL?.standardizedFileURL == budget.url.standardizedFileURL {
                                 Label(budget.title, systemImage: "checkmark")
                             } else {
                                 Text(budget.title)

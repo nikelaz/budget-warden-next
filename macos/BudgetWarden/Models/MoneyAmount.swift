@@ -1,10 +1,6 @@
 import Foundation
 
 extension UInt64 {
-    var majorUnitValue: Double {
-        Double(self) / 100
-    }
-
     func formattedMoneyAmount(currency: AppCurrency) -> Swift.String {
         let formatter = NumberFormatter()
         formatter.locale = .current

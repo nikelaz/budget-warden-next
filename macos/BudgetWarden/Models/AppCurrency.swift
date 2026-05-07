@@ -3,15 +3,22 @@ import Foundation
 nonisolated struct AppCurrency: RawRepresentable, CaseIterable, Hashable, Identifiable {
     let rawValue: Swift.String
 
-    static var allCases: [AppCurrency] {
+    static let allCases: [AppCurrency] =
         Locale.Currency.isoCurrencies
             .map(AppCurrency.init(currency:))
             .sorted { firstCurrency, secondCurrency in
                 firstCurrency.sortTitle.localizedStandardCompare(secondCurrency.sortTitle) == .orderedAscending
             }
+
+    static var defaultCurrency: AppCurrency {
+        defaultCurrency(for: .current)
     }
 
-    static let eur = AppCurrency(rawValue: "EUR")!
+    static func defaultCurrency(for locale: Locale) -> AppCurrency {
+        locale.currency
+            .flatMap { AppCurrency(rawValue: $0.identifier) } ??
+            AppCurrency(rawValue: "USD")!
+    }
 
     init?(rawValue: Swift.String) {
         let normalizedRawValue = rawValue

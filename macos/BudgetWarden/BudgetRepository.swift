@@ -1,41 +1,12 @@
 import Foundation
 
-protocol BudgetRepository {
-    func loadBudgets() throws -> [BudgetDocument]
-    func createBudget(_ draft: BudgetDraft) throws -> BudgetDocument
-    func openBudget(at url: URL) throws -> BudgetDocument
-    func activateBudget(_ budget: BudgetDocument) throws -> BudgetDocument
-    func closeActiveBudget()
-    func addCategory(_ draft: CategoryDraft, to budget: BudgetDocument) throws -> BudgetDocument
-    func updateCategory(_ update: CategoryUpdate, in budget: BudgetDocument) throws -> BudgetDocument
-    func removeCategory(_ category: BudgetCategory, from budget: BudgetDocument) throws -> BudgetDocument
-    func reorderCategories(type: BudgetCategoryType, orderedCategoryIDs: [Int], in budget: BudgetDocument) throws -> BudgetDocument
-    func addTransaction(_ draft: TransactionDraft, to budget: BudgetDocument) throws -> BudgetDocument
-    func updateTransaction(_ update: TransactionUpdate, in budget: BudgetDocument) throws -> BudgetDocument
-    func removeTransaction(_ transaction: BudgetTransaction, from budget: BudgetDocument) throws -> BudgetDocument
-    func removeBudget(_ budget: BudgetDocument) throws
-}
-
-final class CoreBudgetRepository: BudgetRepository {
+final class BudgetRepository {
     private let vault: BudgetVault
-    private let fileStore: BudgetFileStore
-    private var activeBudget = BWBudget()
-    private var activeBudgetURL: URL?
-    private var jsonArena = BWArena()
-    private var isJsonArenaInitialized = false
+    private let fileManager = FileManager.default
     private static let jsonArenaCapacity = 1024 * 1024
 
-    init(vault: BudgetVault = .shared, fileStore: BudgetFileStore = BudgetFileStore()) {
+    init(vault: BudgetVault = .shared) {
         self.vault = vault
-        self.fileStore = fileStore
-    }
-
-    deinit {
-        closeActiveBudget()
-
-        if isJsonArenaInitialized {
-            bw_arena_destroy(&jsonArena)
-        }
     }
 
     func loadBudgets() throws -> [BudgetDocument] {
@@ -43,7 +14,7 @@ final class CoreBudgetRepository: BudgetRepository {
 
         return try vault.accessVault {
             try vault.budgetFileURLs(in: vaultURL)
-                .compactMap { try? readBudgetSnapshot(at: $0) }
+                .compactMap { try? readBudget(at: $0) }
                 .sorted(by: Self.sortByFileName)
         }
     }
@@ -55,56 +26,34 @@ final class CoreBudgetRepository: BudgetRepository {
             let uniqueBudget = vault.uniqueBudgetLocation(for: draft.title, in: vaultURL)
             var coreBudget = BWBudget()
 
-            try initializeBudget(&coreBudget, title: uniqueBudget.title)
+            if let templateURL = draft.templateURL {
+                let result = templateURL.path.withCString {
+                    bw_budget_init_from_template(&coreBudget, $0)
+                }
+
+                guard result == 0 else {
+                    throw BudgetError.budgetCreationFailed
+                }
+
+                try replaceTitle(uniqueBudget.title, in: &coreBudget)
+            } else {
+                try initializeBudget(&coreBudget, title: uniqueBudget.title)
+            }
+
             defer {
                 bw_budget_free(&coreBudget)
             }
 
-            let budgetID = try nextBudgetID(in: vaultURL)
-
-            if !draft.templateUrl.isEmpty {
-                let templateResult = draft.templateUrl.withCString {
-                    bw_budget_init_from_template(&coreBudget, $0)
-                }
-
-                guard templateResult == 0 else {
-                    throw BudgetVaultError.budgetCreationFailed
-                }
-
-                try replaceTitle(uniqueBudget.title, in: &coreBudget)
-            }
-
-            coreBudget.id = Int32(budgetID)
-
-            try fileStore.writeText(jsonString(from: &coreBudget), to: uniqueBudget.url)
-            return try activateBudgetAt(uniqueBudget.url)
+            coreBudget.id = Int32(try nextBudgetID(in: vaultURL))
+            try writeText(jsonString(from: &coreBudget), to: uniqueBudget.url)
+            return try document(from: coreBudget, url: uniqueBudget.url)
         }
     }
 
     func openBudget(at url: URL) throws -> BudgetDocument {
         try accessBudget(url) {
-            try activateBudgetAt(url)
+            try readBudget(at: url)
         }
-    }
-
-    func activateBudget(_ budget: BudgetDocument) throws -> BudgetDocument {
-        try accessBudget(budget.url) {
-            if isActiveBudget(at: budget.url) {
-                return try document(from: activeBudget, url: budget.url)
-            }
-
-            return try activateBudgetAt(budget.url)
-        }
-    }
-
-    func closeActiveBudget() {
-        guard activeBudgetURL != nil else {
-            return
-        }
-
-        bw_budget_free(&activeBudget)
-        activeBudget = BWBudget()
-        activeBudgetURL = nil
     }
 
     func addCategory(_ draft: CategoryDraft, to budget: BudgetDocument) throws -> BudgetDocument {
@@ -121,7 +70,7 @@ final class CoreBudgetRepository: BudgetRepository {
             }
 
             guard result == 0 else {
-                throw BudgetVaultError.categoryCreationFailed
+                throw BudgetError.categoryCreationFailed
             }
         }
     }
@@ -139,7 +88,7 @@ final class CoreBudgetRepository: BudgetRepository {
             }
 
             guard result == 0 else {
-                throw BudgetVaultError.categorySaveFailed
+                throw BudgetError.categorySaveFailed
             }
         }
     }
@@ -147,7 +96,7 @@ final class CoreBudgetRepository: BudgetRepository {
     func removeCategory(_ category: BudgetCategory, from budget: BudgetDocument) throws -> BudgetDocument {
         try mutateBudget(budget) { coreBudget in
             guard bw_budget_remove_category(&coreBudget, Int32(category.coreID)) == 0 else {
-                throw BudgetVaultError.categoryNotFound
+                throw BudgetError.categoryNotFound
             }
         }
     }
@@ -160,7 +109,7 @@ final class CoreBudgetRepository: BudgetRepository {
             }
 
             guard result == 0 else {
-                throw BudgetVaultError.categorySaveFailed
+                throw BudgetError.categorySaveFailed
             }
         }
     }
@@ -181,7 +130,7 @@ final class CoreBudgetRepository: BudgetRepository {
             }
 
             guard result == 0 else {
-                throw BudgetVaultError.transactionCreationFailed
+                throw BudgetError.transactionCreationFailed
             }
         }
     }
@@ -203,7 +152,7 @@ final class CoreBudgetRepository: BudgetRepository {
             }
 
             guard result == 0 else {
-                throw BudgetVaultError.transactionSaveFailed
+                throw BudgetError.transactionSaveFailed
             }
         }
     }
@@ -211,18 +160,14 @@ final class CoreBudgetRepository: BudgetRepository {
     func removeTransaction(_ transaction: BudgetTransaction, from budget: BudgetDocument) throws -> BudgetDocument {
         try mutateBudget(budget) { coreBudget in
             guard bw_budget_remove_transaction(&coreBudget, Int32(transaction.coreID)) == 0 else {
-                throw BudgetVaultError.transactionNotFound
+                throw BudgetError.transactionNotFound
             }
         }
     }
 
     func removeBudget(_ budget: BudgetDocument) throws {
         try accessBudget(budget.url) {
-            if isActiveBudget(at: budget.url) {
-                closeActiveBudget()
-            }
-
-            try fileStore.remove(budget.url)
+            try removeFile(at: budget.url)
         }
     }
 
@@ -231,34 +176,43 @@ final class CoreBudgetRepository: BudgetRepository {
         mutation: (inout BWBudget) throws -> Void
     ) throws -> BudgetDocument {
         try accessBudget(budget.url) {
-            if !isActiveBudget(at: budget.url) {
-                _ = try activateBudgetAt(budget.url)
+            var coreBudget = BWBudget()
+            try initializeBudget(&coreBudget, json: readText(from: budget.url), url: budget.url)
+            defer {
+                bw_budget_free(&coreBudget)
             }
 
-            try mutation(&activeBudget)
-            try fileStore.writeText(jsonString(from: &activeBudget), to: budget.url)
-            return try document(from: activeBudget, url: budget.url)
+            try mutation(&coreBudget)
+            try writeText(jsonString(from: &coreBudget), to: budget.url)
+            return try document(from: coreBudget, url: budget.url)
         }
     }
 
-    private func activateBudgetAt(_ url: URL) throws -> BudgetDocument {
-        closeActiveBudget()
-
+    private func readText(from url: URL) throws -> Swift.String {
         do {
-            try initializeBudget(&activeBudget, json: fileStore.readText(from: url), url: url)
-            activeBudgetURL = url
-            return try document(from: activeBudget, url: url)
+            return try Swift.String(contentsOf: url, encoding: .utf8)
         } catch {
-            activeBudget = BWBudget()
-            activeBudgetURL = nil
-            throw error
+            throw BudgetError.budgetReadFailed(url)
         }
     }
 
-    private func readBudgetSnapshot(at url: URL) throws -> BudgetDocument {
+    private func writeText(_ text: Swift.String, to url: URL) throws {
+        try text.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    private func removeFile(at url: URL) throws {
+        do {
+            var trashedURL: NSURL?
+            try fileManager.trashItem(at: url, resultingItemURL: &trashedURL)
+        } catch {
+            throw BudgetError.budgetRemoveFailed(url)
+        }
+    }
+
+    private func readBudget(at url: URL) throws -> BudgetDocument {
         var coreBudget = BWBudget()
 
-        try initializeBudget(&coreBudget, json: fileStore.readText(from: url), url: url)
+        try initializeBudget(&coreBudget, json: readText(from: url), url: url)
         defer {
             bw_budget_free(&coreBudget)
         }
@@ -268,7 +222,7 @@ final class CoreBudgetRepository: BudgetRepository {
 
     private func initializeBudget(_ budget: inout BWBudget, title: Swift.String) throws {
         guard title.withCString({ bw_budget_init(&budget, $0) }) == 0 else {
-            throw BudgetVaultError.budgetCreationFailed
+            throw BudgetError.budgetCreationFailed
         }
     }
 
@@ -276,7 +230,7 @@ final class CoreBudgetRepository: BudgetRepository {
         let result = json.withCString { bw_budget_from_json_str(&budget, $0) }
 
         guard result == 0 else {
-            throw BudgetVaultError.budgetReadFailed(url)
+            throw BudgetError.budgetReadFailed(url)
         }
     }
 
@@ -284,52 +238,47 @@ final class CoreBudgetRepository: BudgetRepository {
         var newTitle = BWString()
 
         guard bw_string_init(&newTitle, &budget.arena) == 0 else {
-            throw BudgetVaultError.budgetCreationFailed
+            throw BudgetError.budgetCreationFailed
         }
 
         guard title.withCString({ bw_string_append(&newTitle, $0) }) == 0 else {
-            throw BudgetVaultError.budgetCreationFailed
+            throw BudgetError.budgetCreationFailed
         }
 
         budget.title = newTitle
     }
 
     private func jsonString(from budget: inout BWBudget) throws -> Swift.String {
-        try ensureJsonArena()
-        bw_arena_reset(&jsonArena)
+        var jsonArena = BWArena()
+
+        guard bw_arena_init(&jsonArena, Self.jsonArenaCapacity) == 0 else {
+            throw BudgetError.jsonCreationFailed
+        }
+
+        defer {
+            bw_arena_destroy(&jsonArena)
+        }
 
         let jsonString = bw_budget_to_json_str(&budget, &jsonArena)
 
         guard let jsonData = jsonString.data else {
-            throw BudgetVaultError.jsonCreationFailed
+            throw BudgetError.jsonCreationFailed
         }
 
         let json = Swift.String(cString: jsonData)
 
         guard !json.isEmpty else {
-            throw BudgetVaultError.jsonCreationFailed
+            throw BudgetError.jsonCreationFailed
         }
 
         return json
-    }
-
-    private func ensureJsonArena() throws {
-        guard !isJsonArenaInitialized else {
-            return
-        }
-
-        guard bw_arena_init(&jsonArena, Self.jsonArenaCapacity) == 0 else {
-            throw BudgetVaultError.jsonCreationFailed
-        }
-
-        isJsonArenaInitialized = true
     }
 
     private func document(from budget: BWBudget, url: URL) throws -> BudgetDocument {
         let title = budget.title.data.map { Swift.String(cString: $0) } ?? url.deletingPathExtension().lastPathComponent
 
         return BudgetDocument(
-            id: Int(budget.id),
+            coreID: Int(budget.id),
             url: url,
             title: title,
             categories: categories(from: budget)
@@ -416,7 +365,7 @@ final class CoreBudgetRepository: BudgetRepository {
 
     private func nextBudgetID(in vaultURL: URL) throws -> Int {
         let maxID = try vault.budgetFileURLs(in: vaultURL)
-            .compactMap { try? readBudgetSnapshot(at: $0).id }
+            .compactMap { try? readBudget(at: $0).coreID }
             .max() ?? 0
 
         return maxID + 1
@@ -428,14 +377,6 @@ final class CoreBudgetRepository: BudgetRepository {
         }
 
         return try BudgetVault.accessSecurityScopedResource(url, operation: operation)
-    }
-
-    private func isActiveBudget(at url: URL) -> Bool {
-        activeBudgetURL.map { sameFile($0, url) } ?? false
-    }
-
-    private func sameFile(_ lhs: URL, _ rhs: URL) -> Bool {
-        lhs.standardizedFileURL == rhs.standardizedFileURL
     }
 
     nonisolated private static func sortByFileName(_ lhs: BudgetDocument, _ rhs: BudgetDocument) -> Bool {

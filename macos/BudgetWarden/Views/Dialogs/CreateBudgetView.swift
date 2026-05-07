@@ -1,36 +1,31 @@
 import Foundation
 import SwiftUI
 
+private enum BudgetTemplateSelection: Hashable {
+    case basic
+    case blank
+    case previous(URL)
+}
+
 struct CreateBudgetView: View {
     @ObservedObject var store: BudgetStore
     let onSave: (BudgetDraft) -> Void
     let onCancel: () -> Void
-    var basicTemplateUrl: String;
+    let basicTemplateURL: URL?
 
     @State private var title: Swift.String
-
-    @State private var selectedTemplate: String = "TemplateBasic"
+    @State private var selectedTemplate: BudgetTemplateSelection = .basic
 
     private var isValid: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     init(store: BudgetStore, onSave: @escaping (BudgetDraft) -> Void, onCancel: @escaping () -> Void) {
-        let defaults = BudgetDefaults.currentMonth()
         self.store = store
         self.onSave = onSave
         self.onCancel = onCancel
-        self._title = State(initialValue: defaults.title)
-        self.basicTemplateUrl = ""
-        self.basicTemplateUrl = getBasicTemplateUrl()
-    }
-
-    private func getBasicTemplateUrl() -> String {
-        guard let url = Bundle.main.url(forResource: "basic-budget", withExtension: "budget") else {
-            return ""
-        }
-
-        return url.path
+        self.basicTemplateURL = Bundle.main.url(forResource: "basic-budget", withExtension: "budget")
+        self._title = State(initialValue: Self.currentMonthTitle())
     }
 
     var body: some View {
@@ -42,24 +37,24 @@ struct CreateBudgetView: View {
             Form {
                 TextField("Title", text: $title)
                     .accessibilityIdentifier("budget-title-field")
-                    .padding(.bottom, 10);
+                    .padding(.bottom, 10)
 
                 Picker(selection: $selectedTemplate, content: {
-                    Text("Templates") 
+                    Text("Templates")
                         .selectionDisabled(true)
 
                     Text("Basic budget (recommended)")
-                        .tag("TemplateBasic")
+                        .tag(BudgetTemplateSelection.basic)
 
                     Text("Blank budget")
-                        .tag("TemplateBlank")
+                        .tag(BudgetTemplateSelection.blank)
 
-                    Text("Previous budget") 
+                    Text("Previous budget")
                         .selectionDisabled(true)
 
                     ForEach(store.budgets) { budget in
                         Text(budget.title)
-                            .tag(budget.url.path)
+                            .tag(BudgetTemplateSelection.previous(budget.url))
                     }
                 }, label: {
                     Text("Template")
@@ -86,16 +81,30 @@ struct CreateBudgetView: View {
 
     private func saveBudget() {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        var template = ""
-        
-        if (selectedTemplate == "TemplateBasic") {
-            template = basicTemplateUrl
+
+        let templateURL: URL?
+
+        switch selectedTemplate {
+        case .basic:
+            templateURL = basicTemplateURL
+        case .blank:
+            templateURL = nil
+        case .previous(let url):
+            templateURL = url
         }
-        else if (selectedTemplate != "TemplateBlank" && selectedTemplate != "") {
-            template = selectedTemplate
-        }
-        
-        onSave(BudgetDraft(title: trimmedTitle, templateUrl: template))
+
+        onSave(BudgetDraft(title: trimmedTitle, templateURL: templateURL))
+    }
+
+    private static func currentMonthTitle(calendar: Calendar = .current, now: Date = Date()) -> Swift.String {
+        let components = calendar.dateComponents([.year, .month], from: now)
+        let titleDate = calendar.date(from: components) ?? now
+
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "LLLL yyyy"
+
+        return formatter.string(from: titleDate)
     }
 }
