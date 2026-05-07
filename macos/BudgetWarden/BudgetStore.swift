@@ -37,14 +37,16 @@ final class BudgetStore: ObservableObject {
     }
 
     var availableBudgets: [BudgetDocument] {
-        guard
-            let externalBudget,
-            !budgets.contains(where: { sameFile($0.url, externalBudget.url) })
-        else {
+        guard let unwrappedExternalBudget = externalBudget else {
             return budgets
         }
 
-        return budgets + [externalBudget]
+        // check if external budget is a part of the budgets vault
+        if !budgets.contains(where: { sameFile($0.url, unwrappedExternalBudget.url) }) {
+            return budgets
+        }
+
+        return budgets + [unwrappedExternalBudget]
     }
 
     var selectedBudget: BudgetDocument? {
@@ -85,7 +87,7 @@ final class BudgetStore: ObservableObject {
     func selectBudget(_ budget: BudgetDocument) {
         do {
             let activated = try repository.activateBudget(budget)
-            replaceBudgetSnapshot(activated)
+            updateStoredBudgetIfPresent(activated)
             selectedBudgetID = activated.id
         } catch {
             presentedError = error.localizedDescription
@@ -180,7 +182,7 @@ final class BudgetStore: ObservableObject {
             if let vaultBudget = budgets.first(where: { sameFile($0.url, openedBudget.url) }) {
                 externalBudget = nil
                 let activated = try repository.activateBudget(vaultBudget)
-                replaceBudgetSnapshot(activated)
+                updateStoredBudgetIfPresent(activated)
                 selectedBudgetID = activated.id
             } else {
                 externalBudget = openedBudget
@@ -345,7 +347,7 @@ final class BudgetStore: ObservableObject {
             budgets = try repository.loadBudgets()
             externalBudget = nil
             selectedBudgetID = saved.id
-            replaceBudgetSnapshot(saved)
+            updateStoredBudgetIfPresent(saved)
             clearDialogHostIfIdle()
         } catch {
             presentedError = error.localizedDescription
@@ -359,7 +361,7 @@ final class BudgetStore: ObservableObject {
     private func updateBudgetList(afterChanging updated: BudgetDocument) throws {
         if budgets.contains(where: { sameFile($0.url, updated.url) }) {
             budgets = try repository.loadBudgets()
-            replaceBudgetSnapshot(updated)
+            updateStoredBudgetIfPresent(updated)
         } else {
             externalBudget = updated
         }
@@ -373,14 +375,14 @@ final class BudgetStore: ObservableObject {
 
         do {
             let activated = try repository.activateBudget(selectedBudget)
-            replaceBudgetSnapshot(activated)
+            updateStoredBudgetIfPresent(activated)
             selectedBudgetID = activated.id
         } catch {
             presentedError = error.localizedDescription
         }
     }
 
-    private func replaceBudgetSnapshot(_ budget: BudgetDocument) {
+    private func updateStoredBudgetIfPresent(_ budget: BudgetDocument) {
         if let index = budgets.firstIndex(where: { sameFile($0.url, budget.url) }) {
             budgets[index] = budget
         } else if externalBudget.map({ sameFile($0.url, budget.url) }) ?? false {
