@@ -35,6 +35,7 @@ BWResult bw_transaction_init(
 void bw_transaction_clear(BWTransaction *transaction);
 
 BWResult bw_transaction_array_init(BWTransactionArray *array, BWArena *arena);
+BWResult bw_transaction_array_reserve(BWTransactionArray *array, size_t capacity);
 BWResult bw_transaction_array_push_move(BWTransactionArray *array, BWTransaction transaction);
 void bw_transaction_array_clear(BWTransactionArray *array);
 

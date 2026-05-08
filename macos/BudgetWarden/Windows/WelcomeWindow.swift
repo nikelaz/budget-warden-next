@@ -4,11 +4,12 @@ struct WelcomeWindow: Scene {
     let store: BudgetStore
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup("Budget Warden", id: "welcome") {
             WelcomeView(store: store)
                 .containerBackground(.thinMaterial, for: .window)
         }
             .defaultSize(width: 760, height: 420)
+            .defaultLaunchBehavior(.presented)
             .windowStyle(.hiddenTitleBar)
             .windowResizability(.contentSize)
             .commands {

@@ -72,6 +72,10 @@ void test_date_from_string_invalid(void)
 
   assert(bw_date_from_string(&date, "2026-2-03") == BWResult_ERR);
   assert(bw_date_from_string(&date, "2026/02/03") == BWResult_ERR);
+  assert(bw_date_from_string(&date, "2026-00-03") == BWResult_ERR);
+  assert(bw_date_from_string(&date, "2026-13-03") == BWResult_ERR);
+  assert(bw_date_from_string(&date, "2026-02-30") == BWResult_ERR);
+  assert(bw_date_from_string(&date, "2026-04-31") == BWResult_ERR);
   assert(bw_date_from_string(&date, NULL) == BWResult_ERR);
   assert(bw_date_from_string(NULL, "2026-02-03") == BWResult_ERR);
   printf("(Pass) date_from_string_invalid\n");
@@ -188,6 +192,19 @@ void test_arena_grows_string_allocation(void)
 
   bw_arena_destroy(&arena);
   printf("(Pass) arena_grows_string_allocation\n");
+}
+
+void test_arena_rejects_invalid_alignment(void)
+{
+  BWArena arena = test_arena();
+
+  assert(bw_arena_alloc_aligned(&arena, 16, 0) == NULL);
+  assert(bw_arena_alloc_aligned(&arena, 16, 3) == NULL);
+  assert(bw_arena_alloc_aligned(&arena, 16, 6) == NULL);
+  assert(bw_arena_alloc_aligned(&arena, 16, 8) != NULL);
+
+  bw_arena_destroy(&arena);
+  printf("(Pass) arena_rejects_invalid_alignment\n");
 }
 
 void test_arena_grows_without_invalidating_existing_arrays(void)
@@ -360,10 +377,12 @@ void test_budget_json_string_round_trip(void)
   assert(bw_transaction_array_push_move(&category.transactions, transaction) == BWResult_OK);
   assert(bw_category_array_push_move(&budget.categories, category) == BWResult_OK);
 
-  size_t budget_offset = budget.arena.offset;
+  BWArenaBlock *budget_current = budget.arena.current;
+  size_t budget_offset = budget_current->offset;
   BWString json = bw_budget_to_json_str(&budget, &json_arena);
   assert(json.length > 0);
-  assert(budget.arena.offset == budget_offset);
+  assert(budget.arena.current == budget_current);
+  assert(budget.arena.current->offset == budget_offset);
 
   assert(bw_budget_from_json_str(&parsed, json.data) == BWResult_OK);
   assert(parsed.id == 9);
@@ -566,6 +585,54 @@ void test_budget_add_transaction(void)
 
   bw_budget_free(&budget);
   printf("(Pass) budget_add_transaction\n");
+}
+
+void test_budget_read_accessors(void)
+{
+  BWBudget budget;
+
+  assert(bw_budget_init(&budget, "January") == BWResult_OK);
+  assert(bw_budget_category_count(&budget) == 0);
+  assert(bw_budget_category_at(&budget, 0) == NULL);
+  assert(bw_budget_category_by_id(&budget, 2) == NULL);
+
+  assert(
+    bw_budget_add_category_values(
+      &budget,
+      "Food",
+      500,
+      0,
+      0,
+      CATEGORY_EXPENSES
+    ) == BWResult_OK
+  );
+  assert(
+    bw_budget_add_transaction_values(
+      &budget,
+      1,
+      "Groceries",
+      "Weekly shop",
+      test_date(),
+      125
+    ) == BWResult_OK
+  );
+
+  const BWCategory *category = bw_budget_category_at(&budget, 0);
+  assert(category != NULL);
+  assert(category == bw_budget_category_by_id(&budget, 1));
+  assert(bw_budget_category_count(&budget) == 1);
+  assert(bw_category_transaction_count(category) == 1);
+  assert(bw_category_transaction_at(category, 1) == NULL);
+
+  const BWCategory *transaction_category = NULL;
+  const BWTransaction *transaction = bw_budget_transaction_by_id(&budget, 1, &transaction_category);
+  assert(transaction != NULL);
+  assert(transaction_category == category);
+  assert(strcmp(transaction->title.data, "Groceries") == 0);
+  assert(bw_category_transaction_at(category, 0) == transaction);
+
+  bw_budget_free(&budget);
+  printf("(Pass) budget_read_accessors\n");
 }
 
 void test_budget_add_transaction_values(void)
@@ -794,6 +861,7 @@ int main(void)
   test_transaction_init();
   test_transaction_array_push_move();
   test_arena_grows_string_allocation();
+  test_arena_rejects_invalid_alignment();
   test_arena_grows_without_invalidating_existing_arrays();
   test_category_array_push_move();
   test_category_add_transaction();
@@ -810,6 +878,7 @@ int main(void)
   test_budget_update_category();
   test_budget_remove_category();
   test_budget_add_transaction();
+  test_budget_read_accessors();
   test_budget_add_transaction_values();
   test_budget_update_transaction_same_category();
   test_budget_update_transaction_move_category();

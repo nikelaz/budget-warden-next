@@ -4,16 +4,62 @@
 #include <stdio.h>
 #include <string.h>
 
+static int is_leap_year(int year)
+{
+  return (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+}
+
+static int days_in_month(int year, int month)
+{
+  static const int days[] = {
+    31, 28, 31, 30, 31, 30,
+    31, 31, 30, 31, 30, 31
+  };
+
+  if (month < 1 || month > 12)
+  {
+    return 0;
+  }
+
+  if (month == 2 && is_leap_year(year))
+  {
+    return 29;
+  }
+
+  return days[month - 1];
+}
+
 BWResult bw_date_init(BWDate *date, int year, int month, int day)
 {
   if (date == NULL)
   {
     return BWResult_ERR;
   }
+
+  if (year < 0 || month < 1 || month > 12 || day < 1 || day > days_in_month(year, month))
+  {
+    return BWResult_ERR;
+  }
+
   date->year = year;
   date->month = month;
   date->day = day;
   return BWResult_OK;
+}
+
+int bw_date_get_year(const BWDate *date)
+{
+  return date == NULL ? 0 : date->year;
+}
+
+int bw_date_get_month(const BWDate *date)
+{
+  return date == NULL ? 0 : date->month;
+}
+
+int bw_date_get_day(const BWDate *date)
+{
+  return date == NULL ? 0 : date->day;
 }
 
 BWString bw_date_to_string(const BWDate *date, BWArena *arena)

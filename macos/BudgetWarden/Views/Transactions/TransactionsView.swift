@@ -1,15 +1,16 @@
 import SwiftUI
 
 struct TransactionsView: View {
-    let budgets: [BudgetDocument]
-    let budget: BudgetDocument
+    @ObservedObject var store: BudgetStore
+    let budgets: [BudgetRow]
+    let budget: BudgetRow
     let currency: AppCurrency
     let selectedBudgetURL: URL?
     let onCreateBudget: () -> Void
-    let onSelectBudget: (BudgetDocument) -> Void
+    let onSelectBudget: (BudgetRow) -> Void
     let onAddTransaction: (TransactionDraft) -> Void
     let onUpdateTransaction: (TransactionUpdate) -> Void
-    let onRemoveTransaction: (BudgetTransaction) -> Void
+    let onRemoveTransaction: (Int) -> Void
 
     @State private var isCreatingTransaction = false
     @State private var searchText = ""
@@ -19,64 +20,47 @@ struct TransactionsView: View {
     @State private var editedText = ""
     @State private var datePickerTransactionID: Int?
     @State private var pendingDate = Date()
-    @State private var checkedTransactionIDs = Set<BudgetTransaction.ID>()
-    @State private var transactionsPendingRemoval: [BudgetTransaction] = []
+    @State private var checkedTransactionIDs = Set<Int>()
+    @State private var transactionsPendingRemoval: [Int] = []
     @FocusState private var focusedEditingCell: TransactionEditingCell?
 
-    private var filteredTransactions: [BudgetTransaction] {
-        budget.transactions.filter { transaction in
-            matchesCategoryType(transaction) &&
-                matchesCategory(transaction) &&
-                matchesSearch(transaction)
+    private var categoryIDs: [Int] {
+        store.categoryIDs(in: budget.url)
+    }
+
+    private var transactionIDs: [Int] {
+        store.transactionIDs(in: budget.url)
+    }
+
+    private var filteredTransactionIDs: [Int] {
+        transactionIDs.filter { transactionID in
+            matchesCategoryType(transactionID) &&
+                matchesCategory(transactionID) &&
+                matchesSearch(transactionID)
         }
     }
 
     var body: some View {
         Group {
-            if budget.transactions.isEmpty {
+            if transactionIDs.isEmpty {
                 ContentUnavailableView(
                     "No Transactions",
                     systemImage: "list.bullet.rectangle"
                 )
-            } else if filteredTransactions.isEmpty {
+            } else if filteredTransactionIDs.isEmpty {
                 ContentUnavailableView.search(text: searchText)
             } else {
-                Table(filteredTransactions) {
-                    TableColumn("") { transaction in
-                        Toggle("", isOn: checkedBinding(for: transaction))
-                            .labelsHidden()
-                    }
-                    .width(34)
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        transactionHeader
 
-                    TableColumn("Date") { transaction in
-                        dateCell(for: transaction)
+                        ForEach(filteredTransactionIDs, id: \.self) { transactionID in
+                            transactionRow(transactionID)
+                            Divider()
+                        }
                     }
-                    .width(min: 110, ideal: 120)
-
-                    TableColumn("Title") { transaction in
-                        textCell(for: transaction, cell: .title(transaction.coreID), text: transaction.title)
-                    }
-                    .width(min: 160, ideal: 220)
-
-                    TableColumn("Description") { transaction in
-                        textCell(for: transaction, cell: .description(transaction.coreID), text: transaction.description)
-                    }
-                    .width(min: 180, ideal: 260)
-
-                    TableColumn("Category") { transaction in
-                        categoryCell(for: transaction)
-                    }
-                    .width(min: 140, ideal: 180)
-
-                    TableColumn("Type") { transaction in
-                        categoryMenuCell(for: transaction, title: transaction.categoryType.title)
-                    }
-                    .width(min: 100, ideal: 120)
-
-                    TableColumn("Amount") { transaction in
-                        amountCell(for: transaction)
-                    }
-                    .width(min: 110, ideal: 130)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
                 }
             }
         }
@@ -120,8 +104,9 @@ struct TransactionsView: View {
                 } label: {
                     Text(budget.title)
                 }
+                .accessibilityIdentifier("budget-menu")
             }
-            
+
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
                     isCreatingTransaction = true
@@ -129,7 +114,8 @@ struct TransactionsView: View {
                     Label("Add Transaction", systemImage: "plus")
                 }
                 .help("Add Transaction")
-                .disabled(budget.categories.isEmpty)
+                .accessibilityIdentifier("transactions-add-transaction-button")
+                .disabled(categoryIDs.isEmpty)
 
                 if !checkedTransactionIDs.isEmpty {
                     Button(role: .destructive) {
@@ -138,6 +124,7 @@ struct TransactionsView: View {
                         Label("Delete Selected", systemImage: "trash")
                     }
                     .help("Delete Selected Transactions")
+                    .accessibilityIdentifier("transactions-delete-selected-button")
                 }
 
                 Menu {
@@ -153,8 +140,8 @@ struct TransactionsView: View {
 
                         ForEach(BudgetCategoryType.allCases) { type in
                             Section(type.title) {
-                                ForEach(budget.categories(for: type)) { category in
-                                    Text(category.title).tag(category.coreID as Int?)
+                                ForEach(store.categoryIDs(for: type, in: budget.url), id: \.self) { categoryID in
+                                    Text(store.categoryTitle(categoryID, in: budget.url)).tag(categoryID as Int?)
                                 }
                             }
                         }
@@ -162,11 +149,13 @@ struct TransactionsView: View {
                 } label: {
                     Label("Filters", systemImage: "line.3.horizontal.decrease.circle")
                 }
+                .accessibilityIdentifier("transactions-filter-menu")
             }
         }
         .sheet(isPresented: $isCreatingTransaction) {
             CreateTransactionView(
-                categories: budget.categories,
+                store: store,
+                budgetURL: budget.url,
                 onSave: { draft in
                     onAddTransaction(draft)
                     isCreatingTransaction = false
@@ -195,6 +184,71 @@ struct TransactionsView: View {
 }
 
 private extension TransactionsView {
+    var transactionHeader: some View {
+        HStack(spacing: 12) {
+            Text("")
+                .frame(width: 34)
+            headerText("Date")
+                .frame(width: 110, alignment: .leading)
+            headerText("Title")
+                .frame(minWidth: 160, idealWidth: 220, maxWidth: .infinity, alignment: .leading)
+            headerText("Description")
+                .frame(minWidth: 180, idealWidth: 260, maxWidth: .infinity, alignment: .leading)
+            headerText("Category")
+                .frame(width: 150, alignment: .leading)
+            headerText("Type")
+                .frame(width: 100, alignment: .leading)
+            headerText("Amount")
+                .frame(width: 110, alignment: .trailing)
+        }
+        .padding(.vertical, 6)
+    }
+
+    func headerText(_ title: Swift.String) -> some View {
+        Text(title)
+            .font(.caption)
+            .fontWeight(.semibold)
+            .foregroundStyle(.secondary)
+    }
+
+    func transactionRow(_ transactionID: Int) -> some View {
+        HStack(spacing: 12) {
+            Toggle("", isOn: checkedBinding(for: transactionID))
+                .labelsHidden()
+                .frame(width: 34)
+
+            dateCell(for: transactionID)
+                .frame(width: 110, alignment: .leading)
+
+            textCell(
+                for: transactionID,
+                cell: .title(transactionID),
+                text: store.transactionTitle(transactionID, in: budget.url)
+            )
+            .frame(minWidth: 160, idealWidth: 220, maxWidth: .infinity, alignment: .leading)
+
+            textCell(
+                for: transactionID,
+                cell: .description(transactionID),
+                text: store.transactionDescription(transactionID, in: budget.url)
+            )
+            .frame(minWidth: 180, idealWidth: 260, maxWidth: .infinity, alignment: .leading)
+
+            categoryCell(for: transactionID)
+                .frame(width: 150, alignment: .leading)
+
+            categoryMenuCell(
+                for: transactionID,
+                title: store.transactionCategoryType(transactionID, in: budget.url)?.title ?? ""
+            )
+            .frame(width: 100, alignment: .leading)
+
+            amountCell(for: transactionID)
+                .frame(width: 110, alignment: .trailing)
+        }
+        .padding(.vertical, 5)
+    }
+
     var removeTransactionsConfirmationBinding: Binding<Bool> {
         Binding {
             !transactionsPendingRemoval.isEmpty
@@ -205,21 +259,27 @@ private extension TransactionsView {
         }
     }
 
-    func tableText(_ text: Swift.String, transaction: BudgetTransaction, alignment: Alignment = .leading) -> some View {
+    func tableText(
+        _ text: Swift.String,
+        transactionID: Int,
+        alignment: Alignment = .leading,
+        accessibilityIdentifier: Swift.String? = nil
+    ) -> some View {
         Text(text.isEmpty ? " " : text)
             .lineLimit(1)
             .frame(maxWidth: .infinity, alignment: alignment)
             .contentShape(.rect)
+            .accessibilityIdentifier(accessibilityIdentifier ?? "transaction-\(transactionID)-cell")
             .contextMenu {
                 Button(role: .destructive) {
-                    if checkedTransactionIDs.contains(transaction.id), checkedTransactionIDs.count > 1 {
+                    if checkedTransactionIDs.contains(transactionID), checkedTransactionIDs.count > 1 {
                         requestRemoveCheckedTransactions()
                     } else {
-                        requestRemoveTransactions([transaction])
+                        requestRemoveTransactions([transactionID])
                     }
                 } label: {
                     Label(
-                        checkedTransactionIDs.contains(transaction.id) && checkedTransactionIDs.count > 1
+                        checkedTransactionIDs.contains(transactionID) && checkedTransactionIDs.count > 1
                             ? "Delete Selected Transactions"
                             : "Delete Transaction",
                         systemImage: "trash"
@@ -228,23 +288,24 @@ private extension TransactionsView {
             }
     }
 
-    func checkedBinding(for transaction: BudgetTransaction) -> Binding<Bool> {
+    func checkedBinding(for transactionID: Int) -> Binding<Bool> {
         Binding {
-            checkedTransactionIDs.contains(transaction.id)
+            checkedTransactionIDs.contains(transactionID)
         } set: { isChecked in
             if isChecked {
-                checkedTransactionIDs.insert(transaction.id)
+                checkedTransactionIDs.insert(transactionID)
             } else {
-                checkedTransactionIDs.remove(transaction.id)
+                checkedTransactionIDs.remove(transactionID)
             }
         }
     }
 
-    func textCell(for transaction: BudgetTransaction, cell: TransactionEditingCell, text: Swift.String) -> some View {
+    func textCell(for transactionID: Int, cell: TransactionEditingCell, text: Swift.String) -> some View {
         Group {
             if editingCell == cell {
                 TextField("", text: $editedText)
                     .textFieldStyle(.roundedBorder)
+                    .accessibilityIdentifier("transaction-\(cell.transactionID)-edit-field")
                     .focused($focusedEditingCell, equals: cell)
                     .onAppear {
                         focusEditingCell(cell)
@@ -256,7 +317,7 @@ private extension TransactionsView {
                         discardEdit()
                     }
             } else {
-                tableText(text, transaction: transaction)
+                tableText(text, transactionID: transactionID)
                     .onTapGesture {
                         startEditing(cell, text: text)
                     }
@@ -264,14 +325,17 @@ private extension TransactionsView {
         }
     }
 
-    func amountCell(for transaction: BudgetTransaction) -> some View {
-        let cell = TransactionEditingCell.amount(transaction.coreID)
+    func amountCell(for transactionID: Int) -> some View {
+        let cell = TransactionEditingCell.amount(transactionID)
+        let title = store.transactionTitle(transactionID, in: budget.url)
+        let amount = store.transactionAmount(transactionID, in: budget.url)
 
         return Group {
             if editingCell == cell {
                 TextField("", text: $editedText)
                     .textFieldStyle(.roundedBorder)
                     .multilineTextAlignment(.trailing)
+                    .accessibilityIdentifier("transaction-\(transactionID)-amount-edit-field")
                     .focused($focusedEditingCell, equals: cell)
                     .onAppear {
                         focusEditingCell(cell)
@@ -284,29 +348,33 @@ private extension TransactionsView {
                     }
             } else {
                 tableText(
-                    transaction.amount.formattedMoneyAmount(currency: currency),
-                    transaction: transaction,
-                    alignment: .trailing
+                    amount.formattedMoneyAmount(currency: currency),
+                    transactionID: transactionID,
+                    alignment: .trailing,
+                    accessibilityIdentifier: "transaction-amount-cell-\(title.accessibilityIdentifierComponent)"
                 )
                 .monospacedDigit()
                 .onTapGesture {
-                    startEditing(cell, text: transaction.amount.moneyAmountInputText)
+                    startEditing(cell, text: amount.moneyAmountInputText)
                 }
             }
         }
     }
 
-    func dateCell(for transaction: BudgetTransaction) -> some View {
+    func dateCell(for transactionID: Int) -> some View {
         Button {
             discardEdit()
-            pendingDate = transaction.date.dateValue
-            datePickerTransactionID = transaction.coreID
+            pendingDate = store.transactionDate(transactionID, in: budget.url).dateValue
+            datePickerTransactionID = transactionID
         } label: {
-            tableText(transaction.formattedDate, transaction: transaction)
-                .monospacedDigit()
+            tableText(
+                store.transactionFormattedDate(transactionID, in: budget.url),
+                transactionID: transactionID
+            )
+            .monospacedDigit()
         }
         .buttonStyle(.plain)
-        .popover(isPresented: datePickerPresentationBinding(for: transaction)) {
+        .popover(isPresented: datePickerPresentationBinding(for: transactionID)) {
             VStack(alignment: .leading, spacing: 12) {
                 DatePicker("Date", selection: $pendingDate, displayedComponents: .date)
                     .labelsHidden()
@@ -321,7 +389,7 @@ private extension TransactionsView {
                     }
 
                     Button("Save") {
-                        savePendingDate(for: transaction)
+                        savePendingDate(for: transactionID)
                     }
                     .keyboardShortcut(.defaultAction)
                 }
@@ -331,80 +399,83 @@ private extension TransactionsView {
         }
     }
 
-    func categoryCell(for transaction: BudgetTransaction) -> some View {
-        categoryMenuCell(for: transaction, title: transaction.categoryTitle)
+    func categoryCell(for transactionID: Int) -> some View {
+        categoryMenuCell(
+            for: transactionID,
+            title: store.transactionCategoryTitle(transactionID, in: budget.url)
+        )
     }
 
-    func categoryMenuCell(for transaction: BudgetTransaction, title: Swift.String) -> some View {
+    func categoryMenuCell(for transactionID: Int, title: Swift.String) -> some View {
         Menu {
             ForEach(BudgetCategoryType.allCases) { type in
                 Section(type.title) {
-                    ForEach(budget.categories(for: type)) { category in
+                    ForEach(store.categoryIDs(for: type, in: budget.url), id: \.self) { categoryID in
                         Button {
-                            commit(update(for: transaction, categoryID: category.coreID))
+                            commit(update(for: transactionID, categoryID: categoryID))
                         } label: {
-                            if category.coreID == transaction.categoryID {
-                                Label(category.title, systemImage: "checkmark")
+                            if categoryID == store.transactionCategoryID(transactionID, in: budget.url) {
+                                Label(store.categoryTitle(categoryID, in: budget.url), systemImage: "checkmark")
                             } else {
-                                Text(category.title)
+                                Text(store.categoryTitle(categoryID, in: budget.url))
                             }
                         }
                     }
                 }
             }
         } label: {
-            tableText(title, transaction: transaction)
+            tableText(title, transactionID: transactionID)
         }
         .menuStyle(.borderlessButton)
         .buttonStyle(.plain)
     }
 
     func requestRemoveCheckedTransactions() {
-        let transactions = budget.transactions.filter { checkedTransactionIDs.contains($0.id) }
+        let transactionIDs = transactionIDs.filter { checkedTransactionIDs.contains($0) }
 
-        guard !transactions.isEmpty else {
+        guard !transactionIDs.isEmpty else {
             return
         }
 
-        requestRemoveTransactions(transactions)
+        requestRemoveTransactions(transactionIDs)
     }
 
-    func requestRemoveTransactions(_ transactions: [BudgetTransaction]) {
-        guard !transactions.isEmpty else {
+    func requestRemoveTransactions(_ transactionIDs: [Int]) {
+        guard !transactionIDs.isEmpty else {
             return
         }
 
         discardEdit()
-        transactionsPendingRemoval = transactions
+        transactionsPendingRemoval = transactionIDs
     }
 
     func removePendingTransactions() {
-        let transactions = transactionsPendingRemoval
-        checkedTransactionIDs.subtract(transactions.map(\.id))
+        let transactionIDs = transactionsPendingRemoval
+        checkedTransactionIDs.subtract(transactionIDs)
         transactionsPendingRemoval = []
 
-        for transaction in transactions {
-            onRemoveTransaction(transaction)
+        for transactionID in transactionIDs {
+            onRemoveTransaction(transactionID)
         }
     }
 
-    func datePickerPresentationBinding(for transaction: BudgetTransaction) -> Binding<Bool> {
+    func datePickerPresentationBinding(for transactionID: Int) -> Binding<Bool> {
         Binding {
-            datePickerTransactionID == transaction.coreID
+            datePickerTransactionID == transactionID
         } set: { isPresented in
-            if !isPresented, datePickerTransactionID == transaction.coreID {
+            if !isPresented, datePickerTransactionID == transactionID {
                 datePickerTransactionID = nil
             }
         }
     }
 
-    func savePendingDate(for transaction: BudgetTransaction) {
+    func savePendingDate(for transactionID: Int) {
         guard let date = BWDate(date: pendingDate) else {
             datePickerTransactionID = nil
             return
         }
 
-        commit(update(for: transaction, date: date))
+        commit(update(for: transactionID, date: date))
         datePickerTransactionID = nil
     }
 
@@ -427,7 +498,7 @@ private extension TransactionsView {
     func commitActiveEdit() {
         guard
             let editingCell,
-            let transaction = budget.transactions.first(where: { $0.coreID == editingCell.transactionID })
+            transactionIDs.contains(editingCell.transactionID)
         else {
             discardEdit()
             return
@@ -441,16 +512,16 @@ private extension TransactionsView {
                 return
             }
 
-            commit(update(for: transaction, title: title))
+            commit(update(for: editingCell.transactionID, title: title))
         case .description:
-            commit(update(for: transaction, description: editedText.trimmingCharacters(in: .whitespacesAndNewlines)))
+            commit(update(for: editingCell.transactionID, description: editedText.trimmingCharacters(in: .whitespacesAndNewlines)))
         case .amount:
             guard let amount = UInt64.parseMoneyAmount(editedText) else {
                 discardEdit()
                 return
             }
 
-            commit(update(for: transaction, amount: amount))
+            commit(update(for: editingCell.transactionID, amount: amount))
         }
     }
 
@@ -466,7 +537,7 @@ private extension TransactionsView {
     }
 
     func update(
-        for transaction: BudgetTransaction,
+        for transactionID: Int,
         categoryID: Int? = nil,
         title: Swift.String? = nil,
         description: Swift.String? = nil,
@@ -474,51 +545,43 @@ private extension TransactionsView {
         amount: UInt64? = nil
     ) -> TransactionUpdate {
         TransactionUpdate(
-            transactionID: transaction.coreID,
-            categoryID: categoryID ?? transaction.categoryID,
-            title: title ?? transaction.title,
-            description: description ?? transaction.description,
-            date: date ?? transaction.date,
-            amount: amount ?? transaction.amount
+            transactionID: transactionID,
+            categoryID: categoryID ?? store.transactionCategoryID(transactionID, in: budget.url),
+            title: title ?? store.transactionTitle(transactionID, in: budget.url),
+            description: description ?? store.transactionDescription(transactionID, in: budget.url),
+            date: date ?? store.transactionDate(transactionID, in: budget.url),
+            amount: amount ?? store.transactionAmount(transactionID, in: budget.url)
         )
     }
 
-    func matchesCategoryType(_ transaction: BudgetTransaction) -> Bool {
-        selectedCategoryType.map { transaction.categoryType == $0 } ?? true
+    func matchesCategoryType(_ transactionID: Int) -> Bool {
+        selectedCategoryType.map { store.transactionCategoryType(transactionID, in: budget.url) == $0 } ?? true
     }
 
-    func matchesCategory(_ transaction: BudgetTransaction) -> Bool {
-        selectedCategoryID.map { transaction.categoryID == $0 } ?? true
+    func matchesCategory(_ transactionID: Int) -> Bool {
+        selectedCategoryID.map { store.transactionCategoryID(transactionID, in: budget.url) == $0 } ?? true
     }
 
-    func matchesSearch(_ transaction: BudgetTransaction) -> Bool {
+    func matchesSearch(_ transactionID: Int) -> Bool {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !query.isEmpty else {
             return true
         }
 
+        let amount = store.transactionAmount(transactionID, in: budget.url)
         let haystack = [
-            transaction.title,
-            transaction.description,
-            transaction.formattedDate,
-            transaction.categoryTitle,
-            transaction.categoryType.title,
-            transaction.amount.formattedMoneyAmount(currency: currency),
-            transaction.amount.moneyAmountInputText
+            store.transactionTitle(transactionID, in: budget.url),
+            store.transactionDescription(transactionID, in: budget.url),
+            store.transactionFormattedDate(transactionID, in: budget.url),
+            store.transactionCategoryTitle(transactionID, in: budget.url),
+            store.transactionCategoryType(transactionID, in: budget.url)?.title ?? "",
+            amount.formattedMoneyAmount(currency: currency),
+            amount.moneyAmountInputText
         ].joined(separator: " ")
 
         return haystack.localizedCaseInsensitiveContains(query)
     }
-
-    var selectedCategoryTitle: Swift.String {
-        guard let selectedCategoryID else {
-            return "All Categories"
-        }
-
-        return budget.categories.first(where: { $0.coreID == selectedCategoryID })?.title ?? "All Categories"
-    }
-
 }
 
 private enum TransactionEditingCell: Hashable {
@@ -562,5 +625,16 @@ private extension BWDate {
         guard bw_date_init(&self, Int32(year), Int32(month), Int32(day)) == 0 else {
             return nil
         }
+    }
+}
+
+private extension Swift.String {
+    var accessibilityIdentifierComponent: Swift.String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+        let scalars = unicodeScalars.map { scalar in
+            allowed.contains(scalar) ? Character(scalar) : "-"
+        }
+
+        return Swift.String(scalars)
     }
 }

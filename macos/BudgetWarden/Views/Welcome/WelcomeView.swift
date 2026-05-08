@@ -9,7 +9,7 @@ struct WelcomeView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openWindow) private var openWindow
     @State private var shouldOpenWorkspaceAfterCreate = false
-    @State private var budgetPendingRemoval: BudgetDocument?
+    @State private var budgetPendingRemoval: BudgetRow?
     private let dialogHost = BudgetDialogHost.welcome
 
     var body: some View {
@@ -105,7 +105,7 @@ struct WelcomeView: View {
             presenting: budgetPendingRemoval
         ) { budget in
             Button("Move to Trash", role: .destructive) {
-                store.removeBudget(budget)
+                store.removeBudget(url: budget.url)
                 budgetPendingRemoval = nil
             }
 
@@ -118,7 +118,7 @@ struct WelcomeView: View {
     }
 
     private func openWorkspaceIfPossible() {
-        if store.selectedBudget != nil {
+        if store.selectedBudgetRow != nil {
             shouldOpenWorkspaceAfterCreate = false
             openWorkspace()
         }
@@ -137,7 +137,7 @@ struct WelcomeView: View {
         dismiss()
     }
 
-    private func showInFinder(_ budget: BudgetDocument) {
+    private func showInFinder(_ budget: BudgetRow) {
         NSWorkspace.shared.activateFileViewerSelecting([budget.url])
     }
 

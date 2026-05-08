@@ -78,6 +78,18 @@ struct ReportMetricView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(nsColor: .quaternarySystemFill))
         .clipShape(.rect(cornerRadius: 8, style: .continuous))
+        .accessibilityIdentifier("reporting-metric-\(title.accessibilityIdentifierComponent)")
+    }
+}
+
+private extension Swift.String {
+    var accessibilityIdentifierComponent: Swift.String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+        let scalars = unicodeScalars.map { scalar in
+            allowed.contains(scalar) ? Character(scalar) : "-"
+        }
+
+        return Swift.String(scalars)
     }
 }
 

@@ -1,26 +1,27 @@
 import SwiftUI
 
 struct ReportingMetricGrid: View {
-    let budget: BudgetDocument
+    @ObservedObject var store: BudgetStore
+    let budgetURL: URL
     let currency: AppCurrency
     let scope: ReportingScope
 
     private var incomeTotal: UInt64 {
-        budget.categories(for: .income).total(\.amountPlanned)
+        store.categoryTotal(type: .income, field: .planned, in: budgetURL)
     }
 
     private var plannedSpendingTotal: UInt64 {
-        budget.categories(for: .expenses).total(\.amountPlanned) +
-            budget.categories(for: .debt).total(\.amountPlanned)
+        store.categoryTotal(type: .expenses, field: .planned, in: budgetURL) +
+            store.categoryTotal(type: .debt, field: .planned, in: budgetURL)
     }
 
     private var actualSpendingTotal: UInt64 {
-        budget.categories(for: .expenses).total(\.amountActual) +
-            budget.categories(for: .debt).total(\.amountActual)
+        store.categoryTotal(type: .expenses, field: .actual, in: budgetURL) +
+            store.categoryTotal(type: .debt, field: .actual, in: budgetURL)
     }
 
     private var plannedSavingsTotal: UInt64 {
-        budget.categories(for: .savings).total(\.amountPlanned)
+        store.categoryTotal(type: .savings, field: .planned, in: budgetURL)
     }
 
     private var leftToBudgetTotal: Int64 {
@@ -71,4 +72,5 @@ struct ReportingMetricGrid: View {
             )
         }
     }
+
 }

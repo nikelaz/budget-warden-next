@@ -1,6 +1,12 @@
 #include "bw-arena.h"
+#include <stdlib.h>
 
 #define BW_ARENA_GROWTH_CHUNK (1024 * 1024)
+
+static int is_power_of_two(size_t value)
+{
+  return value != 0 && (value & (value - 1)) == 0;
+}
 
 static uintptr_t align_forward(uintptr_t ptr, size_t align)
 {
@@ -56,18 +62,6 @@ static BWArenaBlock *bw_arena_block_create(size_t capacity)
   return block;
 }
 
-static void bw_arena_sync_current(BWArena *arena)
-{
-  if (arena == NULL || arena->current == NULL)
-  {
-    return;
-  }
-
-  arena->buffer = arena->current->buffer;
-  arena->capacity = arena->current->capacity;
-  arena->offset = arena->current->offset;
-}
-
 static void bw_arena_block_destroy(BWArenaBlock *block)
 {
   if (block == NULL)
@@ -110,7 +104,6 @@ static BWArenaBlock *bw_arena_append_block(BWArena *arena, size_t required)
 
   arena->current->next = block;
   arena->current = block;
-  bw_arena_sync_current(arena);
   return block;
 }
 
@@ -130,7 +123,6 @@ BWResult bw_arena_init(BWArena *arena, size_t capacity)
 
   arena->first = block;
   arena->current = block;
-  bw_arena_sync_current(arena);
   return BWResult_OK;
 }
 
@@ -150,9 +142,6 @@ void bw_arena_destroy(BWArena *arena)
     block = next;
   }
 
-  arena->buffer = NULL;
-  arena->capacity = 0;
-  arena->offset = 0;
   arena->first = NULL;
   arena->current = NULL;
 }
@@ -167,12 +156,11 @@ void bw_arena_reset(BWArena *arena)
   bw_arena_destroy_extra_blocks(arena);
   arena->first->offset = 0;
   arena->current = arena->first;
-  bw_arena_sync_current(arena);
 }
 
 void *bw_arena_alloc_aligned(BWArena *arena, size_t size, size_t align)
 {
-  if (arena == NULL || arena->current == NULL || align == 0)
+  if (arena == NULL || arena->current == NULL || !is_power_of_two(align))
   {
     return NULL;
   }
@@ -181,6 +169,11 @@ void *bw_arena_alloc_aligned(BWArena *arena, size_t size, size_t align)
   uintptr_t base = (uintptr_t)block->buffer;
   uintptr_t current = base + block->offset;
   uintptr_t aligned = align_forward(current, align);
+  if (aligned < current)
+  {
+    return NULL;
+  }
+
   size_t padding = aligned - current;
 
   if (size > SIZE_MAX - block->offset - padding)
@@ -209,6 +202,11 @@ void *bw_arena_alloc_aligned(BWArena *arena, size_t size, size_t align)
     base = (uintptr_t)block->buffer;
     current = base + block->offset;
     aligned = align_forward(current, align);
+    if (aligned < current)
+    {
+      return NULL;
+    }
+
     padding = aligned - current;
     new_offset = block->offset + padding + size;
 
@@ -220,8 +218,5 @@ void *bw_arena_alloc_aligned(BWArena *arena, size_t size, size_t align)
 
   void *result = (void *)aligned;
   block->offset = new_offset;
-  bw_arena_sync_current(arena);
-
-  memset(result, 0, size);
   return result;
 }

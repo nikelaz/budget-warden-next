@@ -1,16 +1,14 @@
 import SwiftUI
 
 struct BudgetReportingView: View {
-    let budget: BudgetDocument
+    @ObservedObject var store: BudgetStore
+    let budgetURL: URL
     let currency: AppCurrency
     @Binding var isExpanded: Bool
     let scope: ReportingScope
 
     private var outflowComparisonSegments: [OutflowComparisonSegment] {
-        let income = budget.categories(for: .income).total(\.amountPlanned)
-        let expenses = budget.categories(for: .expenses)
-        let savings = budget.categories(for: .savings)
-        let debt = budget.categories(for: .debt)
+        let income = store.categoryTotal(type: .income, field: .planned, in: budgetURL)
 
         return [
             OutflowComparisonSegment(
@@ -22,51 +20,56 @@ struct BudgetReportingView: View {
             OutflowComparisonSegment(
                 rowTitle: "Planned Allocation",
                 componentTitle: "Expenses",
-                amount: expenses.total(\.amountPlanned),
+                amount: store.categoryTotal(type: .expenses, field: .planned, in: budgetURL),
                 tint: Color(nsColor: .systemOrange)
             ),
             OutflowComparisonSegment(
                 rowTitle: "Planned Allocation",
                 componentTitle: "Savings",
-                amount: savings.total(\.amountPlanned),
+                amount: store.categoryTotal(type: .savings, field: .planned, in: budgetURL),
                 tint: Color(nsColor: .systemGreen)
             ),
             OutflowComparisonSegment(
                 rowTitle: "Planned Allocation",
                 componentTitle: "Debt",
-                amount: debt.total(\.amountPlanned),
+                amount: store.categoryTotal(type: .debt, field: .planned, in: budgetURL),
                 tint: Color(nsColor: .systemBlue)
             ),
             OutflowComparisonSegment(
                 rowTitle: "Actual Allocation",
                 componentTitle: "Expenses",
-                amount: expenses.total(\.amountActual),
+                amount: store.categoryTotal(type: .expenses, field: .actual, in: budgetURL),
                 tint: Color(nsColor: .systemOrange)
             ),
             OutflowComparisonSegment(
                 rowTitle: "Actual Allocation",
                 componentTitle: "Savings",
-                amount: savings.total(\.amountActual),
+                amount: store.categoryTotal(type: .savings, field: .actual, in: budgetURL),
                 tint: Color(nsColor: .systemGreen)
             ),
             OutflowComparisonSegment(
                 rowTitle: "Actual Allocation",
                 componentTitle: "Debt",
-                amount: debt.total(\.amountActual),
+                amount: store.categoryTotal(type: .debt, field: .actual, in: budgetURL),
                 tint: Color(nsColor: .systemBlue)
             )
         ]
     }
 
     private var outflowComparisonTotals: [OutflowComparisonTotal] {
-        let income = budget.categories(for: .income).total(\.amountPlanned)
+        let income = store.categoryTotal(type: .income, field: .planned, in: budgetURL)
         let outflowTypes: [BudgetCategoryType] = [.expenses, .savings, .debt]
-        let outflowCategories = outflowTypes.flatMap { budget.categories(for: $0) }
+        let planned = outflowTypes.reduce(0) { total, type in
+            total + store.categoryTotal(type: type, field: .planned, in: budgetURL)
+        }
+        let actual = outflowTypes.reduce(0) { total, type in
+            total + store.categoryTotal(type: type, field: .actual, in: budgetURL)
+        }
 
         return [
             OutflowComparisonTotal(title: "Income", amount: income),
-            OutflowComparisonTotal(title: "Planned", amount: outflowCategories.total(\.amountPlanned)),
-            OutflowComparisonTotal(title: "Actual", amount: outflowCategories.total(\.amountActual))
+            OutflowComparisonTotal(title: "Planned", amount: planned),
+            OutflowComparisonTotal(title: "Actual", amount: actual)
         ]
     }
 
@@ -92,7 +95,8 @@ struct BudgetReportingView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     ReportingMetricGrid(
-                        budget: budget,
+                        store: store,
+                        budgetURL: budgetURL,
                         currency: currency,
                         scope: scope
                     )
@@ -107,6 +111,7 @@ struct BudgetReportingView: View {
             }
         }
         .frame(maxHeight: .infinity, alignment: .top)
+        .accessibilityIdentifier("budget-reporting-\(scope.accessibilityID)")
     }
 
     private var inspectorChartStack: some View {
@@ -193,17 +198,17 @@ struct BudgetReportingView: View {
         [
             AllocationBreakdownSegment(
                 title: "Expenses",
-                amount: budget.categories(for: .expenses).total(mode.amountKeyPath),
+                amount: store.categoryTotal(type: .expenses, field: mode.amountField, in: budgetURL),
                 tint: Color(nsColor: .systemOrange)
             ),
             AllocationBreakdownSegment(
                 title: "Savings",
-                amount: budget.categories(for: .savings).total(mode.amountKeyPath),
+                amount: store.categoryTotal(type: .savings, field: mode.amountField, in: budgetURL),
                 tint: Color(nsColor: .systemGreen)
             ),
             AllocationBreakdownSegment(
                 title: "Debt",
-                amount: budget.categories(for: .debt).total(mode.amountKeyPath),
+                amount: store.categoryTotal(type: .debt, field: mode.amountField, in: budgetURL),
                 tint: Color(nsColor: .systemBlue)
             )
         ]
@@ -222,12 +227,23 @@ struct BudgetReportingView: View {
             Color(nsColor: .systemPurple)
         ]
 
-        return budget.categories(for: type).enumerated().map { index, category in
+        return store.categoryIDs(for: type, in: budgetURL).enumerated().map { index, categoryID in
             AllocationBreakdownSegment(
-                title: category.title,
-                amount: category[keyPath: mode.amountKeyPath],
+                title: store.categoryTitle(categoryID, in: budgetURL),
+                amount: store.categoryAmount(categoryID, field: mode.amountField, in: budgetURL),
                 tint: colors[index % colors.count]
             )
+        }
+    }
+}
+
+private extension ReportingScope {
+    var accessibilityID: Swift.String {
+        switch self {
+        case .inspector:
+            return "inspector"
+        case .fullPage:
+            return "full-page"
         }
     }
 }

@@ -1,10 +1,10 @@
 import SwiftUI
 
 struct WelcomeRightColumn: View {
-    let budgets: [BudgetDocument]
-    let onSelectBudget: (BudgetDocument) -> Void
-    let onShowInFinder: (BudgetDocument) -> Void
-    let onRemoveBudget: (BudgetDocument) -> Void
+    let budgets: [BudgetRow]
+    let onSelectBudget: (BudgetRow) -> Void
+    let onShowInFinder: (BudgetRow) -> Void
+    let onRemoveBudget: (BudgetRow) -> Void
 
     var body: some View {
         VStack(alignment: .center, spacing: 10) {
@@ -51,7 +51,6 @@ struct WelcomeRightColumn: View {
             
             Spacer()
         }
-        .background(.thinMaterial)
         .padding(20)
         .frame(maxWidth: .infinity)
     }

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct BudgetRowView: View {
-    let budget: BudgetDocument
+    let budget: BudgetRow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -14,15 +14,4 @@ struct BudgetRowView: View {
         }
         .padding(.vertical, 4)
     }
-}
-
-#Preview {
-    BudgetRowView(
-        budget: BudgetDocument(
-            coreID: 1,
-            url: URL(filePath: "/tmp/May 2026.budget"),
-            title: "May 2026",
-            categories: []
-        )
-    )
 }

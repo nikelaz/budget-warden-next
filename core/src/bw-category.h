@@ -38,6 +38,8 @@ BWResult bw_category_init(
 void bw_category_clear(BWCategory *category);
 BWResult bw_category_add_transaction(BWCategory *category, BWTransaction transaction);
 BWResult bw_category_remove_transaction(BWCategory *category, BWTransaction *transaction);
+size_t bw_category_transaction_count(const BWCategory *category);
+const BWTransaction *bw_category_transaction_at(const BWCategory *category, size_t index);
 
 typedef struct {
   BWCategory *items;

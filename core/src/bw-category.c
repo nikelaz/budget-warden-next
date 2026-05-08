@@ -128,6 +128,21 @@ BWResult bw_category_remove_transaction(BWCategory *category, BWTransaction *tra
   return BWResult_ERR;
 }
 
+size_t bw_category_transaction_count(const BWCategory *category)
+{
+  return category == NULL ? 0 : category->transactions.length;
+}
+
+const BWTransaction *bw_category_transaction_at(const BWCategory *category, size_t index)
+{
+  if (category == NULL || category->transactions.items == NULL || index >= category->transactions.length)
+  {
+    return NULL;
+  }
+
+  return &category->transactions.items[index];
+}
+
 BWResult bw_category_array_init(BWCategoryArray *array, BWArena *arena)
 {
   if (array == NULL || arena == NULL)

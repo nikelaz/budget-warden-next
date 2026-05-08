@@ -1,15 +1,16 @@
 import SwiftUI
 
 struct BudgetDetailView: View {
-    let budgets: [BudgetDocument]
-    let budget: BudgetDocument
+    @ObservedObject var store: BudgetStore
+    let budgets: [BudgetRow]
+    let budget: BudgetRow
     let currency: AppCurrency
     let selectedBudgetURL: URL?
     let onCreateBudget: () -> Void
-    let onSelectBudget: (BudgetDocument) -> Void
+    let onSelectBudget: (BudgetRow) -> Void
     let onAddCategory: (Swift.String, UInt64, UInt64, BudgetCategoryType) -> Void
     let onUpdateCategory: (CategoryUpdate) -> Void
-    let onRemoveCategory: (BudgetCategory) -> Void
+    let onRemoveCategory: (Int) -> Void
     let onReorderCategories: (BudgetCategoryType, [Int]) -> Void
     let onAddTransaction: (TransactionDraft) -> Void
 
@@ -54,6 +55,7 @@ struct BudgetDetailView: View {
                 } label: {
                     Text(budget.title)
                 }
+                .accessibilityIdentifier("budget-menu")
                 
                 Button {
                     transactionCategoryID = nil
@@ -63,7 +65,8 @@ struct BudgetDetailView: View {
                     Image(systemName: "plus")
                 }
                 .help("Add Transaction")
-                .disabled(budget.categories.isEmpty)
+                .accessibilityIdentifier("budget-add-transaction-button")
+                .disabled(!store.hasCategories(in: budget.url))
             }
             
             ToolbarItemGroup(placement: .primaryAction) {
@@ -77,7 +80,8 @@ struct BudgetDetailView: View {
         }
         .inspector(isPresented: $isReportingExpanded) {
             BudgetReportingView(
-                budget: budget,
+                store: store,
+                budgetURL: budget.url,
                 currency: currency,
                 isExpanded: $isReportingExpanded,
                 scope: .inspector
@@ -86,7 +90,8 @@ struct BudgetDetailView: View {
         }
         .sheet(isPresented: $isCreatingTransaction) {
             CreateTransactionView(
-                categories: budget.categories,
+                store: store,
+                budgetURL: budget.url,
                 initialCategoryID: transactionCategoryID,
                 onSave: { draft in
                     onAddTransaction(draft)
@@ -104,26 +109,28 @@ struct BudgetDetailView: View {
 
     private func categoryList(for type: BudgetCategoryType) -> some View {
         CategoryListView(
+            store: store,
+            budgetURL: budget.url,
             type: type,
-            categories: budget.categories(for: type),
             currency: currency
         ) { title, amountPlanned, amountAccumulated in
             onAddCategory(title, amountPlanned, amountAccumulated, type)
         } onUpdateCategory: { update in
             onUpdateCategory(update)
-        } onRemoveCategory: { category in
-            onRemoveCategory(category)
+        } onRemoveCategory: { categoryID in
+            onRemoveCategory(categoryID)
         } onReorderCategories: { orderedCategoryIDs in
             onReorderCategories(type, orderedCategoryIDs)
-        } onAddTransaction: { category in
-            transactionCategoryID = category.coreID
+        } onAddTransaction: { categoryID in
+            transactionCategoryID = categoryID
             isCreatingTransaction = true
         }
     }
 }
 
 struct CreateTransactionView: View {
-    let categories: [BudgetCategory]
+    @ObservedObject var store: BudgetStore
+    let budgetURL: URL
     let onSave: (TransactionDraft) -> Void
     let onCancel: () -> Void
 
@@ -135,15 +142,17 @@ struct CreateTransactionView: View {
     @State private var selectedCategoryID: Int
 
     init(
-        categories: [BudgetCategory],
+        store: BudgetStore,
+        budgetURL: URL,
         initialCategoryID: Int? = nil,
         onSave: @escaping (TransactionDraft) -> Void,
         onCancel: @escaping () -> Void
     ) {
-        self.categories = categories
+        _store = ObservedObject(wrappedValue: store)
+        self.budgetURL = budgetURL
         self.onSave = onSave
         self.onCancel = onCancel
-        _selectedCategoryID = State(initialValue: initialCategoryID ?? categories.first?.coreID ?? 0)
+        _selectedCategoryID = State(initialValue: initialCategoryID ?? store.categoryIDs(in: budgetURL).first ?? 0)
     }
 
     var body: some View {
@@ -159,9 +168,9 @@ struct CreateTransactionView: View {
                                 .font(.headline)
                                 .disabled(true)
 
-                            ForEach(categories(for: type)) { category in
-                                Text(category.title)
-                                    .tag(category.coreID)
+                            ForEach(store.categoryIDs(for: type, in: budgetURL), id: \.self) { categoryID in
+                                Text(store.categoryTitle(categoryID, in: budgetURL))
+                                    .tag(categoryID)
                             }
                         }
                     }
@@ -260,18 +269,6 @@ struct CreateTransactionView: View {
 
     private var parsedAmount: UInt64? {
         UInt64.parseMoneyAmount(amount)
-    }
-
-    private func categories(for type: BudgetCategoryType) -> [BudgetCategory] {
-        categories
-            .filter { $0.type == type }
-            .sorted {
-                if $0.ordinal != $1.ordinal {
-                    return $0.ordinal < $1.ordinal
-                }
-
-                return $0.coreID < $1.coreID
-            }
     }
 
     private var transactionDate: BWDate? {

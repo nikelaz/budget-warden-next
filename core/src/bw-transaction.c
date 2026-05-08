@@ -93,23 +93,59 @@ BWResult bw_transaction_array_push_move(BWTransactionArray *array, BWTransaction
     return BWResult_ERR;
   }
 
-  if (array->length == array->capacity)
+  if (bw_transaction_array_reserve(array, array->length + 1) == BWResult_ERR)
   {
-    size_t new_capacity = array->capacity * 2;
-    BWTransaction *new_items = bw_arena_alloc(array->arena, BWTransaction, new_capacity);
-
-    if (new_items == NULL)
-    {
-      return BWResult_ERR;
-    }
-
-    memcpy(new_items, array->items, sizeof(BWTransaction) * array->length);
-    array->items = new_items;
-    array->capacity = new_capacity;
+    return BWResult_ERR;
   }
 
   array->items[array->length] = transaction;
   array->length++;
+  return BWResult_OK;
+}
+
+BWResult bw_transaction_array_reserve(BWTransactionArray *array, size_t capacity)
+{
+  if (array == NULL || array->arena == NULL)
+  {
+    return BWResult_ERR;
+  }
+
+  if (capacity <= array->capacity)
+  {
+    return BWResult_OK;
+  }
+
+  size_t new_capacity = array->capacity;
+
+  if (new_capacity == 0)
+  {
+    new_capacity = TRANSACTION_ARRAY_INITIAL_CAPACITY;
+  }
+
+  while (new_capacity < capacity)
+  {
+    if (new_capacity > SIZE_MAX / 2)
+    {
+      return BWResult_ERR;
+    }
+
+    new_capacity *= 2;
+  }
+
+  BWTransaction *new_items = bw_arena_alloc(array->arena, BWTransaction, new_capacity);
+
+  if (new_items == NULL)
+  {
+    return BWResult_ERR;
+  }
+
+  if (array->items != NULL && array->length > 0)
+  {
+    memcpy(new_items, array->items, sizeof(BWTransaction) * array->length);
+  }
+
+  array->items = new_items;
+  array->capacity = new_capacity;
   return BWResult_OK;
 }
 

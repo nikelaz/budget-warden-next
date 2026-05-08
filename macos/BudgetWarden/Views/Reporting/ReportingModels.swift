@@ -22,12 +22,12 @@ enum AllocationBreakdownMode: Swift.String, CaseIterable, Identifiable {
         }
     }
 
-    var amountKeyPath: KeyPath<BudgetCategory, UInt64> {
+    var amountField: CategoryAmountField {
         switch self {
         case .planned:
-            return \.amountPlanned
+            return .planned
         case .actual:
-            return \.amountActual
+            return .actual
         }
     }
 }
@@ -68,12 +68,6 @@ struct AllocationBreakdownSegment: Identifiable {
 
     var id: Swift.String {
         title
-    }
-}
-
-extension Array where Element == BudgetCategory {
-    func total(_ keyPath: KeyPath<BudgetCategory, UInt64>) -> UInt64 {
-        reduce(0) { $0 + $1[keyPath: keyPath] }
     }
 }
 

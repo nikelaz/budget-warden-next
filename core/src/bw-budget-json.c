@@ -1,4 +1,5 @@
 #include "bw-budget-json.h"
+#include "cJSON.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -314,7 +315,7 @@ static BWResult bw_category_from_json(BWCategory *category, cJSON *json, BWArena
   return BWResult_OK;
 }
 
-cJSON *bw_budget_to_json(const BWBudget *budget)
+static cJSON *bw_budget_to_json(const BWBudget *budget)
 {
   if (budget == NULL)
   {
@@ -387,7 +388,7 @@ BWString bw_budget_to_json_str(const BWBudget *budget, BWArena *json_arena)
   return budget_json;
 }
 
-BWResult bw_budget_from_json(BWBudget *budget, cJSON *json)
+static BWResult bw_budget_from_json(BWBudget *budget, cJSON *json)
 {
   if (budget == NULL || !cJSON_IsObject(json))
   {

@@ -3,14 +3,15 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct CategoryListView: View {
+    @ObservedObject var store: BudgetStore
+    let budgetURL: URL
     let type: BudgetCategoryType
-    let categories: [BudgetCategory]
     let currency: AppCurrency
     let onAddCategory: (Swift.String, UInt64, UInt64) -> Void
     let onUpdateCategory: (CategoryUpdate) -> Void
-    let onRemoveCategory: (BudgetCategory) -> Void
+    let onRemoveCategory: (Int) -> Void
     let onReorderCategories: ([Int]) -> Void
-    let onAddTransaction: (BudgetCategory) -> Void
+    let onAddTransaction: (Int) -> Void
 
     @State private var isCreatingCategory = false
     @State private var newCategoryTitle = ""
@@ -18,26 +19,30 @@ struct CategoryListView: View {
     @State private var newCategoryAccumulated = "0"
     @State private var editingCell: EditingCell?
     @State private var editedValue = ""
-    @State private var categoryPendingRemoval: BudgetCategory?
+    @State private var categoryPendingRemoval: Int?
     @State private var draggedCategoryID: Int?
     @State private var dropTargetCategoryID: Int?
     @State private var isProgrammaticallyChangingEditingCell = false
     @FocusState private var focusedNewCategoryField: NewCategoryField?
     @FocusState private var focusedEditingCell: EditingCell?
 
+    private var categoryIDs: [Int] {
+        store.categoryIDs(for: type, in: budgetURL)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             headerRow
 
             VStack(alignment: .leading, spacing: 0) {
-                if categories.isEmpty && !isCreatingCategory {
+                if categoryIDs.isEmpty && !isCreatingCategory {
                     emptyRow
                     Divider()
                 } else {
-                    ForEach(categories) { category in
-                        dropIndicator(for: category)
-                        categoryRow(category)
-                        rowSeparator(for: category)
+                    ForEach(categoryIDs, id: \.self) { categoryID in
+                        dropIndicator(for: categoryID)
+                        categoryRow(categoryID)
+                        rowSeparator(for: categoryID)
                     }
                 }
 
@@ -65,8 +70,8 @@ struct CategoryListView: View {
             Button("Cancel", role: .cancel) {
                 categoryPendingRemoval = nil
             }
-        } message: { category in
-            Text("Delete \(category.title)? This will also remove its transactions.")
+        } message: { categoryID in
+            Text("Delete \(store.categoryTitle(categoryID, in: budgetURL))? This will also remove its transactions.")
         }
         .onChange(of: focusedEditingCell) { _, newFocusedCell in
             guard !isProgrammaticallyChangingEditingCell else {
@@ -171,6 +176,7 @@ private extension CategoryListView {
                 .buttonStyle(.plain)
                 .foregroundStyle(Color.accentColor)
                 .help("Add \(type.title) Category")
+                .accessibilityIdentifier("category-add-\(type.accessibilityID)-button")
             }
             .padding(.horizontal, 5)
 
@@ -189,25 +195,25 @@ private extension CategoryListView {
         .padding(.vertical, 10)
     }
 
-    func categoryRow(_ category: BudgetCategory) -> some View {
+    func categoryRow(_ categoryID: Int) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            editableTitleCell(for: category)
+            editableTitleCell(for: categoryID)
 
             ForEach(type.valueColumns) { column in
-                valueCell(for: category, column: column)
+                valueCell(for: categoryID, column: column)
             }
         }
         .padding(.horizontal, 5)
         .padding(.vertical, 8)
         .onDrag {
-            draggedCategoryID = category.coreID
-            return NSItemProvider(object: "\(category.coreID)" as NSString)
+            draggedCategoryID = categoryID
+            return NSItemProvider(object: "\(categoryID)" as NSString)
         }
         .onDrop(
             of: [.text],
             delegate: CategoryDropDelegate(
-                targetCategory: category,
-                categories: categories,
+                targetCategoryID: categoryID,
+                categoryIDs: categoryIDs,
                 draggedCategoryID: $draggedCategoryID,
                 dropTargetCategoryID: $dropTargetCategoryID,
                 onReorderCategories: onReorderCategories
@@ -215,87 +221,109 @@ private extension CategoryListView {
         )
         .contextMenu {
             Button(role: .destructive) {
-                categoryPendingRemoval = category
+                categoryPendingRemoval = categoryID
             } label: {
                 Label("Delete Category", systemImage: "trash")
             }
         }
     }
 
-    func dropIndicator(for category: BudgetCategory) -> some View {
+    func dropIndicator(for categoryID: Int) -> some View {
         Rectangle()
             .fill(Color.accentColor)
-            .frame(height: dropTargetCategoryID == category.coreID ? 2 : 0)
+            .frame(height: dropTargetCategoryID == categoryID ? 2 : 0)
     }
 
-    func editableTitleCell(for category: BudgetCategory) -> some View {
+    func editableTitleCell(for categoryID: Int) -> some View {
         Group {
-            if editingCell == .title(category.coreID) {
+            if editingCell == .title(categoryID) {
                 TextField("Title", text: $editedValue)
                     .textFieldStyle(.roundedBorder)
-                    .focused($focusedEditingCell, equals: .title(category.coreID))
+                    .accessibilityIdentifier("category-title-edit-field")
+                    .focused($focusedEditingCell, equals: .title(categoryID))
                     .onAppear {
-                        focusEditingCell(.title(category.coreID))
+                        focusEditingCell(.title(categoryID))
                     }
                     .onSubmit {
-                        commitTitleEdit(for: category)
+                        commitTitleEdit(for: categoryID)
                     }
                     .onExitCommand {
                         discardEdit()
                     }
             } else {
-                ClickableTableCell {
-                    startEditing(.title(category.coreID), value: category.title)
+                Button {
+                    startEditing(.title(categoryID), value: store.categoryTitle(categoryID, in: budgetURL))
                 } label: {
-                    Text(category.title)
+                    Text(store.categoryTitle(categoryID, in: budgetURL))
                         .fontWeight(.medium)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(5)
+                }
+                .buttonStyle(.plain)
+                .contentShape(.rect)
+                .accessibilityIdentifier("category-title-cell-\(categoryAccessibilityID(categoryID))")
+                .contextMenu {
+                    Button(role: .destructive) {
+                        categoryPendingRemoval = categoryID
+                    } label: {
+                        Label("Delete Category", systemImage: "trash")
+                    }
                 }
             }
         }
     }
 
-    func valueCell(for category: BudgetCategory, column: CategoryValueColumn) -> some View {
+    func valueCell(for categoryID: Int, column: CategoryValueColumn) -> some View {
         Group {
-            if editingCell == .amount(category.coreID, column.id) {
+            if editingCell == .amount(categoryID, column.id) {
                 TextField(column.title, text: $editedValue)
                     .textFieldStyle(.roundedBorder)
                     .multilineTextAlignment(.trailing)
+                    .accessibilityIdentifier("category-\(column.id)-edit-field")
                     .frame(width: column.width)
-                    .focused($focusedEditingCell, equals: .amount(category.coreID, column.id))
+                    .focused($focusedEditingCell, equals: .amount(categoryID, column.id))
                     .onAppear {
-                        focusEditingCell(.amount(category.coreID, column.id))
+                        focusEditingCell(.amount(categoryID, column.id))
                     }
                     .onSubmit {
-                        commitAmountEdit(for: category, column: column)
+                        commitAmountEdit(for: categoryID, column: column)
                     }
                     .onExitCommand {
                         discardEdit()
                     }
             } else if column.opensTransaction {
-                ClickableTableCell(width: column.width, alignment: .trailing) {
-                    onAddTransaction(category)
+                Button {
+                    onAddTransaction(categoryID)
                 } label: {
-                    amountText(category.amount(for: column))
+                    amountText(categoryAmount(categoryID, column: column))
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(5)
+                        .frame(width: column.width, alignment: .trailing)
                 }
+                .buttonStyle(.plain)
+                .contentShape(.rect)
+                .accessibilityIdentifier("category-\(column.id)-cell-\(categoryAccessibilityID(categoryID))")
             } else if column.isEditable {
                 ClickableTableCell(width: column.width, alignment: .trailing) {
-                    startEditing(.amount(category.coreID, column.id), value: category.amount(for: column).moneyAmountInputText)
+                    startEditing(.amount(categoryID, column.id), value: categoryAmount(categoryID, column: column).moneyAmountInputText)
                 } label: {
-                    amountText(category.amount(for: column))
+                    amountText(categoryAmount(categoryID, column: column))
+                        .accessibilityIdentifier("category-\(column.id)-cell-\(categoryAccessibilityID(categoryID))")
                 }
             } else {
-                amountText(category.amount(for: column))
+                amountText(categoryAmount(categoryID, column: column))
                     .frame(width: column.width, alignment: .trailing)
+                    .accessibilityIdentifier("category-\(column.id)-cell-\(categoryAccessibilityID(categoryID))")
             }
         }
     }
 
-    func rowSeparator(for category: BudgetCategory) -> some View {
+    func rowSeparator(for categoryID: Int) -> some View {
         ZStack {
             GeometryReader { proxy in
                 Rectangle()
-                    .fill(progressColor(for: category))
-                    .frame(width: proxy.size.width * progressFraction(for: category))
+                    .fill(progressColor(for: categoryID))
+                    .frame(width: proxy.size.width * progressFraction(for: categoryID))
             }
             .frame(height: 2)
 
@@ -308,17 +336,23 @@ private extension CategoryListView {
             .monospacedDigit()
     }
 
-    func progressFraction(for category: BudgetCategory) -> CGFloat {
-        guard category.amountPlanned > 0 else {
-            return category.amountActual > 0 ? 1 : 0
+    func progressFraction(for categoryID: Int) -> CGFloat {
+        let planned = store.categoryAmount(categoryID, field: .planned, in: budgetURL)
+        let actual = store.categoryAmount(categoryID, field: .actual, in: budgetURL)
+
+        guard planned > 0 else {
+            return actual > 0 ? 1 : 0
         }
 
-        let fraction = CGFloat(category.amountActual) / CGFloat(category.amountPlanned)
+        let fraction = CGFloat(actual) / CGFloat(planned)
         return min(fraction, 1)
     }
 
-    func progressColor(for category: BudgetCategory) -> Color {
-        category.amountPlanned > 0 && category.amountActual > category.amountPlanned
+    func progressColor(for categoryID: Int) -> Color {
+        let planned = store.categoryAmount(categoryID, field: .planned, in: budgetURL)
+        let actual = store.categoryAmount(categoryID, field: .actual, in: budgetURL)
+
+        return planned > 0 && actual > planned
             ? Color(nsColor: .systemRed)
             : Color(nsColor: .systemGreen)
     }
@@ -402,26 +436,26 @@ private extension CategoryListView {
 
         switch editingCell {
         case .title(let categoryID):
-            guard let category = categories.first(where: { $0.coreID == categoryID }) else {
+            guard categoryIDs.contains(categoryID) else {
                 discardEdit()
                 return
             }
 
-            commitTitleEdit(for: category)
+            commitTitleEdit(for: categoryID)
         case .amount(let categoryID, let columnID):
             guard
-                let category = categories.first(where: { $0.coreID == categoryID }),
+                categoryIDs.contains(categoryID),
                 let column = type.valueColumns.first(where: { $0.id == columnID })
             else {
                 discardEdit()
                 return
             }
 
-            commitAmountEdit(for: category, column: column)
+            commitAmountEdit(for: categoryID, column: column)
         }
     }
 
-    func commitTitleEdit(for category: BudgetCategory) {
+    func commitTitleEdit(for categoryID: Int) {
         let title = editedValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else {
             discardEdit()
@@ -430,10 +464,10 @@ private extension CategoryListView {
 
         onUpdateCategory(
             CategoryUpdate(
-                categoryID: category.coreID,
+                categoryID: categoryID,
                 title: title,
-                amountPlanned: category.amountPlanned,
-                amountAccumulated: category.amountAccumulated
+                amountPlanned: store.categoryAmount(categoryID, field: .planned, in: budgetURL),
+                amountAccumulated: store.categoryAmount(categoryID, field: .accumulated, in: budgetURL)
             )
         )
         editingCell = nil
@@ -441,7 +475,7 @@ private extension CategoryListView {
         focusedEditingCell = nil
     }
 
-    func commitAmountEdit(for category: BudgetCategory, column: CategoryValueColumn) {
+    func commitAmountEdit(for categoryID: Int, column: CategoryValueColumn) {
         guard let amount = parsedAmount(editedValue) else {
             discardEdit()
             return
@@ -449,10 +483,10 @@ private extension CategoryListView {
 
         onUpdateCategory(
             CategoryUpdate(
-                categoryID: category.coreID,
-                title: category.title,
-                amountPlanned: column.id == "planned" ? amount : category.amountPlanned,
-                amountAccumulated: column.id == "accumulated" ? amount : category.amountAccumulated
+                categoryID: categoryID,
+                title: store.categoryTitle(categoryID, in: budgetURL),
+                amountPlanned: column.id == "planned" ? amount : store.categoryAmount(categoryID, field: .planned, in: budgetURL),
+                amountAccumulated: column.id == "accumulated" ? amount : store.categoryAmount(categoryID, field: .accumulated, in: budgetURL)
             )
         )
         editingCell = nil
@@ -461,7 +495,15 @@ private extension CategoryListView {
     }
 
     func total(for column: CategoryValueColumn) -> UInt64 {
-        categories.reduce(0) { $0 + $1.amount(for: column) }
+        store.categoryTotal(type: type, field: column.amount, in: budgetURL)
+    }
+
+    func categoryAmount(_ categoryID: Int, column: CategoryValueColumn) -> UInt64 {
+        store.categoryAmount(categoryID, field: column.amount, in: budgetURL)
+    }
+
+    func categoryAccessibilityID(_ categoryID: Int) -> Swift.String {
+        store.categoryTitle(categoryID, in: budgetURL).accessibilityIdentifierComponent
     }
 
     func parsedAmount(_ text: Swift.String) -> UInt64? {
@@ -484,8 +526,8 @@ private enum NewCategoryField: Hashable {
 }
 
 private struct CategoryDropDelegate: DropDelegate {
-    let targetCategory: BudgetCategory
-    let categories: [BudgetCategory]
+    let targetCategoryID: Int
+    let categoryIDs: [Int]
     @Binding var draggedCategoryID: Int?
     @Binding var dropTargetCategoryID: Int?
     let onReorderCategories: ([Int]) -> Void
@@ -495,15 +537,15 @@ private struct CategoryDropDelegate: DropDelegate {
     }
 
     func dropEntered(info: DropInfo) {
-        guard draggedCategoryID != targetCategory.coreID else {
+        guard draggedCategoryID != targetCategoryID else {
             return
         }
 
-        dropTargetCategoryID = targetCategory.coreID
+        dropTargetCategoryID = targetCategoryID
     }
 
     func dropExited(info: DropInfo) {
-        if dropTargetCategoryID == targetCategory.coreID {
+        if dropTargetCategoryID == targetCategoryID {
             dropTargetCategoryID = nil
         }
     }
@@ -516,19 +558,19 @@ private struct CategoryDropDelegate: DropDelegate {
 
         guard
             let draggedCategoryID,
-            draggedCategoryID != targetCategory.coreID,
-            let sourceIndex = categories.firstIndex(where: { $0.coreID == draggedCategoryID }),
-            let targetIndex = categories.firstIndex(where: { $0.coreID == targetCategory.coreID })
+            draggedCategoryID != targetCategoryID,
+            let sourceIndex = categoryIDs.firstIndex(of: draggedCategoryID),
+            let targetIndex = categoryIDs.firstIndex(of: targetCategoryID)
         else {
             return false
         }
 
-        var reorderedCategories = categories
-        let movedCategory = reorderedCategories.remove(at: sourceIndex)
+        var reorderedCategories = categoryIDs
+        let movedCategoryID = reorderedCategories.remove(at: sourceIndex)
         let insertionIndex = sourceIndex < targetIndex ? targetIndex : targetIndex
-        reorderedCategories.insert(movedCategory, at: insertionIndex)
+        reorderedCategories.insert(movedCategoryID, at: insertionIndex)
 
-        onReorderCategories(reorderedCategories.map(\.coreID))
+        onReorderCategories(reorderedCategories)
         return true
     }
 }
@@ -573,7 +615,7 @@ private struct ClickableTableCell<Label: View>: View {
 private struct CategoryValueColumn: Identifiable {
     let id: Swift.String
     let title: Swift.String
-    let amount: KeyPath<BudgetCategory, UInt64>
+    let amount: CategoryAmountField
     let width: CGFloat
 
     var isEditable: Bool {
@@ -585,13 +627,20 @@ private struct CategoryValueColumn: Identifiable {
     }
 }
 
-private extension BudgetCategory {
-    func amount(for column: CategoryValueColumn) -> UInt64 {
-        self[keyPath: column.amount]
-    }
-}
-
 private extension BudgetCategoryType {
+    var accessibilityID: Swift.String {
+        switch self {
+        case .income:
+            return "income"
+        case .expenses:
+            return "expenses"
+        case .debt:
+            return "debt"
+        case .savings:
+            return "savings"
+        }
+    }
+
     var allowsAccumulatedAmount: Bool {
         self == .savings || self == .debt
     }
@@ -600,25 +649,25 @@ private extension BudgetCategoryType {
         switch self {
         case .income:
             return [
-                CategoryValueColumn(id: "planned", title: "Planned", amount: \.amountPlanned, width: 92),
-                CategoryValueColumn(id: "actual", title: "Received", amount: \.amountActual, width: 92)
+                CategoryValueColumn(id: "planned", title: "Planned", amount: .planned, width: 92),
+                CategoryValueColumn(id: "actual", title: "Received", amount: .actual, width: 92)
             ]
         case .expenses:
             return [
-                CategoryValueColumn(id: "planned", title: "Planned", amount: \.amountPlanned, width: 92),
-                CategoryValueColumn(id: "actual", title: "Spend", amount: \.amountActual, width: 92)
+                CategoryValueColumn(id: "planned", title: "Planned", amount: .planned, width: 92),
+                CategoryValueColumn(id: "actual", title: "Spend", amount: .actual, width: 92)
             ]
         case .debt:
             return [
-                CategoryValueColumn(id: "accumulated", title: "Leftover Debt", amount: \.amountAccumulated, width: 118),
-                CategoryValueColumn(id: "planned", title: "Planned", amount: \.amountPlanned, width: 92),
-                CategoryValueColumn(id: "actual", title: "Paid", amount: \.amountActual, width: 92)
+                CategoryValueColumn(id: "accumulated", title: "Leftover Debt", amount: .accumulated, width: 118),
+                CategoryValueColumn(id: "planned", title: "Planned", amount: .planned, width: 92),
+                CategoryValueColumn(id: "actual", title: "Paid", amount: .actual, width: 92)
             ]
         case .savings:
             return [
-                CategoryValueColumn(id: "accumulated", title: "Accumulated", amount: \.amountAccumulated, width: 118),
-                CategoryValueColumn(id: "planned", title: "Planned", amount: \.amountPlanned, width: 92),
-                CategoryValueColumn(id: "actual", title: "Saved", amount: \.amountActual, width: 92)
+                CategoryValueColumn(id: "accumulated", title: "Accumulated", amount: .accumulated, width: 118),
+                CategoryValueColumn(id: "planned", title: "Planned", amount: .planned, width: 92),
+                CategoryValueColumn(id: "actual", title: "Saved", amount: .actual, width: 92)
             ]
         }
     }
@@ -634,5 +683,16 @@ private extension BudgetCategoryType {
         case .savings:
             return "New Fund"
         }
+    }
+}
+
+private extension Swift.String {
+    var accessibilityIdentifierComponent: Swift.String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+        let scalars = unicodeScalars.map { scalar in
+            allowed.contains(scalar) ? Character(scalar) : "-"
+        }
+
+        return Swift.String(scalars)
     }
 }

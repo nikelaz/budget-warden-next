@@ -1,19 +1,21 @@
 import SwiftUI
 
 struct ReportingView: View {
-    let budgets: [BudgetDocument]
-    let budget: BudgetDocument
+    @ObservedObject var store: BudgetStore
+    let budgets: [BudgetRow]
+    let budget: BudgetRow
     let currency: AppCurrency
     let selectedBudgetURL: URL?
     let onCreateBudget: () -> Void
-    let onSelectBudget: (BudgetDocument) -> Void
+    let onSelectBudget: (BudgetRow) -> Void
     let onAddTransaction: (TransactionDraft) -> Void
 
     @State private var isCreatingTransaction = false
 
     var body: some View {
         BudgetReportingView(
-            budget: budget,
+            store: store,
+            budgetURL: budget.url,
             currency: currency,
             isExpanded: .constant(true),
             scope: .fullPage
@@ -44,11 +46,13 @@ struct ReportingView: View {
                 } label: {
                     Text(budget.title)
                 }
+                .accessibilityIdentifier("budget-menu")
             }
         }
         .sheet(isPresented: $isCreatingTransaction) {
             CreateTransactionView(
-                categories: budget.categories,
+                store: store,
+                budgetURL: budget.url,
                 initialCategoryID: nil,
                 onSave: { draft in
                     onAddTransaction(draft)
@@ -60,5 +64,6 @@ struct ReportingView: View {
             )
             .frame(minWidth: 420)
         }
+        .accessibilityIdentifier("reporting-root")
     }
 }

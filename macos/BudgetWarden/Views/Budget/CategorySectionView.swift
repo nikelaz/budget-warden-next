@@ -1,19 +1,29 @@
 import SwiftUI
 
 struct CategorySectionView: View {
+    @ObservedObject var store: BudgetStore
+    let budgetURL: URL
     let type: BudgetCategoryType
-    let categories: [BudgetCategory]
     let currency: AppCurrency
     let onAddCategory: () -> Void
 
+    private var categoryIDs: [Int] {
+        store.categoryIDs(for: type, in: budgetURL)
+    }
+
     var body: some View {
         Section {
-            if categories.isEmpty {
+            if categoryIDs.isEmpty {
                 Text("No categories")
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(categories) { category in
-                    CategoryRowView(category: category, currency: currency)
+                ForEach(categoryIDs, id: \.self) { categoryID in
+                    CategoryRowView(
+                        store: store,
+                        budgetURL: budgetURL,
+                        categoryID: categoryID,
+                        currency: currency
+                    )
                 }
             }
         } header: {

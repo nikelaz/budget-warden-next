@@ -11,11 +11,12 @@ struct MainLayoutView: View {
                 selectedSection: $selectedSection
             )
         } detail: {
-            if let selectedBudget = store.selectedBudget {
+            if let selectedBudget = store.selectedBudgetRow {
                 switch selectedSection {
                 case .budget:
                     BudgetDetailView(
-                        budgets: store.availableBudgets,
+                        store: store,
+                        budgets: store.availableBudgetRows,
                         budget: selectedBudget,
                         currency: store.selectedCurrency,
                         selectedBudgetURL: store.selectedBudgetURL,
@@ -29,7 +30,8 @@ struct MainLayoutView: View {
                     )
                 case .reporting:
                     ReportingView(
-                        budgets: store.availableBudgets,
+                        store: store,
+                        budgets: store.availableBudgetRows,
                         budget: selectedBudget,
                         currency: store.selectedCurrency,
                         selectedBudgetURL: store.selectedBudgetURL,
@@ -39,7 +41,8 @@ struct MainLayoutView: View {
                     )
                 case .transactions:
                     TransactionsView(
-                        budgets: store.availableBudgets,
+                        store: store,
+                        budgets: store.availableBudgetRows,
                         budget: selectedBudget,
                         currency: store.selectedCurrency,
                         selectedBudgetURL: store.selectedBudgetURL,

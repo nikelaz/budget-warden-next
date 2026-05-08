@@ -47,5 +47,19 @@ struct SidebarView: View {
             systemImage: section.systemImage
         )
             .tag(section)
+            .accessibilityIdentifier("sidebar-\(section.accessibilityID)")
+    }
+}
+
+private extension SidebarSection {
+    var accessibilityID: Swift.String {
+        switch self {
+        case .budget:
+            return "budget"
+        case .reporting:
+            return "reporting"
+        case .transactions:
+            return "transactions"
+        }
     }
 }

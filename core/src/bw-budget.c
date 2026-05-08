@@ -221,9 +221,14 @@ static BWResult bw_budget_clone_category(BWBudget *budget, const BWCategory *sou
   return BWResult_OK;
 }
 
-static BWResult category_update_actual_amount(BWCategory *category, uint64_t old_amount, uint64_t new_amount)
+static BWResult category_actual_amount_after_update(
+  const BWCategory *category,
+  uint64_t old_amount,
+  uint64_t new_amount,
+  uint64_t *updated_amount
+)
 {
-  if (category == NULL)
+  if (category == NULL || updated_amount == NULL)
   {
     return BWResult_ERR;
   }
@@ -237,7 +242,7 @@ static BWResult category_update_actual_amount(BWCategory *category, uint64_t old
       return BWResult_ERR;
     }
 
-    category->amount_actual += increase;
+    *updated_amount = category->amount_actual + increase;
     return BWResult_OK;
   }
 
@@ -248,7 +253,7 @@ static BWResult category_update_actual_amount(BWCategory *category, uint64_t old
     return BWResult_ERR;
   }
 
-  category->amount_actual -= decrease;
+  *updated_amount = category->amount_actual - decrease;
   return BWResult_OK;
 }
 
@@ -423,6 +428,81 @@ void bw_budget_free(BWBudget *budget)
   budget->id = 0;
   bw_string_clear(&budget->title);
   bw_category_array_clear(&budget->categories);
+}
+
+size_t bw_budget_category_count(const BWBudget *budget)
+{
+  return budget == NULL ? 0 : budget->categories.length;
+}
+
+const BWCategory *bw_budget_category_at(const BWBudget *budget, size_t index)
+{
+  if (budget == NULL || budget->categories.items == NULL || index >= budget->categories.length)
+  {
+    return NULL;
+  }
+
+  return &budget->categories.items[index];
+}
+
+const BWCategory *bw_budget_category_by_id(const BWBudget *budget, int category_id)
+{
+  if (budget == NULL || budget->categories.items == NULL)
+  {
+    return NULL;
+  }
+
+  for (size_t i = 0; i < budget->categories.length; i++)
+  {
+    if (budget->categories.items[i].id == category_id)
+    {
+      return &budget->categories.items[i];
+    }
+  }
+
+  return NULL;
+}
+
+const BWTransaction *bw_budget_transaction_by_id(
+  const BWBudget *budget,
+  int transaction_id,
+  const BWCategory **category
+)
+{
+  if (category != NULL)
+  {
+    *category = NULL;
+  }
+
+  if (budget == NULL || budget->categories.items == NULL)
+  {
+    return NULL;
+  }
+
+  for (size_t category_index = 0; category_index < budget->categories.length; category_index++)
+  {
+    const BWCategory *current_category = &budget->categories.items[category_index];
+
+    if (current_category->transactions.items == NULL)
+    {
+      continue;
+    }
+
+    for (size_t transaction_index = 0; transaction_index < current_category->transactions.length; transaction_index++)
+    {
+      if (current_category->transactions.items[transaction_index].id == transaction_id)
+      {
+        if (category != NULL)
+        {
+          *category = current_category;
+        }
+
+        return &current_category->transactions.items[transaction_index];
+      }
+    }
+  }
+
+  return NULL;
 }
 
 BWResult bw_budget_add_category(BWBudget *budget, BWCategory category)
@@ -602,6 +682,19 @@ BWResult bw_budget_update_transaction(BWBudget *budget, int transaction_id, BWTr
   {
     BWString title;
     BWString description;
+    uint64_t updated_actual;
+
+    if (
+      category_actual_amount_after_update(
+        source_category,
+        source_transaction->amount,
+        transaction_update.amount,
+        &updated_actual
+      ) == BWResult_ERR
+    )
+    {
+      return BWResult_ERR;
+    }
 
     if (bw_string_init(&title, &budget->arena) == BWResult_ERR)
     {
@@ -623,11 +716,7 @@ BWResult bw_budget_update_transaction(BWBudget *budget, int transaction_id, BWTr
       return BWResult_ERR;
     }
 
-    if (category_update_actual_amount(source_category, source_transaction->amount, transaction_update.amount) == BWResult_ERR)
-    {
-      return BWResult_ERR;
-    }
-
+    source_category->amount_actual = updated_actual;
     source_transaction->title = title;
     source_transaction->description = description;
     source_transaction->date = transaction_update.date;
@@ -654,6 +743,11 @@ BWResult bw_budget_update_transaction(BWBudget *budget, int transaction_id, BWTr
   replacement.id = transaction_id;
 
   if (UINT64_MAX - target_category->amount_actual < replacement.amount)
+  {
+    return BWResult_ERR;
+  }
+
+  if (bw_transaction_array_reserve(&target_category->transactions, target_category->transactions.length + 1) == BWResult_ERR)
   {
     return BWResult_ERR;
   }

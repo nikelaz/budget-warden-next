@@ -8,6 +8,7 @@ struct MainWindow: Scene {
             MainLayoutView(store: store)
         }
             .defaultSize(width: 1040, height: 700)
+            .defaultLaunchBehavior(.suppressed)
             .windowToolbarStyle(.unified)
             .commands {
                 windowCommands

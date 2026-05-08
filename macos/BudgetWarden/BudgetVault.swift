@@ -203,7 +203,6 @@ final class BudgetVault {
 
     private var uiTestingVaultURL: URL? {
         guard
-            ProcessInfo.processInfo.arguments.contains("--ui-testing"),
             let runID = ProcessInfo.processInfo.environment[uiTestingRunIDKey],
             !runID.isEmpty,
             let applicationSupportURL = fileManager.urls(

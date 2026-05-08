@@ -2,11 +2,8 @@
 #define BW_BUDGET_JSON_H
 
 #include "bw-budget.h"
-#include "cJSON.h"
 
-cJSON *bw_budget_to_json(const BWBudget *budget);
 BWString bw_budget_to_json_str(const BWBudget *budget, BWArena *json_arena);
-BWResult bw_budget_from_json(BWBudget *budget, cJSON *json);
 BWResult bw_budget_from_json_str(BWBudget *budget, const char *budget_json);
 
 #endif

@@ -14,14 +14,12 @@ typedef struct {
   BWArena arena;
 } BWBudget;
 
-// Todo(Niki): I don't like this object, I think it shouldn't exist
 typedef struct {
   const char *title;
   uint64_t amount_planned;
   uint64_t amount_accumulated;
 } BWCategoryUpdate;
 
-// Todo(Niki): Same as BWCategoryUpdate - it shouldn't exist
 typedef struct {
   int category_id;
   const char *title;
@@ -36,6 +34,16 @@ BWResult bw_budget_init_from_template(BWBudget *budget, const char *template_pat
 
 // Dealloc
 void bw_budget_free(BWBudget *budget);
+
+// Read
+size_t bw_budget_category_count(const BWBudget *budget);
+const BWCategory *bw_budget_category_at(const BWBudget *budget, size_t index);
+const BWCategory *bw_budget_category_by_id(const BWBudget *budget, int category_id);
+const BWTransaction *bw_budget_transaction_by_id(
+  const BWBudget *budget,
+  int transaction_id,
+  const BWCategory **category
+);
 
 // Categories
 BWResult bw_budget_add_category(BWBudget *budget, BWCategory category);

@@ -3,9 +3,6 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
 #include "bw-result.h"
 
 typedef struct BWArenaBlock {
@@ -16,9 +13,6 @@ typedef struct BWArenaBlock {
 } BWArenaBlock;
 
 typedef struct {
-  unsigned char *buffer;
-  size_t capacity;
-  size_t offset;
   BWArenaBlock *first;
   BWArenaBlock *current;
 } BWArena;
