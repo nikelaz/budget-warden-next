@@ -122,60 +122,73 @@ struct BudgetReportingView: View {
     }
 
     private var fullPageChartGrid: some View {
-        GeometryReader { proxy in
-            LazyVGrid(
-                columns: chartGridColumns(for: proxy.size.width),
-                alignment: .leading,
-                spacing: 20
-            ) {
-                incomeVsAllocationSection
-                allocationBreakdownSection
-
-                CategoryBreakdownSection(
-                    title: "Income Breakdown",
-                    emptyTitle: "No income amounts yet",
-                    currency: currency
-                ) { mode in
-                    categoryBreakdownSegments(for: .income, mode: mode)
-                }
-
-                CategoryBreakdownSection(
-                    title: "Expenses Breakdown",
-                    emptyTitle: "No expense amounts yet",
-                    currency: currency
-                ) { mode in
-                    categoryBreakdownSegments(for: .expenses, mode: mode)
-                }
-
-                CategoryBreakdownSection(
-                    title: "Savings Breakdown",
-                    emptyTitle: "No savings amounts yet",
-                    currency: currency
-                ) { mode in
-                    categoryBreakdownSegments(for: .savings, mode: mode)
-                }
-
-                CategoryBreakdownSection(
-                    title: "Debt Breakdown",
-                    emptyTitle: "No debt amounts yet",
-                    currency: currency
-                ) { mode in
-                    categoryBreakdownSegments(for: .debt, mode: mode)
-                }
-            }
+        ViewThatFits(in: .horizontal) {
+            chartGrid(columnCount: 3)
+            chartGrid(columnCount: 2)
+            chartGrid(columnCount: 1)
         }
     }
 
-    private func chartGridColumns(for width: CGFloat) -> [GridItem] {
+    private func chartGrid(columnCount: Int) -> some View {
+        let chartCount = 6
         let spacing: CGFloat = 20
         let minimumColumnWidth: CGFloat = 320
-        let possibleColumnCount = Int((width + spacing) / (minimumColumnWidth + spacing))
-        let columnCount = max(1, min(3, possibleColumnCount))
+        let minimumGridWidth = (CGFloat(columnCount) * minimumColumnWidth) + (CGFloat(columnCount - 1) * spacing)
 
-        return Array(
-            repeating: GridItem(.flexible(minimum: minimumColumnWidth), spacing: spacing, alignment: .top),
-            count: columnCount
-        )
+        return Grid(alignment: .topLeading, horizontalSpacing: spacing, verticalSpacing: spacing) {
+            ForEach(Array(stride(from: 0, to: chartCount, by: columnCount)), id: \.self) { rowStart in
+                GridRow(alignment: .top) {
+                    ForEach(rowStart..<min(rowStart + columnCount, chartCount), id: \.self) { index in
+                        chartSection(at: index)
+                            .frame(minWidth: minimumColumnWidth, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    }
+                }
+            }
+        }
+        .environment(\.reportChartFillsAvailableHeight, true)
+        .frame(minWidth: minimumGridWidth, maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private func chartSection(at index: Int) -> some View {
+        switch index {
+        case 0:
+            incomeVsAllocationSection
+        case 1:
+            allocationBreakdownSection
+        case 2:
+            CategoryBreakdownSection(
+                title: "Income Breakdown",
+                emptyTitle: "No income amounts yet",
+                currency: currency
+            ) { mode in
+                categoryBreakdownSegments(for: .income, mode: mode)
+            }
+        case 3:
+            CategoryBreakdownSection(
+                title: "Expenses Breakdown",
+                emptyTitle: "No expense amounts yet",
+                currency: currency
+            ) { mode in
+                categoryBreakdownSegments(for: .expenses, mode: mode)
+            }
+        case 4:
+            CategoryBreakdownSection(
+                title: "Savings Breakdown",
+                emptyTitle: "No savings amounts yet",
+                currency: currency
+            ) { mode in
+                categoryBreakdownSegments(for: .savings, mode: mode)
+            }
+        default:
+            CategoryBreakdownSection(
+                title: "Debt Breakdown",
+                emptyTitle: "No debt amounts yet",
+                currency: currency
+            ) { mode in
+                categoryBreakdownSegments(for: .debt, mode: mode)
+            }
+        }
     }
 
     private var incomeVsAllocationSection: some View {

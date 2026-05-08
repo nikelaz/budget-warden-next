@@ -1,6 +1,19 @@
 import SwiftUI
 
+private struct ReportChartFillsAvailableHeightKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var reportChartFillsAvailableHeight: Bool {
+        get { self[ReportChartFillsAvailableHeightKey.self] }
+        set { self[ReportChartFillsAvailableHeightKey.self] = newValue }
+    }
+}
+
 struct ReportChartSection<Content: View>: View {
+    @Environment(\.reportChartFillsAvailableHeight) private var fillsAvailableHeight
+
     let title: Swift.String
     @ViewBuilder let content: Content
 
@@ -10,13 +23,30 @@ struct ReportChartSection<Content: View>: View {
                 .font(.subheadline)
                 .fontWeight(.semibold)
 
+            contentContainer
+        }
+        .frame(
+            maxWidth: .infinity,
+            maxHeight: fillsAvailableHeight ? .infinity : nil,
+            alignment: .topLeading
+        )
+    }
+
+    @ViewBuilder
+    private var contentContainer: some View {
+        if fillsAvailableHeight {
             content
                 .padding(10)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .background(Color(nsColor: .quaternarySystemFill))
                 .clipShape(.rect(cornerRadius: 8, style: .continuous))
+        } else {
+            content
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .background(Color(nsColor: .quaternarySystemFill))
+                .clipShape(.rect(cornerRadius: 8, style: .continuous))
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
