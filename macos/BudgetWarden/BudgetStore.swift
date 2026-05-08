@@ -25,7 +25,9 @@ final class BudgetStore: ObservableObject {
     private var pendingDraft: BudgetDraft?
     private let vault: BudgetVault
     private let fileManager = FileManager.default
-    private var cores: [URL: UnsafeMutablePointer<BWBudget>] = [:]
+    private var loadedBudgetURL: URL?
+    private var loadedBudget: UnsafeMutablePointer<BWBudget>?
+    private var externalBudgetRow: BudgetRow?
     @Published private var revision = 0
     private static let selectedCurrencyKey = "SelectedCurrency"
     private static let jsonArenaCapacity = 1024 * 1024
@@ -39,7 +41,7 @@ final class BudgetStore: ObservableObject {
     }
 
     deinit {
-        for pointer in cores.values {
+        if let pointer = loadedBudget {
             freeBudget(pointer)
         }
     }
@@ -51,7 +53,7 @@ final class BudgetStore: ObservableObject {
     var availableBudgetRows: [BudgetRow] {
         guard
             let externalBudgetURL,
-            let externalRow = row(for: externalBudgetURL)
+            let externalRow = externalBudgetRow
         else {
             return budgetRows
         }
@@ -64,11 +66,11 @@ final class BudgetStore: ObservableObject {
     }
 
     var selectedBudgetRow: BudgetRow? {
-        if let selectedBudgetURL, let row = row(for: selectedBudgetURL) {
+        if let selectedBudgetURL, let row = metadataRow(for: selectedBudgetURL) {
             return row
         }
 
-        return budgetRows.first ?? externalBudgetURL.flatMap(row(for:))
+        return budgetRows.first ?? externalBudgetRow
     }
 
     var configuredLocalVaultParentURL: URL? {
@@ -94,6 +96,7 @@ final class BudgetStore: ObservableObject {
 
     func selectBudget(_ budget: BudgetRow) {
         selectedBudgetURL = budget.url
+        loadSelectedBudget()
     }
 
     func cancelCreateBudget() {
@@ -120,10 +123,13 @@ final class BudgetStore: ObservableObject {
             if !hasAvailableBudget(at: selectedBudgetURL) {
                 selectedBudgetURL = externalBudgetURL ?? loadedRows.first?.url
             }
+
+            loadSelectedBudget()
         } catch BudgetError.vaultNotConfigured {
-            releaseVaultBudgets()
+            releaseLoadedBudget()
             budgetRows = []
             selectedBudgetURL = externalBudgetURL
+            loadSelectedBudget()
         } catch {
             presentedError = error.localizedDescription
         }
@@ -181,12 +187,15 @@ final class BudgetStore: ObservableObject {
 
             if let vaultBudget = budgetRows.first(where: { sameFile($0.url, url) }) {
                 externalBudgetURL = nil
+                externalBudgetRow = nil
                 selectedBudgetURL = vaultBudget.url
+                loadSelectedBudget()
                 return true
             }
 
             let pointer = try openBudget(at: url)
-            replaceCore(pointer, for: key)
+            setLoadedBudget(pointer, for: key)
+            externalBudgetRow = row(from: pointer, for: key)
             externalBudgetURL = key
             selectedBudgetURL = key
             revision += 1
@@ -298,14 +307,19 @@ final class BudgetStore: ObservableObject {
             }
 
             if wasExternal {
-                releaseCore(for: key)
+                if loadedBudgetURL.map({ sameFile($0, key) }) == true {
+                    releaseLoadedBudget()
+                }
+
                 externalBudgetURL = nil
+                externalBudgetRow = nil
             }
 
             budgetRows = try loadVaultBudgets()
 
             if wasSelected || !hasAvailableBudget(at: selectedBudgetURL) {
                 selectedBudgetURL = externalBudgetURL ?? budgetRows.first?.url
+                loadSelectedBudget()
             }
 
             revision += 1
@@ -322,32 +336,22 @@ final class BudgetStore: ObservableObject {
             return []
         }
 
-        let categories: [(id: Int, ordinal: Int)] = (0..<Int(bw_budget_category_count(pointer))).compactMap { index in
-            guard let categoryPointer = bw_budget_category_at(pointer, index) else {
-                return nil
-            }
-
-            let category = categoryPointer.pointee
-
-            guard category.category_type == type.coreType else {
-                return nil
-            }
-
-            return (id: Int(category.id), ordinal: Int(category.ordinal))
+        return ids { output, capacity in
+            bw_budget_category_ids(pointer, type.coreType, output, capacity)
         }
-
-        return categories.sorted {
-            if $0.ordinal != $1.ordinal {
-                return $0.ordinal < $1.ordinal
-            }
-
-            return $0.id < $1.id
-        }
-        .map(\.id)
     }
 
     func categoryIDs(in url: URL? = nil) -> [Int] {
-        BudgetCategoryType.allCases.flatMap { categoryIDs(for: $0, in: url) }
+        guard
+            let url = resolvedBudgetURL(url),
+            let pointer = core(for: url)
+        else {
+            return []
+        }
+
+        return ids { output, capacity in
+            bw_budget_all_category_ids(pointer, output, capacity)
+        }
     }
 
     func transactionIDs(in url: URL? = nil) -> [Int] {
@@ -358,36 +362,9 @@ final class BudgetStore: ObservableObject {
             return []
         }
 
-        let transactionIDs = (0..<Int(bw_budget_category_count(pointer))).flatMap { categoryIndex -> [(id: Int, date: BWDate)] in
-            guard let category = bw_budget_category_at(pointer, categoryIndex) else {
-                return []
-            }
-
-            return (0..<Int(bw_category_transaction_count(category))).compactMap { transactionIndex in
-                guard let transaction = bw_category_transaction_at(category, transactionIndex) else {
-                    return nil
-                }
-
-                return (id: Int(transaction.pointee.id), date: transaction.pointee.date)
-            }
+        return ids { output, capacity in
+            bw_budget_transaction_ids(pointer, output, capacity)
         }
-
-        return transactionIDs.sorted {
-            if $0.date.year != $1.date.year {
-                return $0.date.year > $1.date.year
-            }
-
-            if $0.date.month != $1.date.month {
-                return $0.date.month > $1.date.month
-            }
-
-            if $0.date.day != $1.date.day {
-                return $0.date.day > $1.date.day
-            }
-
-            return $0.id > $1.id
-        }
-        .map(\.id)
     }
 
     func hasCategories(in url: URL? = nil) -> Bool {
@@ -395,15 +372,15 @@ final class BudgetStore: ObservableObject {
     }
 
     func categoryTitle(_ categoryID: Int, in url: URL? = nil) -> Swift.String {
-        category(categoryID, in: url)?.title.swiftString() ?? ""
+        categoryView(categoryID, in: url)?.title.swiftString() ?? ""
     }
 
     func categoryType(_ categoryID: Int, in url: URL? = nil) -> BudgetCategoryType? {
-        category(categoryID, in: url).flatMap { BudgetCategoryType(coreType: $0.category_type) }
+        categoryView(categoryID, in: url).flatMap { BudgetCategoryType(coreType: $0.category_type) }
     }
 
     func categoryAmount(_ categoryID: Int, field: CategoryAmountField, in url: URL? = nil) -> UInt64 {
-        guard let category = category(categoryID, in: url) else {
+        guard let category = categoryView(categoryID, in: url) else {
             return 0
         }
 
@@ -418,37 +395,42 @@ final class BudgetStore: ObservableObject {
     }
 
     func categoryTotal(type: BudgetCategoryType, field: CategoryAmountField, in url: URL? = nil) -> UInt64 {
-        categoryIDs(for: type, in: url).reduce(0) { total, categoryID in
-            total + categoryAmount(categoryID, field: field, in: url)
+        guard
+            let url = resolvedBudgetURL(url),
+            let pointer = core(for: url)
+        else {
+            return 0
         }
+
+        return bw_budget_category_total(pointer, type.coreType, field.coreField)
     }
 
     func transactionTitle(_ transactionID: Int, in url: URL? = nil) -> Swift.String {
-        transaction(transactionID, in: url)?.transaction.title.swiftString() ?? ""
+        transactionView(transactionID, in: url)?.title.swiftString() ?? ""
     }
 
     func transactionDescription(_ transactionID: Int, in url: URL? = nil) -> Swift.String {
-        transaction(transactionID, in: url)?.transaction.description.swiftString() ?? ""
+        transactionView(transactionID, in: url)?.description.swiftString() ?? ""
     }
 
     func transactionDate(_ transactionID: Int, in url: URL? = nil) -> BWDate {
-        transaction(transactionID, in: url)?.transaction.date ?? BWDate()
+        transactionView(transactionID, in: url)?.date ?? BWDate()
     }
 
     func transactionAmount(_ transactionID: Int, in url: URL? = nil) -> UInt64 {
-        transaction(transactionID, in: url)?.transaction.amount ?? 0
+        transactionView(transactionID, in: url)?.amount ?? 0
     }
 
     func transactionCategoryID(_ transactionID: Int, in url: URL? = nil) -> Int {
-        transaction(transactionID, in: url).map { Int($0.category.id) } ?? 0
+        transactionView(transactionID, in: url).map { Int($0.category_id) } ?? 0
     }
 
     func transactionCategoryTitle(_ transactionID: Int, in url: URL? = nil) -> Swift.String {
-        transaction(transactionID, in: url)?.category.title.swiftString() ?? ""
+        transactionView(transactionID, in: url)?.category_title.swiftString() ?? ""
     }
 
     func transactionCategoryType(_ transactionID: Int, in url: URL? = nil) -> BudgetCategoryType? {
-        transaction(transactionID, in: url).flatMap { BudgetCategoryType(coreType: $0.category.category_type) }
+        transactionView(transactionID, in: url).flatMap { BudgetCategoryType(coreType: $0.category_type) }
     }
 
     func transactionFormattedDate(_ transactionID: Int, in url: URL? = nil) -> Swift.String {
@@ -510,17 +492,14 @@ final class BudgetStore: ObservableObject {
 
         return try vault.accessVault {
             let urls = try vault.budgetFileURLs(in: vaultURL)
-            let urlKeys = Set(urls.map(budgetKey(for:)))
-
-            for row in budgetRows where !urlKeys.contains(budgetKey(for: row.url)) {
-                releaseCore(for: row.url)
-            }
-
-            let rows = try urls.compactMap { url -> BudgetRow? in
+            let rows = try urls.map { url -> BudgetRow in
                 let key = budgetKey(for: url)
                 let pointer = try readBudget(at: key)
-                replaceCore(pointer, for: key)
-                return row(for: key)
+                defer {
+                    freeBudget(pointer)
+                }
+
+                return row(from: pointer, for: key)
             }
 
             return rows.sorted(by: Self.sortByFileName)
@@ -549,9 +528,12 @@ final class BudgetStore: ObservableObject {
                     try initializeBudget(pointer, title: uniqueBudget.title)
                 }
 
-                pointer.pointee.id = Int32(try nextBudgetID(in: vaultURL))
+                guard bw_budget_set_id(pointer, Int32(try nextBudgetID(in: vaultURL))) == 0 else {
+                    throw BudgetError.budgetCreationFailed
+                }
+
                 try writeText(jsonString(from: pointer), to: uniqueBudget.url)
-                replaceCore(pointer, for: uniqueBudget.url)
+                setLoadedBudget(pointer, for: uniqueBudget.url)
                 return uniqueBudget.url
             } catch {
                 freeBudget(pointer)
@@ -590,41 +572,60 @@ final class BudgetStore: ObservableObject {
         pointer.deallocate()
     }
 
-    private func replaceCore(_ pointer: UnsafeMutablePointer<BWBudget>, for url: URL) {
+    private func setLoadedBudget(_ pointer: UnsafeMutablePointer<BWBudget>, for url: URL) {
         let key = budgetKey(for: url)
 
-        if let existing = cores[key] {
+        if let existing = loadedBudget {
             freeBudget(existing)
         }
 
-        cores[key] = pointer
+        loadedBudgetURL = key
+        loadedBudget = pointer
     }
 
-    private func releaseCore(for url: URL) {
-        let key = budgetKey(for: url)
-
-        guard let pointer = cores.removeValue(forKey: key) else {
+    private func releaseLoadedBudget() {
+        guard let pointer = loadedBudget else {
             return
         }
 
         freeBudget(pointer)
-    }
-
-    private func releaseVaultBudgets() {
-        for row in budgetRows {
-            releaseCore(for: row.url)
-        }
+        loadedBudgetURL = nil
+        loadedBudget = nil
     }
 
     private func core(for url: URL) -> UnsafeMutablePointer<BWBudget>? {
-        cores[budgetKey(for: url)]
-    }
-
-    private func row(for url: URL) -> BudgetRow? {
-        guard let pointer = core(for: url) else {
+        guard
+            let loadedBudgetURL,
+            sameFile(loadedBudgetURL, url)
+        else {
             return nil
         }
 
+        return loadedBudget
+    }
+
+    private func loadSelectedBudget() {
+        guard let selectedBudgetURL else {
+            releaseLoadedBudget()
+            revision += 1
+            return
+        }
+
+        if loadedBudgetURL.map({ sameFile($0, selectedBudgetURL) }) == true {
+            revision += 1
+            return
+        }
+
+        do {
+            let pointer = try openBudget(at: selectedBudgetURL)
+            setLoadedBudget(pointer, for: selectedBudgetURL)
+            revision += 1
+        } catch {
+            presentedError = error.localizedDescription
+        }
+    }
+
+    private func row(from pointer: UnsafeMutablePointer<BWBudget>, for url: URL) -> BudgetRow {
         let key = budgetKey(for: url)
         return BudgetRow(
             url: key,
@@ -633,13 +634,33 @@ final class BudgetStore: ObservableObject {
         )
     }
 
+    private func metadataRow(for url: URL) -> BudgetRow? {
+        let key = budgetKey(for: url)
+
+        if let row = budgetRows.first(where: { sameFile($0.url, key) }) {
+            return row
+        }
+
+        if externalBudgetURL.map({ sameFile($0, key) }) == true {
+            return externalBudgetRow
+        }
+
+        return nil
+    }
+
     private func refreshRow(for url: URL) {
-        guard let updated = row(for: url) else {
+        guard
+            let pointer = core(for: url)
+        else {
             return
         }
 
+        let updated = row(from: pointer, for: url)
+
         if let index = budgetRows.firstIndex(where: { sameFile($0.url, url) }) {
             budgetRows[index] = updated
+        } else if externalBudgetURL.map({ sameFile($0, url) }) == true {
+            externalBudgetRow = updated
         }
     }
 
@@ -647,22 +668,22 @@ final class BudgetStore: ObservableObject {
         url ?? selectedBudgetURL
     }
 
-    private func category(_ categoryID: Int, in url: URL? = nil) -> BWCategory? {
-        guard
-            let url = resolvedBudgetURL(url),
-            let pointer = core(for: url),
-            let category = bw_budget_category_by_id(pointer, Int32(categoryID))
-        else {
-            return nil
+    private func ids(_ fill: (UnsafeMutablePointer<Int32>?, Int) -> Int) -> [Int] {
+        let count = fill(nil, 0)
+
+        guard count > 0 else {
+            return []
         }
 
-        return category.pointee
+        var output = [Int32](repeating: 0, count: count)
+        let written = output.withUnsafeMutableBufferPointer { buffer in
+            fill(buffer.baseAddress, buffer.count)
+        }
+
+        return output.prefix(written).map(Int.init)
     }
 
-    private func transaction(
-        _ transactionID: Int,
-        in url: URL? = nil
-    ) -> (transaction: BWTransaction, category: BWCategory)? {
+    private func categoryView(_ categoryID: Int, in url: URL? = nil) -> BWCategoryView? {
         guard
             let url = resolvedBudgetURL(url),
             let pointer = core(for: url)
@@ -670,15 +691,33 @@ final class BudgetStore: ObservableObject {
             return nil
         }
 
-        var categoryPointer: UnsafePointer<BWCategory>?
+        var view = BWCategoryView()
 
-        guard let transactionPointer = bw_budget_transaction_by_id(pointer, Int32(transactionID), &categoryPointer),
-              let categoryPointer
+        guard bw_budget_category_view_by_id(pointer, Int32(categoryID), &view) == 0 else {
+            return nil
+        }
+
+        return view
+    }
+
+    private func transactionView(
+        _ transactionID: Int,
+        in url: URL? = nil
+    ) -> BWTransactionView? {
+        guard
+            let url = resolvedBudgetURL(url),
+            let pointer = core(for: url)
         else {
             return nil
         }
 
-        return (transactionPointer.pointee, categoryPointer.pointee)
+        var view = BWTransactionView()
+
+        guard bw_budget_transaction_view_by_id(pointer, Int32(transactionID), &view) == 0 else {
+            return nil
+        }
+
+        return view
     }
 
     private func sameFile(_ lhs: URL, _ rhs: URL) -> Bool {
@@ -737,17 +776,9 @@ final class BudgetStore: ObservableObject {
     }
 
     private func replaceTitle(_ title: Swift.String, in budget: UnsafeMutablePointer<BWBudget>) throws {
-        var newTitle = BWString()
-
-        guard bw_string_init(&newTitle, &budget.pointee.arena) == 0 else {
+        guard title.withCString({ bw_budget_set_title(budget, $0) }) == 0 else {
             throw BudgetError.budgetCreationFailed
         }
-
-        guard title.withCString({ bw_string_append(&newTitle, $0) }) == 0 else {
-            throw BudgetError.budgetCreationFailed
-        }
-
-        budget.pointee.title = newTitle
     }
 
     private func jsonString(from budget: UnsafeMutablePointer<BWBudget>) throws -> Swift.String {

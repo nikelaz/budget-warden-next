@@ -270,6 +270,108 @@ static int int_array_contains(const int *items, size_t count, int value)
   return 0;
 }
 
+static uint64_t category_amount_for_field(const BWCategory *category, BWCategoryAmountField field)
+{
+  if (category == NULL)
+  {
+    return 0;
+  }
+
+  switch (field)
+  {
+    case BW_CATEGORY_AMOUNT_PLANNED:
+      return category->amount_planned;
+    case BW_CATEGORY_AMOUNT_ACTUAL:
+      return category->amount_actual;
+    case BW_CATEGORY_AMOUNT_ACCUMULATED:
+      return category->amount_accumulated;
+  }
+
+  return 0;
+}
+
+static int date_compare_desc(BWDate lhs, BWDate rhs)
+{
+  if (lhs.year != rhs.year)
+  {
+    return lhs.year > rhs.year ? -1 : 1;
+  }
+
+  if (lhs.month != rhs.month)
+  {
+    return lhs.month > rhs.month ? -1 : 1;
+  }
+
+  if (lhs.day != rhs.day)
+  {
+    return lhs.day > rhs.day ? -1 : 1;
+  }
+
+  return 0;
+}
+
+static int category_precedes(const BWCategory *lhs, const BWCategory *rhs)
+{
+  if (lhs->ordinal != rhs->ordinal)
+  {
+    return lhs->ordinal < rhs->ordinal;
+  }
+
+  return lhs->id < rhs->id;
+}
+
+static int transaction_precedes(const BWTransaction *lhs, const BWTransaction *rhs)
+{
+  int date_order = date_compare_desc(lhs->date, rhs->date);
+
+  if (date_order != 0)
+  {
+    return date_order < 0;
+  }
+
+  return lhs->id > rhs->id;
+}
+
+static BWResult category_view_from_category(const BWCategory *category, BWCategoryView *view)
+{
+  if (category == NULL || view == NULL)
+  {
+    return BWResult_ERR;
+  }
+
+  view->id = category->id;
+  view->ordinal = category->ordinal;
+  view->title = category->title.data;
+  view->amount_planned = category->amount_planned;
+  view->amount_actual = category->amount_actual;
+  view->amount_accumulated = category->amount_accumulated;
+  view->category_type = category->category_type;
+  view->transaction_count = category->transactions.length;
+  return BWResult_OK;
+}
+
+static BWResult transaction_view_from_transaction(
+  const BWCategory *category,
+  const BWTransaction *transaction,
+  BWTransactionView *view
+)
+{
+  if (category == NULL || transaction == NULL || view == NULL)
+  {
+    return BWResult_ERR;
+  }
+
+  view->id = transaction->id;
+  view->category_id = category->id;
+  view->category_title = category->title.data;
+  view->category_type = category->category_type;
+  view->title = transaction->title.data;
+  view->description = transaction->description.data;
+  view->date = transaction->date;
+  view->amount = transaction->amount;
+  return BWResult_OK;
+}
+
 static void bw_budget_rebind_arena(BWBudget *budget)
 {
   if (budget == NULL)
@@ -503,6 +605,222 @@ const BWTransaction *bw_budget_transaction_by_id(
   }
 
   return NULL;
+}
+
+BWResult bw_budget_category_view_by_id(
+  const BWBudget *budget,
+  int category_id,
+  BWCategoryView *view
+)
+{
+  return category_view_from_category(bw_budget_category_by_id(budget, category_id), view);
+}
+
+BWResult bw_budget_transaction_view_by_id(
+  const BWBudget *budget,
+  int transaction_id,
+  BWTransactionView *view
+)
+{
+  const BWCategory *category = NULL;
+  const BWTransaction *transaction = bw_budget_transaction_by_id(budget, transaction_id, &category);
+  return transaction_view_from_transaction(category, transaction, view);
+}
+
+uint64_t bw_budget_category_total(
+  const BWBudget *budget,
+  BWCategoryType category_type,
+  BWCategoryAmountField field
+)
+{
+  uint64_t total = 0;
+
+  if (budget == NULL || budget->categories.items == NULL)
+  {
+    return 0;
+  }
+
+  for (size_t i = 0; i < budget->categories.length; i++)
+  {
+    const BWCategory *category = &budget->categories.items[i];
+
+    if (category->category_type != category_type)
+    {
+      continue;
+    }
+
+    uint64_t amount = category_amount_for_field(category, field);
+
+    if (UINT64_MAX - total < amount)
+    {
+      return UINT64_MAX;
+    }
+
+    total += amount;
+  }
+
+  return total;
+}
+
+size_t bw_budget_category_ids(
+  const BWBudget *budget,
+  BWCategoryType category_type,
+  int *out_ids,
+  size_t out_capacity
+)
+{
+  size_t count = 0;
+
+  if (budget == NULL || budget->categories.items == NULL)
+  {
+    return 0;
+  }
+
+  for (size_t i = 0; i < budget->categories.length; i++)
+  {
+    const BWCategory *category = &budget->categories.items[i];
+
+    if (category->category_type != category_type)
+    {
+      continue;
+    }
+
+    if (out_ids != NULL && count < out_capacity)
+    {
+      size_t insert_at = count;
+
+      while (insert_at > 0)
+      {
+        const BWCategory *previous = bw_budget_category_by_id(budget, out_ids[insert_at - 1]);
+
+        if (previous == NULL || category_precedes(previous, category))
+        {
+          break;
+        }
+
+        out_ids[insert_at] = out_ids[insert_at - 1];
+        insert_at--;
+      }
+
+      out_ids[insert_at] = category->id;
+    }
+
+    count++;
+  }
+
+  return count;
+}
+
+size_t bw_budget_all_category_ids(
+  const BWBudget *budget,
+  int *out_ids,
+  size_t out_capacity
+)
+{
+  size_t count = 0;
+  BWCategoryType category_types[] = {
+    CATEGORY_INCOME,
+    CATEGORY_EXPENSES,
+    CATEGORY_SAVINGS,
+    CATEGORY_DEBT
+  };
+
+  for (size_t i = 0; i < sizeof(category_types) / sizeof(category_types[0]); i++)
+  {
+    size_t written = 0;
+
+    if (out_ids != NULL && count < out_capacity)
+    {
+      written = bw_budget_category_ids(
+        budget,
+        category_types[i],
+        out_ids + count,
+        out_capacity - count
+      );
+    }
+    else
+    {
+      written = bw_budget_category_ids(budget, category_types[i], NULL, 0);
+    }
+
+    count += written;
+  }
+
+  return count;
+}
+
+size_t bw_budget_transaction_ids(
+  const BWBudget *budget,
+  int *out_ids,
+  size_t out_capacity
+)
+{
+  size_t count = 0;
+
+  if (budget == NULL || budget->categories.items == NULL)
+  {
+    return 0;
+  }
+
+  for (size_t category_index = 0; category_index < budget->categories.length; category_index++)
+  {
+    const BWCategory *category = &budget->categories.items[category_index];
+
+    if (category->transactions.items == NULL)
+    {
+      continue;
+    }
+
+    for (size_t transaction_index = 0; transaction_index < category->transactions.length; transaction_index++)
+    {
+      const BWTransaction *transaction = &category->transactions.items[transaction_index];
+
+      if (out_ids != NULL && count < out_capacity)
+      {
+        size_t insert_at = count;
+
+        while (insert_at > 0)
+        {
+          const BWTransaction *previous = bw_budget_transaction_by_id(budget, out_ids[insert_at - 1], NULL);
+
+          if (previous == NULL || transaction_precedes(previous, transaction))
+          {
+            break;
+          }
+
+          out_ids[insert_at] = out_ids[insert_at - 1];
+          insert_at--;
+        }
+
+        out_ids[insert_at] = transaction->id;
+      }
+
+      count++;
+    }
+  }
+
+  return count;
+}
+
+BWResult bw_budget_set_id(BWBudget *budget, int id)
+{
+  if (budget == NULL || id < 0)
+  {
+    return BWResult_ERR;
+  }
+
+  budget->id = id;
+  return BWResult_OK;
+}
+
+BWResult bw_budget_set_title(BWBudget *budget, const char *title)
+{
+  if (budget == NULL || title == NULL)
+  {
+    return BWResult_ERR;
+  }
+
+  return bw_string_replace(&budget->title, title, &budget->arena);
 }
 
 BWResult bw_budget_add_category(BWBudget *budget, BWCategory category)

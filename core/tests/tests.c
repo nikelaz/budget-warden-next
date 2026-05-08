@@ -590,11 +590,18 @@ void test_budget_add_transaction(void)
 void test_budget_read_accessors(void)
 {
   BWBudget budget;
+  BWCategoryView category_view;
+  BWTransactionView transaction_view;
+  int ids[4];
 
   assert(bw_budget_init(&budget, "January") == BWResult_OK);
   assert(bw_budget_category_count(&budget) == 0);
   assert(bw_budget_category_at(&budget, 0) == NULL);
   assert(bw_budget_category_by_id(&budget, 2) == NULL);
+  assert(bw_budget_set_id(&budget, 42) == BWResult_OK);
+  assert(budget.id == 42);
+  assert(bw_budget_set_title(&budget, "February") == BWResult_OK);
+  assert(strcmp(budget.title.data, "February") == 0);
 
   assert(
     bw_budget_add_category_values(
@@ -604,6 +611,16 @@ void test_budget_read_accessors(void)
       0,
       0,
       CATEGORY_EXPENSES
+    ) == BWResult_OK
+  );
+  assert(
+    bw_budget_add_category_values(
+      &budget,
+      "Income",
+      1000,
+      0,
+      0,
+      CATEGORY_INCOME
     ) == BWResult_OK
   );
   assert(
@@ -620,9 +637,22 @@ void test_budget_read_accessors(void)
   const BWCategory *category = bw_budget_category_at(&budget, 0);
   assert(category != NULL);
   assert(category == bw_budget_category_by_id(&budget, 1));
-  assert(bw_budget_category_count(&budget) == 1);
+  assert(bw_budget_category_count(&budget) == 2);
   assert(bw_category_transaction_count(category) == 1);
   assert(bw_category_transaction_at(category, 1) == NULL);
+  assert(bw_budget_category_view_by_id(&budget, 1, &category_view) == BWResult_OK);
+  assert(category_view.id == 1);
+  assert(strcmp(category_view.title, "Food") == 0);
+  assert(category_view.amount_planned == 500);
+  assert(category_view.transaction_count == 1);
+  assert(bw_budget_category_total(&budget, CATEGORY_EXPENSES, BW_CATEGORY_AMOUNT_PLANNED) == 500);
+  assert(bw_budget_category_total(&budget, CATEGORY_EXPENSES, BW_CATEGORY_AMOUNT_ACTUAL) == 125);
+  assert(bw_budget_category_total(&budget, CATEGORY_INCOME, BW_CATEGORY_AMOUNT_PLANNED) == 1000);
+  assert(bw_budget_category_ids(&budget, CATEGORY_EXPENSES, ids, 4) == 1);
+  assert(ids[0] == 1);
+  assert(bw_budget_all_category_ids(&budget, ids, 4) == 2);
+  assert(ids[0] == 2);
+  assert(ids[1] == 1);
 
   const BWCategory *transaction_category = NULL;
   const BWTransaction *transaction = bw_budget_transaction_by_id(&budget, 1, &transaction_category);
@@ -630,6 +660,13 @@ void test_budget_read_accessors(void)
   assert(transaction_category == category);
   assert(strcmp(transaction->title.data, "Groceries") == 0);
   assert(bw_category_transaction_at(category, 0) == transaction);
+  assert(bw_budget_transaction_view_by_id(&budget, 1, &transaction_view) == BWResult_OK);
+  assert(transaction_view.id == 1);
+  assert(transaction_view.category_id == 1);
+  assert(strcmp(transaction_view.category_title, "Food") == 0);
+  assert(strcmp(transaction_view.title, "Groceries") == 0);
+  assert(bw_budget_transaction_ids(&budget, ids, 4) == 1);
+  assert(ids[0] == 1);
 
   bw_budget_free(&budget);
   printf("(Pass) budget_read_accessors\n");

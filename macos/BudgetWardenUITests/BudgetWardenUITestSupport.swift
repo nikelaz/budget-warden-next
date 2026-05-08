@@ -22,7 +22,8 @@ class BudgetWardenUITestCase: XCTestCase {
     func launchApp(testRunID: String) -> XCUIApplication {
         let launchedApp = XCUIApplication()
         launchedApp.launchArguments = [
-            "-ApplePersistenceIgnoreState", "YES"
+            "-ApplePersistenceIgnoreState", "YES",
+            "-SelectedCurrency", "USD"
         ]
         launchedApp.launchEnvironment = [
             "BUDGET_WARDEN_UI_TEST_RUN_ID": testRunID,
@@ -148,7 +149,7 @@ class BudgetWardenUITestCase: XCTestCase {
         XCTAssertTrue(deleteItem.waitForExistence(timeout: 5))
         deleteItem.click()
 
-        let confirmButton = app.buttons["Delete Category"].firstMatch
+        let confirmButton = app.windows.sheets.buttons["Delete Category"].firstMatch
         XCTAssertTrue(confirmButton.waitForExistence(timeout: 5))
         confirmButton.click()
 
@@ -164,7 +165,7 @@ class BudgetWardenUITestCase: XCTestCase {
         XCTAssertTrue(deleteItem.waitForExistence(timeout: 5))
         deleteItem.click()
 
-        let confirmButton = app.buttons["Delete 1 Transaction"].firstMatch
+        let confirmButton = app.windows.sheets.buttons["Delete 1 Transaction"].firstMatch
         XCTAssertTrue(confirmButton.waitForExistence(timeout: 5))
         confirmButton.click()
 
@@ -188,6 +189,10 @@ class BudgetWardenUITestCase: XCTestCase {
 
     func categoryTitleCell(_ title: String) -> XCUIElement {
         app.descendants(matching: .any)["category-title-cell-\(title.accessibilityIdentifierComponent)"].firstMatch
+    }
+
+    func categoryValueCell(_ title: String, column: String) -> XCUIElement {
+        app.descendants(matching: .any)["category-\(column)-cell-\(title.accessibilityIdentifierComponent)"].firstMatch
     }
 
     func removeTrackedBudgetFromWelcome(named title: String) {

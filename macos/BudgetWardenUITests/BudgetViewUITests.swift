@@ -25,5 +25,7 @@ final class BudgetViewUITests: BudgetWardenUITestCase {
         )
 
         XCTAssertTrue(categoryTitleCell("Utilities UI").waitForExistence(timeout: 5))
+        XCTAssertTrue(categoryValueCell("Utilities UI", column: "planned").waitForExistence(timeout: 5))
+        XCTAssertTrue(categoryValueCell("Utilities UI", column: "actual").waitForExistence(timeout: 5))
     }
 }

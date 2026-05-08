@@ -18,6 +18,6 @@ final class ReportingViewUITests: BudgetWardenUITestCase {
         XCTAssertTrue(app.staticTexts["Actual Spending"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Income vs Allocation"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Allocation Breakdown"].waitForExistence(timeout: 5))
-        XCTAssertTrue(categoryTitleCell("Reporting Rent").waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Reporting Rent"].firstMatch.waitForExistence(timeout: 5))
     }
 }

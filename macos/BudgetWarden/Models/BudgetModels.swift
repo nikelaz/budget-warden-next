@@ -66,11 +66,28 @@ enum CategoryAmountField {
     case planned
     case actual
     case accumulated
+
+    var coreField: BWCategoryAmountField {
+        switch self {
+        case .planned:
+            return BW_CATEGORY_AMOUNT_PLANNED
+        case .actual:
+            return BW_CATEGORY_AMOUNT_ACTUAL
+        case .accumulated:
+            return BW_CATEGORY_AMOUNT_ACCUMULATED
+        }
+    }
 }
 
 extension BWString {
     func swiftString(default fallback: Swift.String = "") -> Swift.String {
         data.map { Swift.String(cString: $0) } ?? fallback
+    }
+}
+
+extension Optional where Wrapped == UnsafePointer<CChar> {
+    func swiftString(default fallback: Swift.String = "") -> Swift.String {
+        map { Swift.String(cString: $0) } ?? fallback
     }
 }
 
