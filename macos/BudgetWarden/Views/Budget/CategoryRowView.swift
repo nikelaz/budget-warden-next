@@ -17,26 +17,28 @@ struct CategoryRowView: View {
     let currency: AppCurrency
 
     var body: some View {
+        let category = store.category(categoryID, in: budgetURL)
+
         VStack(alignment: .leading, spacing: 3) {
-            Text(store.categoryTitle(categoryID, in: budgetURL))
+            Text(category?.title.swiftString() ?? "")
                 .font(.headline)
                 .fontWeight(.medium)
 
-            Text(summary)
+            Text(summary(for: category))
                 .font(.body)
                 .foregroundStyle(.secondary)
         }
         .padding(.vertical, 2)
     }
 
-    private var summary: Swift.String {
+    private func summary(for category: BWCategoryView?) -> Swift.String {
         var parts = [
-            "Planned \(store.categoryAmount(categoryID, field: .planned, in: budgetURL).formattedMoneyAmount(currency: currency))",
-            "Actual \(store.categoryAmount(categoryID, field: .actual, in: budgetURL).formattedMoneyAmount(currency: currency))"
+            "Planned \((category?.amount_planned ?? 0).formattedMoneyAmount(currency: currency))",
+            "Actual \((category?.amount_actual ?? 0).formattedMoneyAmount(currency: currency))"
         ]
 
-        if store.categoryType(categoryID, in: budgetURL) == .savings || store.categoryType(categoryID, in: budgetURL) == .debt {
-            parts.append("Accumulated \(store.categoryAmount(categoryID, field: .accumulated, in: budgetURL).formattedMoneyAmount(currency: currency))")
+        if category?.type == .savings || category?.type == .debt {
+            parts.append("Accumulated \((category?.amount_accumulated ?? 0).formattedMoneyAmount(currency: currency))")
         }
 
         return parts.joined(separator: " | ")

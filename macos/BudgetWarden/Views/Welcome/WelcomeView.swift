@@ -41,6 +41,7 @@ struct WelcomeView: View {
             )
             WelcomeRightColumn(
                 budgets: store.budgets,
+                isLoadingBudgets: !store.budgetsLoaded,
                 onSelectBudget: { budget in
                     store.selectBudget(budget)
                     openWorkspace()

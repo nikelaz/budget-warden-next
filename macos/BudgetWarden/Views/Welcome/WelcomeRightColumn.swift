@@ -12,6 +12,7 @@ import SwiftUI
 
 struct WelcomeRightColumn: View {
     let budgets: [BudgetRow]
+    let isLoadingBudgets: Bool
     let onSelectBudget: (BudgetRow) -> Void
     let onShowInFinder: (BudgetRow) -> Void
     let onRemoveBudget: (BudgetRow) -> Void
@@ -23,7 +24,11 @@ struct WelcomeRightColumn: View {
             Text("Budgets in Vault")
                 .font(.headline)
 
-            if budgets.isEmpty {
+            if isLoadingBudgets {
+                ProgressView()
+                    .controlSize(.large)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if budgets.isEmpty {
                 ContentUnavailableView(
                     "No Budgets",
                     systemImage: "tray",

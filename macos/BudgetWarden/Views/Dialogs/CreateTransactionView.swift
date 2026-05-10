@@ -54,7 +54,7 @@ struct CreateTransactionView: View {
                                     .selectionDisabled(true)
 
                                 ForEach(categoryIDs, id: \.self) { categoryID in
-                                    Text(store.categoryTitle(categoryID, in: budgetURL))
+                                    Text(store.category(categoryID, in: budgetURL)?.title.swiftString() ?? "")
                                         .tag(categoryID)
                                 }
                             }

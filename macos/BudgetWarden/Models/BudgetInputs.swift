@@ -15,13 +15,6 @@ struct BudgetDraft {
     let templateURL: URL?
 }
 
-struct CategoryDraft {
-    let title: Swift.String
-    let amountPlanned: UInt64
-    let amountAccumulated: UInt64
-    let type: BudgetCategoryType
-}
-
 struct CategoryUpdate {
     let categoryID: Int
     let title: Swift.String

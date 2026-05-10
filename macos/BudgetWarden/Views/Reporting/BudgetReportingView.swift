@@ -251,9 +251,11 @@ struct BudgetReportingView: View {
         ]
 
         return store.categoryIDs(for: type, in: budgetURL).enumerated().map { index, categoryID in
-            AllocationBreakdownSegment(
-                title: store.categoryTitle(categoryID, in: budgetURL),
-                amount: store.categoryAmount(categoryID, field: mode.amountField, in: budgetURL),
+            let category = store.category(categoryID, in: budgetURL)
+
+            return AllocationBreakdownSegment(
+                title: category?.title.swiftString() ?? "",
+                amount: category?.amount(mode.amountField) ?? 0,
                 tint: colors[index % colors.count]
             )
         }

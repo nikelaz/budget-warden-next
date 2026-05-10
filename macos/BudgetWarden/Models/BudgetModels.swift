@@ -1,6 +1,6 @@
 import Foundation
 
-struct BudgetRow: Identifiable {
+struct BudgetRow: Identifiable, Sendable {
     let url: URL
     let coreID: Int
     let title: Swift.String
@@ -80,13 +80,13 @@ enum CategoryAmountField {
 }
 
 extension BWString {
-    func swiftString(default fallback: Swift.String = "") -> Swift.String {
+    nonisolated func swiftString(default fallback: Swift.String = "") -> Swift.String {
         data.map { Swift.String(cString: $0) } ?? fallback
     }
 }
 
 extension Optional where Wrapped == UnsafePointer<CChar> {
-    func swiftString(default fallback: Swift.String = "") -> Swift.String {
+    nonisolated func swiftString(default fallback: Swift.String = "") -> Swift.String {
         map { Swift.String(cString: $0) } ?? fallback
     }
 }
@@ -94,5 +94,32 @@ extension Optional where Wrapped == UnsafePointer<CChar> {
 extension BWDate {
     var formattedDate: Swift.String {
         Swift.String(format: "%04d-%02d-%02d", year, month, day)
+    }
+}
+
+extension BWCategoryView {
+    func amount(_ field: CategoryAmountField) -> UInt64 {
+        switch field {
+        case .planned:
+            return amount_planned
+        case .actual:
+            return amount_actual
+        case .accumulated:
+            return amount_accumulated
+        }
+    }
+
+    var type: BudgetCategoryType? {
+        BudgetCategoryType(coreType: category_type)
+    }
+}
+
+extension BWTransactionView {
+    var categoryID: Int {
+        Int(category_id)
+    }
+
+    var categoryType: BudgetCategoryType? {
+        BudgetCategoryType(coreType: category_type)
     }
 }

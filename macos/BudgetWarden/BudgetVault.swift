@@ -17,10 +17,7 @@ final class BudgetVault {
 
     private let folderName = "Budget Warden Budgets"
     private let bookmarkKey = "BudgetVaultBookmark"
-    private let uiTestingRunIDKey = "BUDGET_WARDEN_UI_TEST_RUN_ID"
     private let fileManager = FileManager.default
-
-    private init() {}
 
     func selectVaultParent(preferICloud: Bool) -> URL? {
         let panel = NSOpenPanel()
@@ -84,11 +81,6 @@ final class BudgetVault {
     }
 
     func resolveVaultURL() throws -> URL {
-        if let uiTestingVaultURL {
-            try fileManager.createDirectory(at: uiTestingVaultURL, withIntermediateDirectories: true)
-            return uiTestingVaultURL
-        }
-
         guard let bookmark = UserDefaults.standard.data(forKey: bookmarkKey) else {
             throw BudgetError.vaultNotConfigured
         }
@@ -120,10 +112,6 @@ final class BudgetVault {
     }
 
     func configuredLocalParentURL() -> URL? {
-        if let uiTestingVaultURL {
-            return uiTestingVaultURL.deletingLastPathComponent()
-        }
-
         guard let vaultURL = try? resolveVaultURL(), !isICloudURL(vaultURL) else {
             return nil
         }
@@ -139,6 +127,37 @@ final class BudgetVault {
         )
 
         return urls.filter { $0.pathExtension == "budget" }
+    }
+
+    nonisolated static func loadBudgetRows(in vaultURL: URL) throws -> [BudgetRow] {
+        try accessSecurityScopedResource(vaultURL) {
+            let urls = try FileManager.default.contentsOfDirectory(
+                at: vaultURL,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            )
+            .filter { $0.pathExtension == "budget" }
+
+            let rows = try urls.map { url -> BudgetRow in
+                let key = budgetKey(for: url)
+                let pointer = try readBudget(at: key)
+                defer {
+                    bw_budget_free(pointer)
+                    pointer.deinitialize(count: 1)
+                    pointer.deallocate()
+                }
+
+                return BudgetRow(
+                    url: key,
+                    coreID: Int(pointer.pointee.id),
+                    title: pointer.pointee.title.swiftString(
+                        default: key.deletingPathExtension().lastPathComponent
+                    )
+                )
+            }
+
+            return rows.sorted(by: sortByFileName)
+        }
     }
 
     func uniqueBudgetLocation(for title: Swift.String, in directory: URL) -> (title: Swift.String, url: URL) {
@@ -171,7 +190,7 @@ final class BudgetVault {
         return try Self.accessSecurityScopedResource(vaultURL, operation: operation)
     }
 
-    static func accessSecurityScopedResource<T>(_ url: URL, operation: () throws -> T) throws -> T {
+    nonisolated static func accessSecurityScopedResource<T>(_ url: URL, operation: () throws -> T) throws -> T {
         let didAccess = url.startAccessingSecurityScopedResource()
         defer {
             if didAccess {
@@ -185,6 +204,49 @@ final class BudgetVault {
     nonisolated private static func isBudgetFile(_ url: URL, in vaultURL: URL) -> Bool {
         url.pathExtension == "budget" &&
             url.deletingLastPathComponent().standardizedFileURL == vaultURL.standardizedFileURL
+    }
+
+    nonisolated private static func sortByFileName(_ lhs: BudgetRow, _ rhs: BudgetRow) -> Bool {
+        lhs.url.lastPathComponent.localizedStandardCompare(rhs.url.lastPathComponent) == .orderedAscending
+    }
+
+    nonisolated private static func readBudget(at url: URL) throws -> UnsafeMutablePointer<BWBudget> {
+        let pointer = UnsafeMutablePointer<BWBudget>.allocate(capacity: 1)
+        pointer.initialize(to: BWBudget())
+
+        do {
+            try initializeBudget(pointer, json: readText(from: url), url: url)
+            return pointer
+        } catch {
+            bw_budget_free(pointer)
+            pointer.deinitialize(count: 1)
+            pointer.deallocate()
+            throw error
+        }
+    }
+
+    nonisolated private static func budgetKey(for url: URL) -> URL {
+        url.standardizedFileURL
+    }
+
+    nonisolated private static func readText(from url: URL) throws -> Swift.String {
+        do {
+            return try Swift.String(contentsOf: url, encoding: .utf8)
+        } catch {
+            throw BudgetError.budgetReadFailed(url)
+        }
+    }
+
+    nonisolated private static func initializeBudget(
+        _ budget: UnsafeMutablePointer<BWBudget>,
+        json: Swift.String,
+        url: URL
+    ) throws {
+        let result = json.withCString { bw_budget_from_json_str(budget, $0) }
+
+        guard result == 0 else {
+            throw BudgetError.budgetReadFailed(url)
+        }
     }
 
     private func isICloudURL(_ url: URL) -> Bool {
@@ -209,23 +271,5 @@ final class BudgetVault {
             .filter { !$0.isEmpty }
 
         return parts.joined(separator: " ").isEmpty ? "Budget" : parts.joined(separator: " ")
-    }
-
-    private var uiTestingVaultURL: URL? {
-        guard
-            let runID = ProcessInfo.processInfo.environment[uiTestingRunIDKey],
-            !runID.isEmpty,
-            let applicationSupportURL = fileManager.urls(
-                for: .applicationSupportDirectory,
-                in: .userDomainMask
-            ).first
-        else {
-            return nil
-        }
-
-        return applicationSupportURL
-            .appendingPathComponent("BudgetWardenUITests", isDirectory: true)
-            .appendingPathComponent(runID, isDirectory: true)
-            .appendingPathComponent(folderName, isDirectory: true)
     }
 }

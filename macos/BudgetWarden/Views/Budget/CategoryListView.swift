@@ -93,7 +93,7 @@ struct CategoryListView: View {
                 categoryPendingRemoval = nil
             }
         } message: { categoryID in
-            Text("Delete \(store.categoryTitle(categoryID, in: budgetURL))? This will also remove its transactions.")
+            Text("Delete \(categoryTitle(categoryID))? This will also remove its transactions.")
         }
         .onChange(of: focusedEditingCell) { _, newFocusedCell in
             guard !isProgrammaticallyChangingEditingCell else {
@@ -257,7 +257,9 @@ private extension CategoryListView {
     }
 
     func editableTitleCell(for categoryID: Int) -> some View {
-        Group {
+        let title = categoryTitle(categoryID)
+
+        return Group {
             if editingCell == .title(categoryID) {
                 TextField("Title", text: $editedValue)
                     .textFieldStyle(.roundedBorder)
@@ -280,12 +282,12 @@ private extension CategoryListView {
                     }
             } else {
                 ClickableTableCell {
-                    startEditing(.title(categoryID), value: store.categoryTitle(categoryID, in: budgetURL))
+                    startEditing(.title(categoryID), value: title)
                 } label: {
-                    Text(store.categoryTitle(categoryID, in: budgetURL))
+                    Text(title)
                         .fontWeight(.medium)
                 }
-                .accessibilityIdentifier("category-title-cell-\(categoryAccessibilityID(categoryID))")
+                .accessibilityIdentifier("category-title-cell-\(title.accessibilityIdentifierComponent)")
                 .contextMenu {
                     Button(role: .destructive) {
                         categoryPendingRemoval = categoryID
@@ -298,7 +300,11 @@ private extension CategoryListView {
     }
 
     func valueCell(for categoryID: Int, column: CategoryValueColumn) -> some View {
-        Group {
+        let category = store.category(categoryID, in: budgetURL)
+        let amount = category?.amount(column.amount) ?? 0
+        let accessibilityID = (category?.title.swiftString() ?? "").accessibilityIdentifierComponent
+
+        return Group {
             if editingCell == .amount(categoryID, column.id) {
                 TextField(column.title, text: $editedValue)
                     .textFieldStyle(.roundedBorder)
@@ -324,25 +330,25 @@ private extension CategoryListView {
                 Button {
                     onAddTransaction(categoryID)
                 } label: {
-                    amountText(categoryAmount(categoryID, column: column))
+                    amountText(amount)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                         .padding(5)
                         .frame(width: valueColumnWidth(for: column), alignment: .trailing)
                 }
                 .buttonStyle(.plain)
                 .contentShape(.rect)
-                .accessibilityIdentifier("category-\(column.id)-cell-\(categoryAccessibilityID(categoryID))")
+                .accessibilityIdentifier("category-\(column.id)-cell-\(accessibilityID)")
             } else if column.isEditable {
                 ClickableTableCell(width: valueColumnWidth(for: column), alignment: .trailing) {
-                    startEditing(.amount(categoryID, column.id), value: categoryAmount(categoryID, column: column).moneyAmountInputText)
+                    startEditing(.amount(categoryID, column.id), value: amount.moneyAmountInputText)
                 } label: {
-                    amountText(categoryAmount(categoryID, column: column))
-                        .accessibilityIdentifier("category-\(column.id)-cell-\(categoryAccessibilityID(categoryID))")
+                    amountText(amount)
+                        .accessibilityIdentifier("category-\(column.id)-cell-\(accessibilityID)")
                 }
             } else {
-                amountText(categoryAmount(categoryID, column: column))
+                amountText(amount)
                     .frame(width: valueColumnWidth(for: column), alignment: .trailing)
-                    .accessibilityIdentifier("category-\(column.id)-cell-\(categoryAccessibilityID(categoryID))")
+                    .accessibilityIdentifier("category-\(column.id)-cell-\(accessibilityID)")
             }
         }
     }
@@ -366,8 +372,9 @@ private extension CategoryListView {
     }
 
     func progressFraction(for categoryID: Int) -> CGFloat {
-        let planned = store.categoryAmount(categoryID, field: .planned, in: budgetURL)
-        let actual = store.categoryAmount(categoryID, field: .actual, in: budgetURL)
+        let category = store.category(categoryID, in: budgetURL)
+        let planned = category?.amount_planned ?? 0
+        let actual = category?.amount_actual ?? 0
 
         guard planned > 0 else {
             return actual > 0 ? 1 : 0
@@ -378,8 +385,9 @@ private extension CategoryListView {
     }
 
     func progressColor(for categoryID: Int) -> Color {
-        let planned = store.categoryAmount(categoryID, field: .planned, in: budgetURL)
-        let actual = store.categoryAmount(categoryID, field: .actual, in: budgetURL)
+        let category = store.category(categoryID, in: budgetURL)
+        let planned = category?.amount_planned ?? 0
+        let actual = category?.amount_actual ?? 0
 
         return planned > 0 && actual > planned
             ? Color(nsColor: .systemRed)
@@ -495,8 +503,8 @@ private extension CategoryListView {
             CategoryUpdate(
                 categoryID: categoryID,
                 title: title,
-                amountPlanned: store.categoryAmount(categoryID, field: .planned, in: budgetURL),
-                amountAccumulated: store.categoryAmount(categoryID, field: .accumulated, in: budgetURL)
+                amountPlanned: categoryAmount(categoryID, field: .planned),
+                amountAccumulated: categoryAmount(categoryID, field: .accumulated)
             )
         )
         editingCell = nil
@@ -513,9 +521,9 @@ private extension CategoryListView {
         onUpdateCategory(
             CategoryUpdate(
                 categoryID: categoryID,
-                title: store.categoryTitle(categoryID, in: budgetURL),
-                amountPlanned: column.id == "planned" ? amount : store.categoryAmount(categoryID, field: .planned, in: budgetURL),
-                amountAccumulated: column.id == "accumulated" ? amount : store.categoryAmount(categoryID, field: .accumulated, in: budgetURL)
+                title: categoryTitle(categoryID),
+                amountPlanned: column.id == "planned" ? amount : categoryAmount(categoryID, field: .planned),
+                amountAccumulated: column.id == "accumulated" ? amount : categoryAmount(categoryID, field: .accumulated)
             )
         )
         editingCell = nil
@@ -528,11 +536,15 @@ private extension CategoryListView {
     }
 
     func categoryAmount(_ categoryID: Int, column: CategoryValueColumn) -> UInt64 {
-        store.categoryAmount(categoryID, field: column.amount, in: budgetURL)
+        categoryAmount(categoryID, field: column.amount)
     }
 
-    func categoryAccessibilityID(_ categoryID: Int) -> Swift.String {
-        store.categoryTitle(categoryID, in: budgetURL).accessibilityIdentifierComponent
+    func categoryAmount(_ categoryID: Int, field: CategoryAmountField) -> UInt64 {
+        store.category(categoryID, in: budgetURL)?.amount(field) ?? 0
+    }
+
+    func categoryTitle(_ categoryID: Int) -> Swift.String {
+        store.category(categoryID, in: budgetURL)?.title.swiftString() ?? ""
     }
 
     func parsedAmount(_ text: Swift.String) -> UInt64? {

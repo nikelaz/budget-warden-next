@@ -2,31 +2,27 @@ import XCTest
 
 class BudgetWardenUITestCase: XCTestCase {
     var app: XCUIApplication!
-    private var testRunID: String!
     private var trackedBudgetNames: [String] = []
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        testRunID = UUID().uuidString
-        app = launchApp(testRunID: testRunID)
+        app = launchApp()
     }
 
     override func tearDownWithError() throws {
         cleanupTrackedBudgets()
         app?.terminate()
         app = nil
-        testRunID = nil
         trackedBudgetNames = []
     }
 
-    func launchApp(testRunID: String) -> XCUIApplication {
+    func launchApp() -> XCUIApplication {
         let launchedApp = XCUIApplication()
         launchedApp.launchArguments = [
             "-ApplePersistenceIgnoreState", "YES",
             "-SelectedCurrency", "USD"
         ]
         launchedApp.launchEnvironment = [
-            "BUDGET_WARDEN_UI_TEST_RUN_ID": testRunID,
             "AppleLanguages": "(en)",
             "AppleLocale": "en_US"
         ]
@@ -69,7 +65,7 @@ class BudgetWardenUITestCase: XCTestCase {
 
     func relaunchToWelcome() {
         app.terminate()
-        app = launchApp(testRunID: testRunID)
+        app = launchApp()
     }
 
     func openSidebarSection(_ section: SidebarSectionIdentifier) {
@@ -206,7 +202,7 @@ class BudgetWardenUITestCase: XCTestCase {
         }
 
         app?.terminate()
-        app = launchApp(testRunID: testRunID)
+        app = launchApp()
 
         for title in trackedBudgetNames {
             removeBudgetFromWelcome(named: title, assertExists: false)
