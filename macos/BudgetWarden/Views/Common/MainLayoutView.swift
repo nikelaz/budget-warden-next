@@ -26,17 +26,8 @@ struct MainLayoutView: View {
                 case .budget:
                     BudgetDetailView(
                         store: store,
-                        budgets: store.availableBudgetRows,
+                        windowStore: windowStore,
                         budget: selectedBudget,
-                        currency: store.selectedCurrency,
-                        selectedBudgetURL: store.selectedBudgetURL,
-                        onCreateBudget: showCreateBudget,
-                        onSelectBudget: store.selectBudget,
-                        onAddCategory: store.addCategory,
-                        onUpdateCategory: store.updateCategory,
-                        onRemoveCategory: store.removeCategory,
-                        onReorderCategories: store.reorderCategories,
-                        onAddTransaction: store.addTransaction
                     )
                 case .reporting:
                     ReportingView(
@@ -45,7 +36,7 @@ struct MainLayoutView: View {
                         budget: selectedBudget,
                         currency: store.selectedCurrency,
                         selectedBudgetURL: store.selectedBudgetURL,
-                        onCreateBudget: showCreateBudget,
+                        onCreateBudget: windowStore.showCreateBudget,
                         onSelectBudget: store.selectBudget,
                         onAddTransaction: store.addTransaction
                     )
@@ -56,7 +47,7 @@ struct MainLayoutView: View {
                         budget: selectedBudget,
                         currency: store.selectedCurrency,
                         selectedBudgetURL: store.selectedBudgetURL,
-                        onCreateBudget: showCreateBudget,
+                        onCreateBudget: windowStore.showCreateBudget,
                         onSelectBudget: store.selectBudget,
                         onAddTransaction: store.addTransaction,
                         onUpdateTransaction: store.updateTransaction,
@@ -71,7 +62,7 @@ struct MainLayoutView: View {
                 .toolbar {
                     ToolbarItem(placement: .primaryAction) {
                         Button {
-                            showCreateBudget()
+                            windowStore.showCreateBudget()
                         } label: {
                             Label("Create New Budget", systemImage: "plus")
                         }
@@ -129,10 +120,6 @@ struct MainLayoutView: View {
         } message: {
             Text(store.presentedError ?? "")
         }
-    }
-
-    private func showCreateBudget() {
-        windowStore.showCreateBudget()
     }
 
     private var errorBinding: Binding<Bool> {

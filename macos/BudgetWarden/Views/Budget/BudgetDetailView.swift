@@ -12,18 +12,8 @@ import SwiftUI
 
 struct BudgetDetailView: View {
     @ObservedObject var store: BWStore
-    let budgets: [BudgetRow]
-    let budget: BudgetRow
-    let currency: AppCurrency
-    let selectedBudgetURL: URL?
-    let onCreateBudget: () -> Void
-    let onSelectBudget: (BudgetRow) -> Void
-    let onAddCategory: (Swift.String, UInt64, UInt64, BudgetCategoryType) -> Void
-    let onUpdateCategory: (CategoryUpdate) -> Void
-    let onRemoveCategory: (Int) -> Void
-    let onReorderCategories: (BudgetCategoryType, [Int]) -> Void
-    let onAddTransaction: (TransactionDraft) -> Void
-
+    @ObservedObject var windowStore: BWWindowStore
+    var budget: BudgetRow
     @State private var isCreatingTransaction = false
     @State private var transactionCategoryID: Int?
     @State private var isReportingExpanded = true
@@ -38,16 +28,20 @@ struct BudgetDetailView: View {
             .padding()
             .frame(maxWidth: .infinity, alignment: .top)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(
+            maxWidth: .infinity,
+            maxHeight: .infinity,
+            alignment: .topLeading
+        )
         .navigationTitle("Budget")
         .toolbar {
             ToolbarItemGroup(placement: .principal) {
                 Menu {
-                    ForEach(budgets) { budget in
+                    ForEach(store.availableBudgetRows) { budget in
                         Button {
-                            onSelectBudget(budget)
+                            store.selectBudget(budget)
                         } label: {
-                            if selectedBudgetURL?.standardizedFileURL == budget.url.standardizedFileURL {
+                            if store.selectedBudgetURL?.standardizedFileURL == budget.url.standardizedFileURL {
                                 Label(budget.title, systemImage: "checkmark")
                             } else {
                                 Text(budget.title)
@@ -58,14 +52,13 @@ struct BudgetDetailView: View {
                     Divider()
 
                     Button {
-                        onCreateBudget()
+                        windowStore.showCreateBudget()
                     } label: {
                         Label("New Budget", systemImage: "plus")
                     }
                 } label: {
                     Text(budget.title)
                 }
-                .accessibilityIdentifier("budget-menu")
                 
                 Button {
                     transactionCategoryID = nil
@@ -75,7 +68,6 @@ struct BudgetDetailView: View {
                     Image(systemName: "plus")
                 }
                 .help("Add Transaction")
-                .accessibilityIdentifier("budget-add-transaction-button")
                 .disabled(!store.hasCategories(in: budget.url))
             }
             
@@ -92,11 +84,11 @@ struct BudgetDetailView: View {
             BudgetReportingView(
                 store: store,
                 budgetURL: budget.url,
-                currency: currency,
+                currency: store.selectedCurrency,
                 isExpanded: $isReportingExpanded,
                 scope: .inspector
             )
-            .inspectorColumnWidth(min: 300, ideal: 340, max: 420)
+            .inspectorColumnWidth(min: 300, ideal: 420, max: 600)
         }
         .sheet(isPresented: $isCreatingTransaction) {
             CreateTransactionView(
@@ -104,7 +96,7 @@ struct BudgetDetailView: View {
                 budgetURL: budget.url,
                 initialCategoryID: transactionCategoryID,
                 onSave: { draft in
-                    onAddTransaction(draft)
+                    store.addTransaction(draft)
                     isCreatingTransaction = false
                     transactionCategoryID = nil
                 },
@@ -122,15 +114,15 @@ struct BudgetDetailView: View {
             store: store,
             budgetURL: budget.url,
             type: type,
-            currency: currency
+            currency: store.selectedCurrency
         ) { title, amountPlanned, amountAccumulated in
-            onAddCategory(title, amountPlanned, amountAccumulated, type)
+            store.addCategory(title: title, amountPlanned: amountPlanned, amountAccumulated: amountAccumulated, type: type)
         } onUpdateCategory: { update in
-            onUpdateCategory(update)
+            store.updateCategory(update)
         } onRemoveCategory: { categoryID in
-            onRemoveCategory(categoryID)
+            store.removeCategory(categoryID: categoryID)
         } onReorderCategories: { orderedCategoryIDs in
-            onReorderCategories(type, orderedCategoryIDs)
+            store.reorderCategories(type: type, orderedCategoryIDs: orderedCategoryIDs)
         } onAddTransaction: { categoryID in
             transactionCategoryID = categoryID
             isCreatingTransaction = true
