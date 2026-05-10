@@ -250,6 +250,7 @@ private extension CategoryListView {
                 TextField("Title", text: $editedValue)
                     .textFieldStyle(.roundedBorder)
                     .accessibilityIdentifier("category-title-edit-field")
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .focused($focusedEditingCell, equals: .title(categoryID))
                     .background {
                         OutsideClickCommitObserver {
@@ -266,16 +267,12 @@ private extension CategoryListView {
                         discardEdit()
                     }
             } else {
-                Button {
+                ClickableTableCell {
                     startEditing(.title(categoryID), value: store.categoryTitle(categoryID, in: budgetURL))
                 } label: {
                     Text(store.categoryTitle(categoryID, in: budgetURL))
                         .fontWeight(.medium)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(5)
                 }
-                .buttonStyle(.plain)
-                .contentShape(.rect)
                 .accessibilityIdentifier("category-title-cell-\(categoryAccessibilityID(categoryID))")
                 .contextMenu {
                     Button(role: .destructive) {
