@@ -1,5 +1,5 @@
 /* 
- * Budget Warden Core
+ * Budget Warden
  * Copyright (c) 2026 Lazarov & Co EOOD
  * Author: Nikola Lazarov
  *
@@ -19,37 +19,21 @@ struct WelcomeView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openWindow) private var openWindow
     @StateObject private var windowStore = BWWindowStore()
-    @State private var shouldOpenWorkspaceAfterCreate = false
     @State private var budgetPendingRemoval: BudgetRow?
 
     var body: some View {
         HStack(spacing: 0) {
             WelcomeLeftColumn(
-                onCreateBudget: {
-                    shouldOpenWorkspaceAfterCreate = true
-                    windowStore.showCreateBudget()
-                },
-                onOpenBudget: {
-                    if store.openBudgetInPlace() {
-                        openWorkspace()
-                    }
-                },
-                onConfigureVault: {
-                    shouldOpenWorkspaceAfterCreate = false
-                    windowStore.showVaultSetup()
-                }
+                store: store,
+                windowStore: windowStore, 
+                openMainWindow: openMainWindow
             )
             WelcomeRightColumn(
-                budgets: store.budgets,
-                isLoadingBudgets: !store.budgetsLoaded,
-                onSelectBudget: { budget in
-                    store.selectBudget(budget)
-                    openWorkspace()
-                },
-                onShowInFinder: showInFinder,
+                store: store,
+                openMainWindow: openMainWindow,
                 onRemoveBudget: { budget in
                     budgetPendingRemoval = budget
-                }
+                },
             )
         }
         .frame(
@@ -70,11 +54,10 @@ struct WelcomeView: View {
                 store: store, 
                 onSave: { draft in
                     if windowStore.createBudget(draft, store: store) {
-                        openWorkspaceIfPossible()
+                        openMainWindow()
                     }
                 },
                 onCancel: {
-                    shouldOpenWorkspaceAfterCreate = false
                     windowStore.cancelCreateBudget()
                 }
             )
@@ -85,12 +68,9 @@ struct WelcomeView: View {
                 initialLocalParentURL: store.configuredLocalVaultParentURL
             ) {
                 windowStore.configureVault(preferICloud: true, store: store)
-                openWorkspaceAfterCreateIfNeeded()
             } onChooseLocal: { parentURL in
                 windowStore.configureVault(parentURL: parentURL, store: store)
-                openWorkspaceAfterCreateIfNeeded()
             } onCancel: {
-                shouldOpenWorkspaceAfterCreate = false
                 windowStore.cancelVaultSetup(store: store)
             }
             .frame(minWidth: 440)
@@ -130,28 +110,13 @@ struct WelcomeView: View {
         }
     }
 
-    private func openWorkspaceIfPossible() {
-        if store.selectedBudgetRow != nil {
-            shouldOpenWorkspaceAfterCreate = false
-            openWorkspace()
-        }
-    }
-
-    private func openWorkspaceAfterCreateIfNeeded() {
-        guard shouldOpenWorkspaceAfterCreate else {
-            return
+    private func openMainWindow() {
+        if store.selectedBudgetRow == nil {
+            return;
         }
 
-        openWorkspaceIfPossible()
-    }
-
-    private func openWorkspace() {
-        openWindow(id: "workspace")
+        openWindow(id: "main-window")
         dismiss()
-    }
-
-    private func showInFinder(_ budget: BudgetRow) {
-        NSWorkspace.shared.activateFileViewerSelecting([budget.url])
     }
 
     private var errorBinding: Binding<Bool> {

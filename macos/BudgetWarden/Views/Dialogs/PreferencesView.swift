@@ -1,5 +1,5 @@
 /* 
- * Budget Warden Core
+ * Budget Warden
  * Copyright (c) 2026 Lazarov & Co EOOD
  * Author: Nikola Lazarov
  *

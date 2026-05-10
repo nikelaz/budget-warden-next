@@ -1,5 +1,5 @@
 /* 
- * Budget Warden Core
+ * Budget Warden
  * Copyright (c) 2026 Lazarov & Co EOOD
  * Author: Nikola Lazarov
  *
@@ -14,7 +14,7 @@ struct MainWindow: Scene {
     let store: BWStore
 
     var body: some Scene {
-        WindowGroup("Budget Warden", id: "workspace") {
+        WindowGroup("Budget Warden", id: "main-window") {
             MainLayoutView(store: store)
         }
             .defaultSize(width: 1040, height: 700)

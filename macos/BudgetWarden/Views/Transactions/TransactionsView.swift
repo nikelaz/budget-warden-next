@@ -1,5 +1,5 @@
 /* 
- * Budget Warden Core
+ * Budget Warden
  * Copyright (c) 2026 Lazarov & Co EOOD
  * Author: Nikola Lazarov
  *
@@ -36,6 +36,12 @@ struct TransactionsView: View {
 
     private var categoryIDs: [Int] {
         store.categoryIDs(in: budget.url)
+    }
+
+    private var categoryTypesWithCategories: [BudgetCategoryType] {
+        BudgetCategoryType.allCases.filter { type in
+            !store.categoryIDs(for: type, in: budget.url).isEmpty
+        }
     }
 
     private var transactionIDs: [Int] {
@@ -145,14 +151,14 @@ struct TransactionsView: View {
                     Picker("Category Type", selection: $selectedCategoryType) {
                         Text("All Types").tag(nil as BudgetCategoryType?)
 
-                        ForEach(BudgetCategoryType.allCases) { type in
+                        ForEach(categoryTypesWithCategories) { type in
                             Text(type.title).tag(type as BudgetCategoryType?)
                         }
                     }
                     Picker("Category", selection: $selectedCategoryID) {
                         Text("All Categories").tag(nil as Int?)
 
-                        ForEach(BudgetCategoryType.allCases) { type in
+                        ForEach(categoryTypesWithCategories) { type in
                             Section(type.title) {
                                 ForEach(store.categoryIDs(for: type, in: budget.url), id: \.self) { categoryID in
                                     Text(categoryTitle(categoryID)).tag(categoryID as Int?)
@@ -434,7 +440,7 @@ private extension TransactionsView {
 
     func categoryMenuCell(for transactionID: Int, transaction: BWTransactionView?, title: Swift.String) -> some View {
         Menu {
-            ForEach(BudgetCategoryType.allCases) { type in
+            ForEach(categoryTypesWithCategories) { type in
                 Section(type.title) {
                     ForEach(store.categoryIDs(for: type, in: budget.url), id: \.self) { categoryID in
                         Button {

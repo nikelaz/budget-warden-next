@@ -1,5 +1,5 @@
 /* 
- * Budget Warden Core
+ * Budget Warden
  * Copyright (c) 2026 Lazarov & Co EOOD
  * Author: Nikola Lazarov
  *
@@ -12,9 +12,9 @@ import AppKit
 import SwiftUI
 
 struct WelcomeLeftColumn: View {
-    let onCreateBudget: () -> Void
-    let onOpenBudget: () -> Void
-    let onConfigureVault: () -> Void
+    let store: BWStore
+    let windowStore: BWWindowStore
+    let openMainWindow: () -> Void
 
     var body: some View {
         VStack(alignment: .center, spacing: 20) {
@@ -29,19 +29,19 @@ struct WelcomeLeftColumn: View {
             
             VStack(alignment: .center, spacing: 10) {
                 Button("Create New Budget", systemImage: "plus") {
-                    onCreateBudget()
+                    windowStore.showCreateBudget() 
                 }
-                .accessibilityIdentifier("welcome-create-budget-button")
                 
                 Button("Open Budget", systemImage: "folder") {
-                    onOpenBudget()
+                    let budgetOpened = store.openBudgetInPlace() 
+                    if budgetOpened { 
+                        openMainWindow()
+                    }
                 }
-                .accessibilityIdentifier("welcome-open-budget-button")
                 
                 Button("Configure Vault", systemImage: "externaldrive") {
-                    onConfigureVault()
+                    windowStore.showVaultSetup()
                 }
-                .accessibilityIdentifier("welcome-configure-vault-button")
             }
             
             Spacer()
