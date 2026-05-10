@@ -33,6 +33,7 @@ struct CategoryListView: View {
     @State private var draggedCategoryID: Int?
     @State private var dropTargetCategoryID: Int?
     @State private var isProgrammaticallyChangingEditingCell = false
+    @State private var tableWidth: CGFloat = 0
     @FocusState private var focusedNewCategoryField: NewCategoryField?
     @FocusState private var focusedEditingCell: EditingCell?
 
@@ -66,6 +67,17 @@ struct CategoryListView: View {
         }
         .padding(.horizontal, 10)
         .background(Color(nsColor: .quaternarySystemFill))
+        .overlay {
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear {
+                        tableWidth = proxy.size.width
+                    }
+                    .onChange(of: proxy.size.width) { _, width in
+                        tableWidth = width
+                    }
+            }
+        }
         .clipShape(.rect(cornerRadius: 8, style: .continuous))
         .confirmationDialog(
             "Delete Category?",
@@ -123,7 +135,7 @@ private extension CategoryListView {
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .padding(5)
-                    .frame(width: column.width, alignment: .trailing)
+                    .frame(width: valueColumnWidth(for: column), alignment: .trailing)
             }
         }
         .padding(.horizontal, 5)
@@ -154,14 +166,14 @@ private extension CategoryListView {
                         .textFieldStyle(.roundedBorder)
                         .multilineTextAlignment(.trailing)
                         .accessibilityIdentifier("new-category-\(column.id)-field")
-                        .frame(width: column.width)
+                        .frame(width: valueColumnWidth(for: column))
                         .focused($focusedNewCategoryField, equals: .amount(column.id))
                         .onSubmit(saveNewCategory)
                 } else {
                     Text(formattedAmount(0))
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
-                        .frame(width: column.width, alignment: .trailing)
+                        .frame(width: valueColumnWidth(for: column), alignment: .trailing)
                 }
             }
         }
@@ -198,7 +210,7 @@ private extension CategoryListView {
                     .monospacedDigit()
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .padding(5)
-                    .frame(width: column.width, alignment: .trailing)
+                    .frame(width: valueColumnWidth(for: column), alignment: .trailing)
             }
         }
         .padding(.horizontal, 5)
@@ -292,7 +304,7 @@ private extension CategoryListView {
                     .textFieldStyle(.roundedBorder)
                     .multilineTextAlignment(.trailing)
                     .accessibilityIdentifier("category-\(column.id)-edit-field")
-                    .frame(width: column.width)
+                    .frame(width: valueColumnWidth(for: column))
                     .focused($focusedEditingCell, equals: .amount(categoryID, column.id))
                     .background {
                         OutsideClickCommitObserver {
@@ -315,13 +327,13 @@ private extension CategoryListView {
                     amountText(categoryAmount(categoryID, column: column))
                         .frame(maxWidth: .infinity, alignment: .trailing)
                         .padding(5)
-                        .frame(width: column.width, alignment: .trailing)
+                        .frame(width: valueColumnWidth(for: column), alignment: .trailing)
                 }
                 .buttonStyle(.plain)
                 .contentShape(.rect)
                 .accessibilityIdentifier("category-\(column.id)-cell-\(categoryAccessibilityID(categoryID))")
             } else if column.isEditable {
-                ClickableTableCell(width: column.width, alignment: .trailing) {
+                ClickableTableCell(width: valueColumnWidth(for: column), alignment: .trailing) {
                     startEditing(.amount(categoryID, column.id), value: categoryAmount(categoryID, column: column).moneyAmountInputText)
                 } label: {
                     amountText(categoryAmount(categoryID, column: column))
@@ -329,7 +341,7 @@ private extension CategoryListView {
                 }
             } else {
                 amountText(categoryAmount(categoryID, column: column))
-                    .frame(width: column.width, alignment: .trailing)
+                    .frame(width: valueColumnWidth(for: column), alignment: .trailing)
                     .accessibilityIdentifier("category-\(column.id)-cell-\(categoryAccessibilityID(categoryID))")
             }
         }
@@ -530,6 +542,54 @@ private extension CategoryListView {
     func formattedAmount(_ amount: UInt64) -> Swift.String {
         amount.formattedMoneyAmount(currency: currency)
     }
+
+    func valueColumnWidth(for column: CategoryValueColumn) -> CGFloat {
+        let contentWidth = valueColumnContentWidth(for: column)
+        let availableWidth = tableWidth > 0 ? tableWidth : 700
+        let maximumWidth = max(96, floor(availableWidth * 0.16))
+
+        return min(max(contentWidth, 76), maximumWidth)
+    }
+
+    func valueColumnContentWidth(for column: CategoryValueColumn) -> CGFloat {
+        var values = categoryIDs.map { formattedAmount(categoryAmount($0, column: column)) }
+        values.append(formattedAmount(total(for: column)))
+
+        if isCreatingCategory {
+            if column.id == "planned" {
+                values.append(newCategoryPlanned)
+            } else if column.id == "accumulated" {
+                values.append(newCategoryAccumulated)
+            } else {
+                values.append(formattedAmount(0))
+            }
+        }
+
+        if case .amount(_, let columnID) = editingCell, columnID == column.id {
+            values.append(editedValue)
+        }
+
+        let widestValue = values
+            .map { measuredMoneyTextWidth($0) }
+            .max() ?? 0
+        let headerWidth = measuredHeaderTextWidth(column.title)
+
+        return ceil(max(widestValue, headerWidth) + 18)
+    }
+
+    func measuredMoneyTextWidth(_ text: Swift.String) -> CGFloat {
+        let font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+        let attributes: [NSAttributedString.Key: Any] = [.font: font]
+
+        return (text as NSString).size(withAttributes: attributes).width
+    }
+
+    func measuredHeaderTextWidth(_ text: Swift.String) -> CGFloat {
+        let font = NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+        let attributes: [NSAttributedString.Key: Any] = [.font: font]
+
+        return (text as NSString).size(withAttributes: attributes).width
+    }
 }
 
 private enum EditingCell: Hashable {
@@ -693,7 +753,6 @@ private struct CategoryValueColumn: Identifiable {
     let id: Swift.String
     let title: Swift.String
     let amount: CategoryAmountField
-    let width: CGFloat
 
     var isEditable: Bool {
         id == "planned" || id == "accumulated"
@@ -726,25 +785,25 @@ private extension BudgetCategoryType {
         switch self {
         case .income:
             return [
-                CategoryValueColumn(id: "planned", title: "Planned", amount: .planned, width: 92),
-                CategoryValueColumn(id: "actual", title: "Received", amount: .actual, width: 92)
+                CategoryValueColumn(id: "planned", title: "Planned", amount: .planned),
+                CategoryValueColumn(id: "actual", title: "Received", amount: .actual)
             ]
         case .expenses:
             return [
-                CategoryValueColumn(id: "planned", title: "Planned", amount: .planned, width: 92),
-                CategoryValueColumn(id: "actual", title: "Spend", amount: .actual, width: 92)
+                CategoryValueColumn(id: "planned", title: "Planned", amount: .planned),
+                CategoryValueColumn(id: "actual", title: "Spend", amount: .actual)
             ]
         case .debt:
             return [
-                CategoryValueColumn(id: "accumulated", title: "Leftover Debt", amount: .accumulated, width: 118),
-                CategoryValueColumn(id: "planned", title: "Planned", amount: .planned, width: 92),
-                CategoryValueColumn(id: "actual", title: "Paid", amount: .actual, width: 92)
+                CategoryValueColumn(id: "accumulated", title: "Leftover Debt", amount: .accumulated),
+                CategoryValueColumn(id: "planned", title: "Planned", amount: .planned),
+                CategoryValueColumn(id: "actual", title: "Paid", amount: .actual)
             ]
         case .savings:
             return [
-                CategoryValueColumn(id: "accumulated", title: "Accumulated", amount: .accumulated, width: 118),
-                CategoryValueColumn(id: "planned", title: "Planned", amount: .planned, width: 92),
-                CategoryValueColumn(id: "actual", title: "Saved", amount: .actual, width: 92)
+                CategoryValueColumn(id: "accumulated", title: "Accumulated", amount: .accumulated),
+                CategoryValueColumn(id: "planned", title: "Planned", amount: .planned),
+                CategoryValueColumn(id: "actual", title: "Saved", amount: .actual)
             ]
         }
     }
