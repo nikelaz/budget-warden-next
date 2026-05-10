@@ -11,7 +11,7 @@
 import SwiftUI
 
 struct CreateTransactionView: View {
-    @ObservedObject var store: BudgetStore
+    @ObservedObject var store: BWStore
     let budgetURL: URL
     let onSave: (TransactionDraft) -> Void
     let onCancel: () -> Void
@@ -24,7 +24,7 @@ struct CreateTransactionView: View {
     @State private var selectedCategoryID: Int
 
     init(
-        store: BudgetStore,
+        store: BWStore,
         budgetURL: URL,
         initialCategoryID: Int? = nil,
         onSave: @escaping (TransactionDraft) -> Void,

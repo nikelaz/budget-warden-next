@@ -18,7 +18,7 @@ private enum BudgetTemplateSelection: Hashable {
 }
 
 struct CreateBudgetView: View {
-    @ObservedObject var store: BudgetStore
+    @ObservedObject var store: BWStore
     let onSave: (BudgetDraft) -> Void
     let onCancel: () -> Void
     let basicTemplateURL: URL?
@@ -30,7 +30,7 @@ struct CreateBudgetView: View {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    init(store: BudgetStore, onSave: @escaping (BudgetDraft) -> Void, onCancel: @escaping () -> Void) {
+    init(store: BWStore, onSave: @escaping (BudgetDraft) -> Void, onCancel: @escaping () -> Void) {
         self.store = store
         self.onSave = onSave
         self.onCancel = onCancel

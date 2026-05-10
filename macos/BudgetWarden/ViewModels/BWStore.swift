@@ -12,7 +12,7 @@ import Foundation
 import Combine
 
 @MainActor
-final class BudgetStore: ObservableObject {
+final class BWStore: ObservableObject {
     @Published private(set) var budgetRows: [BudgetRow] = []
     @Published var externalBudgetURL: URL?
     @Published var selectedBudgetURL: URL?
@@ -25,7 +25,7 @@ final class BudgetStore: ObservableObject {
     }
 
     private var pendingDraft: BudgetDraft?
-    private let vault: BudgetVault
+    private let vault: BWBudgetVault
     private let fileManager = FileManager.default
     private var loadedBudgetURL: URL?
     private var loadedBudget: UnsafeMutablePointer<BWBudget>?
@@ -35,8 +35,8 @@ final class BudgetStore: ObservableObject {
     private static let selectedCurrencyKey = "SelectedCurrency"
     private static let jsonArenaCapacity = 1024 * 1024
 
-    init(vault: BudgetVault? = nil) {
-        let resolvedVault = vault ?? BudgetVault.shared
+    init(vault: BWBudgetVault? = nil) {
+        let resolvedVault = vault ?? BWBudgetVault.shared
         self.vault = resolvedVault
         let savedCurrency = UserDefaults.standard.string(forKey: Self.selectedCurrencyKey)
             .flatMap(AppCurrency.init(rawValue:))
@@ -98,7 +98,7 @@ final class BudgetStore: ObservableObject {
 
         do {
             vaultURL = try vault.resolveVaultURL()
-        } catch BudgetError.vaultNotConfigured {
+        } catch BWError.vaultNotConfigured {
             releaseLoadedBudget()
             budgetRows = []
             selectedBudgetURL = externalBudgetURL
@@ -117,7 +117,7 @@ final class BudgetStore: ObservableObject {
         isLoadingBudgets = true
         Task.detached(priority: .userInitiated) { [weak self, vaultURL, selectedBudgetURL, externalBudgetURL, externalBudgetRow] in
             let result = Result {
-                try BudgetVault.loadBudgetRows(in: vaultURL)
+                try BWBudgetVault.loadBudgetRows(in: vaultURL)
             }
 
             await self?.applyLoadedBudgets(
@@ -154,7 +154,7 @@ final class BudgetStore: ObservableObject {
 
             loadSelectedBudget()
             budgetsLoaded = true
-        case .failure(BudgetError.vaultNotConfigured):
+        case .failure(BWError.vaultNotConfigured):
             releaseLoadedBudget()
             budgetRows = []
             selectedBudgetURL = externalBudgetURL
@@ -173,7 +173,7 @@ final class BudgetStore: ObservableObject {
             _ = try vault.resolveVaultURL()
             savePendingBudget()
             return true
-        } catch BudgetError.vaultNotConfigured {
+        } catch BWError.vaultNotConfigured {
             return false
         } catch {
             presentedError = error.localizedDescription
@@ -239,7 +239,7 @@ final class BudgetStore: ObservableObject {
         amountAccumulated: UInt64,
         type: BudgetCategoryType
     ) {
-        mutateSelectedBudget(BudgetError.categoryCreationFailed) { budget in
+        mutateSelectedBudget(BWError.categoryCreationFailed) { budget in
             title.withCString { title in
                 bw_budget_add_category_values(
                     budget,
@@ -254,7 +254,7 @@ final class BudgetStore: ObservableObject {
     }
 
     func updateCategory(_ update: CategoryUpdate) {
-        mutateSelectedBudget(BudgetError.categorySaveFailed) { budget in
+        mutateSelectedBudget(BWError.categorySaveFailed) { budget in
             update.title.withCString { title in
                 let coreUpdate = BWCategoryUpdate(
                     title: title,
@@ -268,13 +268,13 @@ final class BudgetStore: ObservableObject {
     }
 
     func removeCategory(categoryID: Int) {
-        mutateSelectedBudget(BudgetError.categoryNotFound) { budget in
+        mutateSelectedBudget(BWError.categoryNotFound) { budget in
             bw_budget_remove_category(budget, Int32(categoryID))
         }
     }
 
     func reorderCategories(type: BudgetCategoryType, orderedCategoryIDs: [Int]) {
-        mutateSelectedBudget(BudgetError.categorySaveFailed) { budget in
+        mutateSelectedBudget(BWError.categorySaveFailed) { budget in
             let coreCategoryIDs = orderedCategoryIDs.map(Int32.init)
             return coreCategoryIDs.withUnsafeBufferPointer { buffer in
                 bw_budget_reorder_categories(budget, type.coreType, buffer.baseAddress, buffer.count)
@@ -283,7 +283,7 @@ final class BudgetStore: ObservableObject {
     }
 
     func addTransaction(_ draft: TransactionDraft) {
-        mutateSelectedBudget(BudgetError.transactionCreationFailed) { budget in
+        mutateSelectedBudget(BWError.transactionCreationFailed) { budget in
             draft.title.withCString { title in
                 draft.description.withCString { description in
                     bw_budget_add_transaction_values(
@@ -300,7 +300,7 @@ final class BudgetStore: ObservableObject {
     }
 
     func updateTransaction(_ update: TransactionUpdate) {
-        mutateSelectedBudget(BudgetError.transactionSaveFailed) { budget in
+        mutateSelectedBudget(BWError.transactionSaveFailed) { budget in
             update.title.withCString { title in
                 update.description.withCString { description in
                     let coreUpdate = BWTransactionUpdate(
@@ -318,7 +318,7 @@ final class BudgetStore: ObservableObject {
     }
 
     func removeTransaction(transactionID: Int) {
-        mutateSelectedBudget(BudgetError.transactionNotFound) { budget in
+        mutateSelectedBudget(BWError.transactionNotFound) { budget in
             bw_budget_remove_transaction(budget, Int32(transactionID))
         }
     }
@@ -427,7 +427,7 @@ final class BudgetStore: ObservableObject {
     }
 
     private func mutateSelectedBudget(
-        _ failure: BudgetError,
+        _ failure: BWError,
         mutation: (UnsafeMutablePointer<BWBudget>) throws -> Int32
     ) {
         guard
@@ -458,7 +458,7 @@ final class BudgetStore: ObservableObject {
     }
 
     private func loadVaultBudgets() throws -> [BudgetRow] {
-        try BudgetVault.loadBudgetRows(in: vault.resolveVaultURL())
+        try BWBudgetVault.loadBudgetRows(in: vault.resolveVaultURL())
     }
 
     private func createBudgetCore(_ draft: BudgetDraft) throws -> URL {
@@ -475,7 +475,7 @@ final class BudgetStore: ObservableObject {
                     }
 
                     guard result == 0 else {
-                        throw BudgetError.budgetCreationFailed
+                        throw BWError.budgetCreationFailed
                     }
 
                     try replaceTitle(uniqueBudget.title, in: pointer)
@@ -484,7 +484,7 @@ final class BudgetStore: ObservableObject {
                 }
 
                 guard bw_budget_set_id(pointer, Int32(try nextBudgetID(in: vaultURL))) == 0 else {
-                    throw BudgetError.budgetCreationFailed
+                    throw BWError.budgetCreationFailed
                 }
 
                 try writeText(jsonString(from: pointer), to: uniqueBudget.url)
@@ -691,7 +691,7 @@ final class BudgetStore: ObservableObject {
         do {
             return try Swift.String(contentsOf: url, encoding: .utf8)
         } catch {
-            throw BudgetError.budgetReadFailed(url)
+            throw BWError.budgetReadFailed(url)
         }
     }
 
@@ -704,13 +704,13 @@ final class BudgetStore: ObservableObject {
             var trashedURL: NSURL?
             try fileManager.trashItem(at: url, resultingItemURL: &trashedURL)
         } catch {
-            throw BudgetError.budgetRemoveFailed(url)
+            throw BWError.budgetRemoveFailed(url)
         }
     }
 
     private func initializeBudget(_ budget: UnsafeMutablePointer<BWBudget>, title: Swift.String) throws {
         guard title.withCString({ bw_budget_init(budget, $0) }) == 0 else {
-            throw BudgetError.budgetCreationFailed
+            throw BWError.budgetCreationFailed
         }
     }
 
@@ -722,13 +722,13 @@ final class BudgetStore: ObservableObject {
         let result = json.withCString { bw_budget_from_json_str(budget, $0) }
 
         guard result == 0 else {
-            throw BudgetError.budgetReadFailed(url)
+            throw BWError.budgetReadFailed(url)
         }
     }
 
     private func replaceTitle(_ title: Swift.String, in budget: UnsafeMutablePointer<BWBudget>) throws {
         guard title.withCString({ bw_budget_set_title(budget, $0) }) == 0 else {
-            throw BudgetError.budgetCreationFailed
+            throw BWError.budgetCreationFailed
         }
     }
 
@@ -736,7 +736,7 @@ final class BudgetStore: ObservableObject {
         var jsonArena = BWArena()
 
         guard bw_arena_init(&jsonArena, Self.jsonArenaCapacity) == 0 else {
-            throw BudgetError.jsonCreationFailed
+            throw BWError.jsonCreationFailed
         }
 
         defer {
@@ -746,13 +746,13 @@ final class BudgetStore: ObservableObject {
         let jsonString = bw_budget_to_json_str(budget, &jsonArena)
 
         guard let jsonData = jsonString.data else {
-            throw BudgetError.jsonCreationFailed
+            throw BWError.jsonCreationFailed
         }
 
         let json = Swift.String(cString: jsonData)
 
         guard !json.isEmpty else {
-            throw BudgetError.jsonCreationFailed
+            throw BWError.jsonCreationFailed
         }
 
         return json
@@ -780,7 +780,7 @@ final class BudgetStore: ObservableObject {
             return try vault.accessVault(operation)
         }
 
-        return try BudgetVault.accessSecurityScopedResource(url, operation: operation)
+        return try BWBudgetVault.accessSecurityScopedResource(url, operation: operation)
     }
 
     nonisolated private static func hasAvailableBudget(

@@ -15,10 +15,10 @@ let WINDOW_WIDTH: CGFloat = 760
 let WINDOW_HEIGHT: CGFloat = 420
 
 struct WelcomeView: View {
-    @ObservedObject var store: BudgetStore
+    @ObservedObject var store: BWStore
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openWindow) private var openWindow
-    @StateObject private var windowStore = BudgetWindowStore()
+    @StateObject private var windowStore = BWWindowStore()
     @State private var shouldOpenWorkspaceAfterCreate = false
     @State private var budgetPendingRemoval: BudgetRow?
 

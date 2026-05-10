@@ -11,7 +11,7 @@
 import SwiftUI
 
 struct CategorySectionView: View {
-    @ObservedObject var store: BudgetStore
+    @ObservedObject var store: BWStore
     let budgetURL: URL
     let type: BudgetCategoryType
     let currency: AppCurrency

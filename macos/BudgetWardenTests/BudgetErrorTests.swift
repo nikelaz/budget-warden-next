@@ -6,11 +6,11 @@ final class BudgetErrorTests: XCTestCase {
         let url = URL(fileURLWithPath: "/tmp/Family.budget")
 
         XCTAssertEqual(
-            BudgetError.budgetReadFailed(url).errorDescription,
+            BWError.budgetReadFailed(url).errorDescription,
             "The budget file could not be read: Family.budget"
         )
         XCTAssertEqual(
-            BudgetError.budgetRemoveFailed(url).errorDescription,
+            BWError.budgetRemoveFailed(url).errorDescription,
             "The budget file could not be moved to Trash: Family.budget"
         )
     }

@@ -11,7 +11,7 @@
 import SwiftUI
 
 struct CategoryRowView: View {
-    @ObservedObject var store: BudgetStore
+    @ObservedObject var store: BWStore
     let budgetURL: URL
     let categoryID: Int
     let currency: AppCurrency

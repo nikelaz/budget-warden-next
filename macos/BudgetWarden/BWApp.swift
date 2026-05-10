@@ -11,8 +11,8 @@
 import SwiftUI
 
 @main
-struct BudgetWardenApp: App {
-    @StateObject private var store = BudgetStore()
+struct BWApp: App {
+    @StateObject private var store = BWStore()
 
     var body: some Scene {
         WelcomeWindow(store: store)

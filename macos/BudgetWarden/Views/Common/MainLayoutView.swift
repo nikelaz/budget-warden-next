@@ -11,8 +11,8 @@
 import SwiftUI
 
 struct MainLayoutView: View {
-    @ObservedObject var store: BudgetStore
-    @StateObject private var windowStore = BudgetWindowStore()
+    @ObservedObject var store: BWStore
+    @StateObject private var windowStore = BWWindowStore()
     @State private var selectedSection: SidebarSection = .budget
 
     var body: some View {

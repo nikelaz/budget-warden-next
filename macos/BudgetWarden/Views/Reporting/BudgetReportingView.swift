@@ -11,7 +11,7 @@
 import SwiftUI
 
 struct BudgetReportingView: View {
-    @ObservedObject var store: BudgetStore
+    @ObservedObject var store: BWStore
     let budgetURL: URL
     let currency: AppCurrency
     @Binding var isExpanded: Bool

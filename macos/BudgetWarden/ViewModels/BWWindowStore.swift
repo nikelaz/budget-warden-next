@@ -12,7 +12,7 @@ import Combine
 import SwiftUI
 
 @MainActor
-final class BudgetWindowStore: ObservableObject {
+final class BWWindowStore: ObservableObject {
     @Published var isCreatingBudget = false
     @Published var isConfiguringVault = false
     @Published var isShowingPreferences = false
@@ -33,7 +33,7 @@ final class BudgetWindowStore: ObservableObject {
         isCreatingBudget = false
     }
 
-    func cancelVaultSetup(store: BudgetStore) {
+    func cancelVaultSetup(store: BWStore) {
         isConfiguringVault = false
         store.cancelVaultSetup()
     }
@@ -42,7 +42,7 @@ final class BudgetWindowStore: ObservableObject {
         isShowingPreferences = false
     }
 
-    func createBudget(_ draft: BudgetDraft, store: BudgetStore) -> Bool {
+    func createBudget(_ draft: BudgetDraft, store: BWStore) -> Bool {
         if store.createBudget(draft) {
             isCreatingBudget = false
             return true
@@ -56,17 +56,17 @@ final class BudgetWindowStore: ObservableObject {
         return false
     }
 
-    func configureVault(preferICloud: Bool, store: BudgetStore) {
+    func configureVault(preferICloud: Bool, store: BWStore) {
         store.configureVault(preferICloud: preferICloud)
         closeVaultSetupIfSuccessful(store: store)
     }
 
-    func configureVault(parentURL: URL, store: BudgetStore) {
+    func configureVault(parentURL: URL, store: BWStore) {
         store.configureVault(parentURL: parentURL)
         closeVaultSetupIfSuccessful(store: store)
     }
 
-    private func closeVaultSetupIfSuccessful(store: BudgetStore) {
+    private func closeVaultSetupIfSuccessful(store: BWStore) {
         if store.presentedError == nil {
             isConfiguringVault = false
         }
@@ -74,11 +74,11 @@ final class BudgetWindowStore: ObservableObject {
 }
 
 private struct BudgetWindowStoreFocusedValueKey: FocusedValueKey {
-    typealias Value = BudgetWindowStore
+    typealias Value = BWWindowStore
 }
 
 extension FocusedValues {
-    var budgetWindowStore: BudgetWindowStore? {
+    var budgetWindowStore: BWWindowStore? {
         get { self[BudgetWindowStoreFocusedValueKey.self] }
         set { self[BudgetWindowStoreFocusedValueKey.self] = newValue }
     }

@@ -10,7 +10,7 @@
 
 import Foundation
 
-enum BudgetError: LocalizedError {
+enum BWError: LocalizedError {
     case vaultNotConfigured
     case vaultUnavailable
     case budgetCreationFailed

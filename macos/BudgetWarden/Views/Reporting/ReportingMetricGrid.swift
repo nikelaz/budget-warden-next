@@ -11,7 +11,7 @@
 import SwiftUI
 
 struct ReportingMetricGrid: View {
-    @ObservedObject var store: BudgetStore
+    @ObservedObject var store: BWStore
     let budgetURL: URL
     let currency: AppCurrency
     let scope: ReportingScope

@@ -11,7 +11,7 @@
 import SwiftUI
 
 struct WelcomeWindow: Scene {
-    let store: BudgetStore
+    let store: BWStore
 
     var body: some Scene {
         WindowGroup("Budget Warden", id: "welcome") {

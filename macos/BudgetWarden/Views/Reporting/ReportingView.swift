@@ -11,7 +11,7 @@
 import SwiftUI
 
 struct ReportingView: View {
-    @ObservedObject var store: BudgetStore
+    @ObservedObject var store: BWStore
     let budgets: [BudgetRow]
     let budget: BudgetRow
     let currency: AppCurrency

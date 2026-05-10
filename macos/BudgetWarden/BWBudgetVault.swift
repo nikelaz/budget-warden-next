@@ -12,8 +12,8 @@ import AppKit
 import Foundation
 import UniformTypeIdentifiers
 
-final class BudgetVault {
-    static let shared = BudgetVault()
+final class BWBudgetVault {
+    static let shared = BWBudgetVault()
 
     private let folderName = "Budget Warden Budgets"
     private let bookmarkKey = "BudgetVaultBookmark"
@@ -82,7 +82,7 @@ final class BudgetVault {
 
     func resolveVaultURL() throws -> URL {
         guard let bookmark = UserDefaults.standard.data(forKey: bookmarkKey) else {
-            throw BudgetError.vaultNotConfigured
+            throw BWError.vaultNotConfigured
         }
 
         var isStale = false
@@ -105,7 +105,7 @@ final class BudgetVault {
         var isDirectory: ObjCBool = false
 
         guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue else {
-            throw BudgetError.vaultUnavailable
+            throw BWError.vaultUnavailable
         }
 
         return url
@@ -233,7 +233,7 @@ final class BudgetVault {
         do {
             return try Swift.String(contentsOf: url, encoding: .utf8)
         } catch {
-            throw BudgetError.budgetReadFailed(url)
+            throw BWError.budgetReadFailed(url)
         }
     }
 
@@ -245,7 +245,7 @@ final class BudgetVault {
         let result = json.withCString { bw_budget_from_json_str(budget, $0) }
 
         guard result == 0 else {
-            throw BudgetError.budgetReadFailed(url)
+            throw BWError.budgetReadFailed(url)
         }
     }
 

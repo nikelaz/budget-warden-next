@@ -4,7 +4,7 @@ import XCTest
 final class BudgetModelTests: XCTestCase {
     @MainActor
         func testBudgetStorePersistsBridgeBackedRowsTotalsAndTransactions() throws {
-            let store = BudgetStore()
+            let store = BWStore()
             store.createBudget(BudgetDraft(title: "Store Coverage", templateURL: nil))
 
             XCTAssertNil(store.presentedError)
@@ -62,7 +62,7 @@ final class BudgetModelTests: XCTestCase {
             XCTAssertEqual(store.transaction(transactionIDs[0])?.category_title.swiftString(), "Rent")
             XCTAssertEqual(store.categoryTotal(type: .expenses, field: .actual), 109_250)
 
-            let reloadedStore = BudgetStore()
+            let reloadedStore = BWStore()
             reloadedStore.loadBudgets()
 
         XCTAssertNil(reloadedStore.presentedError)
