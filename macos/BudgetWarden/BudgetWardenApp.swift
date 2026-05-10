@@ -17,5 +17,8 @@ struct BudgetWardenApp: App {
     var body: some Scene {
         WelcomeWindow(store: store)
         MainWindow(store: store)
+            .commands {
+                BWCommands()
+            }
     }
 }

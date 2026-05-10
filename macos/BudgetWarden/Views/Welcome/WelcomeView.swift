@@ -18,16 +18,16 @@ struct WelcomeView: View {
     @ObservedObject var store: BudgetStore
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openWindow) private var openWindow
+    @StateObject private var windowStore = BudgetWindowStore()
     @State private var shouldOpenWorkspaceAfterCreate = false
     @State private var budgetPendingRemoval: BudgetRow?
-    private let dialogHost = BudgetDialogHost.welcome
 
     var body: some View {
         HStack(spacing: 0) {
             WelcomeLeftColumn(
                 onCreateBudget: {
                     shouldOpenWorkspaceAfterCreate = true
-                    store.showCreateBudget(from: dialogHost)
+                    windowStore.showCreateBudget()
                 },
                 onOpenBudget: {
                     if store.openBudgetInPlace() {
@@ -36,7 +36,7 @@ struct WelcomeView: View {
                 },
                 onConfigureVault: {
                     shouldOpenWorkspaceAfterCreate = false
-                    store.showVaultSetup(from: dialogHost)
+                    windowStore.showVaultSetup()
                 }
             )
             WelcomeRightColumn(
@@ -63,40 +63,42 @@ struct WelcomeView: View {
         .task {
             store.loadBudgets()
         }
-        .sheet(isPresented: dialogBinding(\.isCreatingBudget, dismiss: store.cancelCreateBudget)) {
+        .focusedSceneValue(\.budgetWindowStore, windowStore)
+        .sheet(isPresented: $windowStore.isCreatingBudget) {
             CreateBudgetView(
                 store: store, 
                 onSave: { draft in
-                    store.createBudget(draft)
-                    openWorkspaceIfPossible()
+                    if windowStore.createBudget(draft, store: store) {
+                        openWorkspaceIfPossible()
+                    }
                 },
                 onCancel: {
                     shouldOpenWorkspaceAfterCreate = false
-                    store.cancelCreateBudget()
+                    windowStore.cancelCreateBudget()
                 }
             )
             .frame(minWidth: 420)
         }
-        .sheet(isPresented: dialogBinding(\.isConfiguringVault, dismiss: store.cancelVaultSetup)) {
+        .sheet(isPresented: $windowStore.isConfiguringVault) {
             VaultSetupView(
                 initialLocalParentURL: store.configuredLocalVaultParentURL
             ) {
-                store.configureVault(preferICloud: true)
+                windowStore.configureVault(preferICloud: true, store: store)
                 openWorkspaceAfterCreateIfNeeded()
             } onChooseLocal: { parentURL in
-                store.configureVault(parentURL: parentURL)
+                windowStore.configureVault(parentURL: parentURL, store: store)
                 openWorkspaceAfterCreateIfNeeded()
             } onCancel: {
                 shouldOpenWorkspaceAfterCreate = false
-                store.cancelVaultSetup()
+                windowStore.cancelVaultSetup(store: store)
             }
             .frame(minWidth: 440)
         }
-        .sheet(isPresented: dialogBinding(\.isShowingPreferences, dismiss: store.closePreferences)) {
+        .sheet(isPresented: $windowStore.isShowingPreferences) {
             PreferencesView(
                 selectedCurrency: $store.selectedCurrency,
                 onClose: {
-                    store.closePreferences()
+                    windowStore.closePreferences()
                 }
             )
             .frame(minWidth: 360)
@@ -149,22 +151,6 @@ struct WelcomeView: View {
 
     private func showInFinder(_ budget: BudgetRow) {
         NSWorkspace.shared.activateFileViewerSelecting([budget.url])
-    }
-
-    private func dialogBinding(
-        _ keyPath: KeyPath<BudgetStore, Bool>,
-        dismiss: @escaping () -> Void
-    ) -> Binding<Bool> {
-        Binding(
-            get: {
-                store[keyPath: keyPath] && store.dialogHost == dialogHost
-            },
-            set: { isPresented in
-                if !isPresented && store.dialogHost == dialogHost {
-                    dismiss()
-                }
-            }
-        )
     }
 
     private var errorBinding: Binding<Bool> {

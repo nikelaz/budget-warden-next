@@ -12,8 +12,8 @@ import SwiftUI
 
 struct MainLayoutView: View {
     @ObservedObject var store: BudgetStore
+    @StateObject private var windowStore = BudgetWindowStore()
     @State private var selectedSection: SidebarSection = .budget
-    private let dialogHost = BudgetDialogHost.workspace
 
     var body: some View {
         NavigationSplitView {
@@ -78,7 +78,7 @@ struct MainLayoutView: View {
                     }
                     ToolbarItem(placement: .primaryAction) {
                         Button {
-                            store.showPreferences(from: dialogHost)
+                            windowStore.showPreferences()
                         } label: {
                             Label("Preferences", systemImage: "gearshape")
                         }
@@ -89,31 +89,34 @@ struct MainLayoutView: View {
         .task {
             store.loadBudgets()
         }
-        .sheet(isPresented: dialogBinding(\.isCreatingBudget, dismiss: store.cancelCreateBudget)) {
+        .focusedSceneValue(\.budgetWindowStore, windowStore)
+        .sheet(isPresented: $windowStore.isCreatingBudget) {
             CreateBudgetView(
                 store: store,
-                onSave: store.createBudget,
-                onCancel: store.cancelCreateBudget
+                onSave: { draft in
+                    _ = windowStore.createBudget(draft, store: store)
+                },
+                onCancel: windowStore.cancelCreateBudget
             )
             .frame(minWidth: 420)
         }
-        .sheet(isPresented: dialogBinding(\.isConfiguringVault, dismiss: store.cancelVaultSetup)) {
+        .sheet(isPresented: $windowStore.isConfiguringVault) {
             VaultSetupView(
                 initialLocalParentURL: store.configuredLocalVaultParentURL
             ) {
-                store.configureVault(preferICloud: true)
+                windowStore.configureVault(preferICloud: true, store: store)
             } onChooseLocal: { parentURL in
-                store.configureVault(parentURL: parentURL)
+                windowStore.configureVault(parentURL: parentURL, store: store)
             } onCancel: {
-                store.cancelVaultSetup()
+                windowStore.cancelVaultSetup(store: store)
             }
             .frame(minWidth: 440)
         }
-        .sheet(isPresented: dialogBinding(\.isShowingPreferences, dismiss: store.closePreferences)) {
+        .sheet(isPresented: $windowStore.isShowingPreferences) {
             PreferencesView(
                 selectedCurrency: $store.selectedCurrency,
                 onClose: {
-                    store.closePreferences()
+                    windowStore.closePreferences()
                 }
             )
             .frame(minWidth: 360)
@@ -129,23 +132,7 @@ struct MainLayoutView: View {
     }
 
     private func showCreateBudget() {
-        store.showCreateBudget(from: dialogHost)
-    }
-
-    private func dialogBinding(
-        _ keyPath: KeyPath<BudgetStore, Bool>,
-        dismiss: @escaping () -> Void
-    ) -> Binding<Bool> {
-        Binding(
-            get: {
-                store[keyPath: keyPath] && store.dialogHost == dialogHost
-            },
-            set: { isPresented in
-                if !isPresented && store.dialogHost == dialogHost {
-                    dismiss()
-                }
-            }
-        )
+        windowStore.showCreateBudget()
     }
 
     private var errorBinding: Binding<Bool> {

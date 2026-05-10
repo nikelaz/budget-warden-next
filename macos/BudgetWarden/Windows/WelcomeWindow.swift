@@ -22,13 +22,5 @@ struct WelcomeWindow: Scene {
             .defaultLaunchBehavior(.presented)
             .windowStyle(.hiddenTitleBar)
             .windowResizability(.contentSize)
-            .commands {
-                CommandGroup(replacing: .appSettings) {
-                    Button("Preferences...") {
-                        store.showPreferences(from: .welcome)
-                    }
-                    .keyboardShortcut(",", modifiers: .command)
-                }
-            }
     }
 }

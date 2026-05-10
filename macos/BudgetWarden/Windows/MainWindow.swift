@@ -20,24 +20,5 @@ struct MainWindow: Scene {
             .defaultSize(width: 1040, height: 700)
             .defaultLaunchBehavior(.suppressed)
             .windowToolbarStyle(.unified)
-            .commands {
-                windowCommands
-            }
-    }
-
-    @CommandsBuilder
-    private var windowCommands: some Commands {
-        CommandGroup(replacing: .appSettings) {
-            Button("Preferences...") {
-                store.showPreferences(from: .workspace)
-            }
-            .keyboardShortcut(",", modifiers: .command)
-        }
-        
-        CommandGroup(after: .newItem) {
-            Button("Configure Vault...") {
-                store.showVaultSetup(from: .workspace)
-            }
-        }
     }
 }

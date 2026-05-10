@@ -317,6 +317,11 @@ private extension TransactionsView {
                     .textFieldStyle(.roundedBorder)
                     .accessibilityIdentifier("transaction-\(cell.transactionID)-edit-field")
                     .focused($focusedEditingCell, equals: cell)
+                    .background {
+                        OutsideClickCommitObserver {
+                            commitActiveEdit()
+                        }
+                    }
                     .onAppear {
                         focusEditingCell(cell)
                     }
@@ -347,6 +352,11 @@ private extension TransactionsView {
                     .multilineTextAlignment(.trailing)
                     .accessibilityIdentifier("transaction-\(transactionID)-amount-edit-field")
                     .focused($focusedEditingCell, equals: cell)
+                    .background {
+                        OutsideClickCommitObserver {
+                            commitActiveEdit()
+                        }
+                    }
                     .onAppear {
                         focusEditingCell(cell)
                     }

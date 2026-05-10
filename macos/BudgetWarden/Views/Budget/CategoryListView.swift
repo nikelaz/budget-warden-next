@@ -251,6 +251,11 @@ private extension CategoryListView {
                     .textFieldStyle(.roundedBorder)
                     .accessibilityIdentifier("category-title-edit-field")
                     .focused($focusedEditingCell, equals: .title(categoryID))
+                    .background {
+                        OutsideClickCommitObserver {
+                            commitTitleEdit(for: categoryID)
+                        }
+                    }
                     .onAppear {
                         focusEditingCell(.title(categoryID))
                     }
@@ -292,6 +297,11 @@ private extension CategoryListView {
                     .accessibilityIdentifier("category-\(column.id)-edit-field")
                     .frame(width: column.width)
                     .focused($focusedEditingCell, equals: .amount(categoryID, column.id))
+                    .background {
+                        OutsideClickCommitObserver {
+                            commitAmountEdit(for: categoryID, column: column)
+                        }
+                    }
                     .onAppear {
                         focusEditingCell(.amount(categoryID, column.id))
                     }
@@ -533,6 +543,66 @@ private enum EditingCell: Hashable {
 private enum NewCategoryField: Hashable {
     case title
     case amount(Swift.String)
+}
+
+struct OutsideClickCommitObserver: NSViewRepresentable {
+    let onOutsideClick: () -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        context.coordinator.view = view
+        context.coordinator.onOutsideClick = onOutsideClick
+        context.coordinator.installMonitor()
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.view = nsView
+        context.coordinator.onOutsideClick = onOutsideClick
+        context.coordinator.installMonitor()
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator {
+        weak var view: NSView?
+        var onOutsideClick: (() -> Void)?
+        private var monitor: Any?
+
+        deinit {
+            if let monitor {
+                NSEvent.removeMonitor(monitor)
+            }
+        }
+
+        func installMonitor() {
+            guard monitor == nil else {
+                return
+            }
+
+            monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+                self?.handle(event)
+                return event
+            }
+        }
+
+        private func handle(_ event: NSEvent) {
+            guard
+                let view,
+                let window = view.window,
+                event.window === window
+            else {
+                return
+            }
+
+            let frameInWindow = view.convert(view.bounds, to: nil)
+            if !frameInWindow.contains(event.locationInWindow) {
+                onOutsideClick?()
+            }
+        }
+    }
 }
 
 private struct CategoryDropDelegate: DropDelegate {

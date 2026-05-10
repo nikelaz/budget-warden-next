@@ -11,20 +11,11 @@
 import Foundation
 import Combine
 
-enum BudgetDialogHost {
-    case welcome
-    case workspace
-}
-
 @MainActor
 final class BudgetStore: ObservableObject {
     @Published private(set) var budgetRows: [BudgetRow] = []
     @Published var externalBudgetURL: URL?
     @Published var selectedBudgetURL: URL?
-    @Published var isCreatingBudget = false
-    @Published var isConfiguringVault = false
-    @Published var isShowingPreferences = false
-    @Published var dialogHost: BudgetDialogHost?
     @Published var presentedError: Swift.String?
     @Published var selectedCurrency: AppCurrency {
         didSet {
@@ -87,42 +78,16 @@ final class BudgetStore: ObservableObject {
         vault.configuredLocalParentURL()
     }
 
-    func showCreateBudget(from host: BudgetDialogHost) {
-        presentedError = nil
-        dialogHost = host
-        isCreatingBudget = true
-    }
-
-    func showVaultSetup(from host: BudgetDialogHost) {
-        presentedError = nil
-        dialogHost = host
-        isConfiguringVault = true
-    }
-
-    func showPreferences(from host: BudgetDialogHost) {
-        dialogHost = host
-        isShowingPreferences = true
-    }
-
     func selectBudget(_ budget: BudgetRow) {
         selectedBudgetURL = budget.url
         loadSelectedBudget()
     }
 
     func cancelCreateBudget() {
-        isCreatingBudget = false
-        clearDialogHostIfIdle()
     }
 
     func cancelVaultSetup() {
         pendingDraft = nil
-        isConfiguringVault = false
-        clearDialogHostIfIdle()
-    }
-
-    func closePreferences() {
-        isShowingPreferences = false
-        clearDialogHostIfIdle()
     }
 
     func loadBudgets() {
@@ -145,20 +110,19 @@ final class BudgetStore: ObservableObject {
         }
     }
 
-    func createBudget(_ draft: BudgetDraft) {
+    @discardableResult
+    func createBudget(_ draft: BudgetDraft) -> Bool {
         pendingDraft = draft
 
         do {
             _ = try vault.resolveVaultURL()
             savePendingBudget()
+            return true
         } catch BudgetError.vaultNotConfigured {
-            isCreatingBudget = false
-
-            DispatchQueue.main.async {
-                self.isConfiguringVault = true
-            }
+            return false
         } catch {
             presentedError = error.localizedDescription
+            return false
         }
     }
 
@@ -173,10 +137,8 @@ final class BudgetStore: ObservableObject {
     func configureVault(parentURL: URL) {
         do {
             try vault.configureVault(parentURL: parentURL)
-            isConfiguringVault = false
 
             if pendingDraft == nil {
-                clearDialogHostIfIdle()
                 loadBudgets()
             } else {
                 savePendingBudget()
@@ -455,11 +417,9 @@ final class BudgetStore: ObservableObject {
         do {
             let savedURL = try createBudgetCore(draft)
             pendingDraft = nil
-            isCreatingBudget = false
             budgetRows = try loadVaultBudgets()
             externalBudgetURL = nil
             selectedBudgetURL = savedURL
-            clearDialogHostIfIdle()
             revision += 1
         } catch {
             presentedError = error.localizedDescription
@@ -844,11 +804,5 @@ final class BudgetStore: ObservableObject {
 
     nonisolated private static func sortByFileName(_ lhs: BudgetRow, _ rhs: BudgetRow) -> Bool {
         lhs.url.lastPathComponent.localizedStandardCompare(rhs.url.lastPathComponent) == .orderedAscending
-    }
-
-    private func clearDialogHostIfIdle() {
-        if !isCreatingBudget && !isConfiguringVault && !isShowingPreferences {
-            dialogHost = nil
-        }
     }
 }
