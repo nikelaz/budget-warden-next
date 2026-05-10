@@ -32,26 +32,14 @@ struct MainLayoutView: View {
                 case .reporting:
                     ReportingView(
                         store: store,
-                        budgets: store.availableBudgetRows,
+                        windowStore: windowStore,
                         budget: selectedBudget,
-                        currency: store.selectedCurrency,
-                        selectedBudgetURL: store.selectedBudgetURL,
-                        onCreateBudget: windowStore.showCreateBudget,
-                        onSelectBudget: store.selectBudget,
-                        onAddTransaction: store.addTransaction
                     )
                 case .transactions:
                     TransactionsView(
                         store: store,
-                        budgets: store.availableBudgetRows,
+                        windowStore: windowStore,
                         budget: selectedBudget,
-                        currency: store.selectedCurrency,
-                        selectedBudgetURL: store.selectedBudgetURL,
-                        onCreateBudget: windowStore.showCreateBudget,
-                        onSelectBudget: store.selectBudget,
-                        onAddTransaction: store.addTransaction,
-                        onUpdateTransaction: store.updateTransaction,
-                        onRemoveTransaction: store.removeTransaction
                     )
                 }
             } else {

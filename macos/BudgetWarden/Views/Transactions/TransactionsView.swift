@@ -12,15 +12,8 @@ import SwiftUI
 
 struct TransactionsView: View {
     @ObservedObject var store: BWStore
-    let budgets: [BudgetRow]
+    @ObservedObject var windowStore: BWWindowStore
     let budget: BudgetRow
-    let currency: AppCurrency
-    let selectedBudgetURL: URL?
-    let onCreateBudget: () -> Void
-    let onSelectBudget: (BudgetRow) -> Void
-    let onAddTransaction: (TransactionDraft) -> Void
-    let onUpdateTransaction: (TransactionUpdate) -> Void
-    let onRemoveTransaction: (Int) -> Void
 
     @State private var isCreatingTransaction = false
     @State private var searchText = ""
@@ -102,11 +95,11 @@ struct TransactionsView: View {
         .toolbar {
             ToolbarItemGroup(placement: .principal) {
                 Menu {
-                    ForEach(budgets) { budget in
+                    ForEach(store.availableBudgetRows) { budget in
                         Button {
-                            onSelectBudget(budget)
+                            store.selectBudget(budget)
                         } label: {
-                            if selectedBudgetURL?.standardizedFileURL == budget.url.standardizedFileURL {
+                            if store.selectedBudgetURL?.standardizedFileURL == budget.url.standardizedFileURL {
                                 Label(budget.title, systemImage: "checkmark")
                             } else {
                                 Text(budget.title)
@@ -117,7 +110,7 @@ struct TransactionsView: View {
                     Divider()
 
                     Button {
-                        onCreateBudget()
+                        windowStore.showCreateBudget()
                     } label: {
                         Label("New Budget", systemImage: "plus")
                     }
@@ -177,7 +170,7 @@ struct TransactionsView: View {
                 store: store,
                 budgetURL: budget.url,
                 onSave: { draft in
-                    onAddTransaction(draft)
+                    store.addTransaction(draft)
                     isCreatingTransaction = false
                 },
                 onCancel: {
@@ -385,7 +378,7 @@ private extension TransactionsView {
                     }
             } else {
                 tableText(
-                    amount.formattedMoneyAmount(currency: currency),
+                    amount.formattedMoneyAmount(currency: store.selectedCurrency),
                     transactionID: transactionID,
                     alignment: .trailing,
                     accessibilityIdentifier: "transaction-amount-cell-\(title.accessibilityIdentifierComponent)"
@@ -489,7 +482,7 @@ private extension TransactionsView {
         transactionsPendingRemoval = []
 
         for transactionID in transactionIDs {
-            onRemoveTransaction(transactionID)
+            store.removeTransaction(transactionID: transactionID)
         }
     }
 
@@ -560,7 +553,7 @@ private extension TransactionsView {
     }
 
     func commit(_ update: TransactionUpdate) {
-        onUpdateTransaction(update)
+        store.updateTransaction(update)
         discardEdit()
     }
 
@@ -612,7 +605,7 @@ private extension TransactionsView {
             transaction.date.formattedDate,
             transaction.category_title.swiftString(),
             transaction.categoryType?.title ?? "",
-            amount.formattedMoneyAmount(currency: currency),
+            amount.formattedMoneyAmount(currency: store.selectedCurrency),
             amount.moneyAmountInputText
         ].joined(separator: " ")
 

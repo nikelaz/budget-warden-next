@@ -114,18 +114,10 @@ struct BudgetDetailView: View {
             store: store,
             budgetURL: budget.url,
             type: type,
-            currency: store.selectedCurrency
-        ) { title, amountPlanned, amountAccumulated in
-            store.addCategory(title: title, amountPlanned: amountPlanned, amountAccumulated: amountAccumulated, type: type)
-        } onUpdateCategory: { update in
-            store.updateCategory(update)
-        } onRemoveCategory: { categoryID in
-            store.removeCategory(categoryID: categoryID)
-        } onReorderCategories: { orderedCategoryIDs in
-            store.reorderCategories(type: type, orderedCategoryIDs: orderedCategoryIDs)
-        } onAddTransaction: { categoryID in
-            transactionCategoryID = categoryID
-            isCreatingTransaction = true
-        }
+            onAddTransaction: { categoryID in
+                transactionCategoryID = categoryID
+                isCreatingTransaction = true
+            }
+        )
     }
 }

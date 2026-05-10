@@ -16,11 +16,6 @@ struct CategoryListView: View {
     @ObservedObject var store: BWStore
     let budgetURL: URL
     let type: BudgetCategoryType
-    let currency: AppCurrency
-    let onAddCategory: (Swift.String, UInt64, UInt64) -> Void
-    let onUpdateCategory: (CategoryUpdate) -> Void
-    let onRemoveCategory: (Int) -> Void
-    let onReorderCategories: ([Int]) -> Void
     let onAddTransaction: (Int) -> Void
 
     @State private var isCreatingCategory = false
@@ -85,7 +80,7 @@ struct CategoryListView: View {
             presenting: categoryPendingRemoval
         ) { category in
             Button("Delete Category", role: .destructive) {
-                onRemoveCategory(category)
+                store.removeCategory(categoryID: category)
                 categoryPendingRemoval = nil
             }
 
@@ -238,7 +233,9 @@ private extension CategoryListView {
                 categoryIDs: categoryIDs,
                 draggedCategoryID: $draggedCategoryID,
                 dropTargetCategoryID: $dropTargetCategoryID,
-                onReorderCategories: onReorderCategories
+                onReorderCategories: { orderedCategoryIDs in
+                    store.reorderCategories(type: type, orderedCategoryIDs: orderedCategoryIDs)
+                }
             )
         )
         .contextMenu {
@@ -412,7 +409,12 @@ private extension CategoryListView {
             return
         }
 
-        onAddCategory(title, planned, type.allowsAccumulatedAmount ? accumulated : 0)
+        store.addCategory(
+            title: title,
+            amountPlanned: planned,
+            amountAccumulated: type.allowsAccumulatedAmount ? accumulated : 0,
+            type: type
+        )
         isCreatingCategory = false
         newCategoryTitle = ""
         newCategoryPlanned = "0"
@@ -499,7 +501,7 @@ private extension CategoryListView {
             return
         }
 
-        onUpdateCategory(
+        store.updateCategory(
             CategoryUpdate(
                 categoryID: categoryID,
                 title: title,
@@ -518,7 +520,7 @@ private extension CategoryListView {
             return
         }
 
-        onUpdateCategory(
+        store.updateCategory(
             CategoryUpdate(
                 categoryID: categoryID,
                 title: categoryTitle(categoryID),
@@ -552,7 +554,7 @@ private extension CategoryListView {
     }
 
     func formattedAmount(_ amount: UInt64) -> Swift.String {
-        amount.formattedMoneyAmount(currency: currency)
+        amount.formattedMoneyAmount(currency: store.selectedCurrency)
     }
 
     func valueColumnWidth(for column: CategoryValueColumn) -> CGFloat {

@@ -12,13 +12,8 @@ import SwiftUI
 
 struct ReportingView: View {
     @ObservedObject var store: BWStore
-    let budgets: [BudgetRow]
+    @ObservedObject var windowStore: BWWindowStore
     let budget: BudgetRow
-    let currency: AppCurrency
-    let selectedBudgetURL: URL?
-    let onCreateBudget: () -> Void
-    let onSelectBudget: (BudgetRow) -> Void
-    let onAddTransaction: (TransactionDraft) -> Void
 
     @State private var isCreatingTransaction = false
 
@@ -26,7 +21,7 @@ struct ReportingView: View {
         BudgetReportingView(
             store: store,
             budgetURL: budget.url,
-            currency: currency,
+            currency: store.selectedCurrency,
             isExpanded: .constant(true),
             scope: .fullPage
         )
@@ -34,11 +29,11 @@ struct ReportingView: View {
         .toolbar {
             ToolbarItemGroup(placement: .principal) {
                 Menu {
-                    ForEach(budgets) { budget in
+                    ForEach(store.availableBudgetRows) { budget in
                         Button {
-                            onSelectBudget(budget)
+                            store.selectBudget(budget)
                         } label: {
-                            if selectedBudgetURL?.standardizedFileURL == budget.url.standardizedFileURL {
+                            if store.selectedBudgetURL?.standardizedFileURL == budget.url.standardizedFileURL {
                                 Label(budget.title, systemImage: "checkmark")
                             } else {
                                 Text(budget.title)
@@ -49,7 +44,7 @@ struct ReportingView: View {
                     Divider()
 
                     Button {
-                        onCreateBudget()
+                        windowStore.showCreateBudget()
                     } label: {
                         Label("New Budget", systemImage: "plus")
                     }
@@ -65,7 +60,7 @@ struct ReportingView: View {
                 budgetURL: budget.url,
                 initialCategoryID: nil,
                 onSave: { draft in
-                    onAddTransaction(draft)
+                    store.addTransaction(draft)
                     isCreatingTransaction = false
                 },
                 onCancel: {
