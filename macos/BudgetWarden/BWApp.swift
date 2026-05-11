@@ -12,17 +12,10 @@ import SwiftUI
 
 @main
 struct BWApp: App {
-    init() {
-        var vault = BWVault()
-
-        let start = CFAbsoluteTimeGetCurrent()
-        vault.readBudgetsFromVault()
-        print("Took \((CFAbsoluteTimeGetCurrent() - start) * 1000) ms")
-    }
+    @StateObject private var store = BWStore()
 
     var body: some Scene {
-        WindowGroup {
-            ContentView()
-        }
+        BWWelcomeWindow()
+            .environmentObject(store)
     }
 }
