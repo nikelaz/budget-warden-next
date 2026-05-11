@@ -12,13 +12,22 @@ import SwiftUI
 
 @main
 struct BWApp: App {
-    @StateObject private var store = BWStore()
+    init() {
+        let fileContentsOptional = BWFiles.openAndReadFile();
+
+        if fileContentsOptional == nil {
+            print("file contents are nil")
+            return
+        }
+
+        let fileContents = fileContentsOptional!
+
+        print(fileContents)
+    }
 
     var body: some Scene {
-        WelcomeWindow(store: store)
-        MainWindow(store: store)
-            .commands {
-                BWCommands()
-            }
+        WindowGroup {
+            ContentView()
+        }
     }
 }

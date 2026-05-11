@@ -8,8 +8,12 @@
  *
  */
 
-enum BWError: Error {
-    case encodingJson 
-    case decodingJson
-    case savingFile
+import Foundation
+
+struct BWTransaction: Codable {
+    var id: UUID = UUID()
+    var title: String
+    var description: String = ""
+    var date: Date 
+    var amount: UInt64 = 0
 }

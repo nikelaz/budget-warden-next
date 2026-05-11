@@ -1,6 +1,6 @@
 # Budget Warden
 
-Budget Warden is a source-available macOS budgeting app backed by a small C core. It stores budgets as plain JSON `.budget` files, keeps the budgeting logic in `core/`, and exposes the user experience through a native SwiftUI app in `macos/`.
+Budget Warden is a source-available SwiftUI macOS budgeting app. It stores budgets as plain JSON `.budget` files and keeps the budget model, file loading, and user experience in the Swift app.
 
 ## Features
 
@@ -17,7 +17,6 @@ Budget Warden is a source-available macOS budgeting app backed by a small C core
 
 ```text
 .
-├── core/       C17 budgeting engine, JSON serialization, and core tests
 ├── macos/      SwiftUI macOS app and Xcode test targets
 ├── templates/  Starter .budget templates
 └── LICENSE     Source-available educational license
@@ -27,26 +26,15 @@ Budget Warden is a source-available macOS budgeting app backed by a small C core
 
 - macOS
 - Xcode with `xcodebuild`
-- Clang with C17 support
-
 The macOS project currently targets macOS `26.4` and uses Swift `5.0` settings in the Xcode project.
 
 ## Development
 
-The project has separate test scripts for the C core and macOS app.
-
-Run the C core tests:
-
-```sh
-cd core
-./test.sh
-```
-
-Run the macOS app tests:
+Build the macOS app:
 
 ```sh
 cd macos
-./test.sh
+./build.sh
 ```
 
 Open the app project in Xcode:
@@ -71,23 +59,10 @@ Amounts are stored as integer minor units. For example, `480000` represents `4,8
 
 The SwiftUI app is organized around:
 
-- `BudgetStore`, which coordinates app state and user actions.
-- `BudgetRepository`, which reads, writes, and mutates `.budget` files through the C core.
-- `BudgetVault`, which manages the configured storage folder and security-scoped access.
+- `Budget`, the single Swift model for budget data, JSON serialization, category logic, totals, and transactions.
+- `BWStore`, which coordinates app state, user actions, and selected-budget persistence.
+- `BWBudgetVault`, which manages the configured storage folder and security-scoped access.
 - SwiftUI views for welcome, budget, reporting, transactions, dialogs, and shared layout.
-
-The app bridges into the C core through `BudgetWarden-Bridging-Header.h`.
-
-## C Core
-
-The core library is written in C17 and provides:
-
-- budget, category, and transaction models
-- date and string helpers
-- arena allocation utilities
-- JSON parsing and serialization
-
-JSON support is provided by the vendored `cJSON` dependency in `core/vendor/cJSON/`.
 
 ## License
 

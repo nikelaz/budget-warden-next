@@ -8,8 +8,9 @@
  *
  */
 
-enum BWError: Error {
-    case encodingJson 
-    case decodingJson
-    case savingFile
+enum BWCategoryType: Int, Codable {
+    case income = 1
+    case expenses = 2
+    case savings = 3
+    case debt = 4
 }

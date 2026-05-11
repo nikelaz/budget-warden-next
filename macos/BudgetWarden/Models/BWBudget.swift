@@ -8,8 +8,11 @@
  *
  */
 
-enum BWError: Error {
-    case encodingJson 
-    case decodingJson
-    case savingFile
+import Foundation
+
+struct BWBudget: Codable {
+    var id: UUID = UUID()
+    //var url: URL
+    var title: String
+    var categories: [BWCategory] = []
 }
