@@ -22,7 +22,9 @@ struct BWWelcomeWindow: Scene {
                 VStack(spacing: 10) {
                     Text("Budget Warden")
                     Button("Select Vault Folder") {
-                        store.selectVaultFolder()
+                        Task {
+                            await store.selectVaultFolder()
+                        }
                     }
                 }
 
@@ -46,7 +48,7 @@ struct BWWelcomeWindow: Scene {
             )
             .containerBackground(.thinMaterial, for: .window)
             .task {
-                store.loadBudgetsFromVault()
+                await store.loadBudgetsFromVault()
             }
         }
         .defaultSize(width: WINDOW_WIDTH, height: WINDOW_HEIGHT)

@@ -19,25 +19,23 @@ class BWStore: ObservableObject {
 
     private var vault: BWVault = BWVault()
     
-    func selectVaultFolder() {
-        let selectVaultRes = vault.selectVaultFolder()
+    func selectVaultFolder() async {
+        let selectVaultRes = await vault.selectVaultFolder()
        
         switch selectVaultRes {
             case .success:
-                loadBudgetsFromVault()
+                await loadBudgetsFromVault()
             case .failure:
-                break
+                isVaultNotSet = true
         }
     }
 
-    func loadBudgetsFromVault() {
+    func loadBudgetsFromVault() async {
         budgetsInVault = []
         budgetsInVaultLoaded = false
         isVaultNotSet = false
 
-        let vault = self.vault
-
-        let vaultReadRes = vault.readBudgetsFromVault()
+        let vaultReadRes = await vault.readBudgetsFromVault()
 
         switch vaultReadRes {
             case .failure:

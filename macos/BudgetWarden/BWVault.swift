@@ -13,7 +13,7 @@ import AppKit
 
 private let VAULT_BOOKMARK_KEY = "BW_VAULT_BOOKMARK"
 
-struct BWVault: Sendable {
+actor BWVault: Sendable {
     var url: URL?
 
     private var fileManager: FileManager {
@@ -44,7 +44,9 @@ struct BWVault: Sendable {
         }
     }
 
-    mutating func selectVaultFolder() -> Result<Void, BWError> {
+    // Runs on the UI thread because it opens a file dialog
+    @MainActor
+    func selectVaultFolder() async -> Result<Void, BWError> {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
@@ -65,8 +67,8 @@ struct BWVault: Sendable {
 
             UserDefaults.standard.set(bookmark, forKey: VAULT_BOOKMARK_KEY)
 
-
-            self.url = url
+            await setUrl(url);
+            
             return .success(())
         }
         catch {
@@ -74,54 +76,61 @@ struct BWVault: Sendable {
         }
     }
 
-    func readBudgetsFromVault() -> Result<[BWBudget], BWError> {
-        guard let url = url else {
+    // This setter is necessary as otherwise the UI thread selectVaultFolder()
+    // cannot access this class to set the URL property
+    private func setUrl(_ url: URL) {
+        self.url = url
+    }
+ 
+    func readBudgetsFromVault() async -> Result<[BWBudget], BWError> {
+        guard let url else {
             return .failure(.vaultNotSet)
         }
 
-        // This startAccessing... call is needed in order to use the permissions
-        // granted from the "security bookmark"
+        return await Task.detached(priority: .userInitiated) {
+            Self.readBudgetsFromDirectory(url: url)
+        }.value
+    }
+
+    private static func readBudgetsFromDirectory(url: URL) -> Result<[BWBudget], BWError> {
         let didStartAccessing = url.startAccessingSecurityScopedResource()
 
-        defer {
-            if didStartAccessing {
-                url.stopAccessingSecurityScopedResource()
-            }
-        }
-
-        let budgets = readBudgetsFromDirectory(url: url)
-
-        return .success(budgets)
-    }
- 
-    private func readBudgetsFromDirectory(url: URL) -> [BWBudget] {
-        guard let files = try? fileManager.contentsOfDirectory(
-            at: url,
-            includingPropertiesForKeys: nil
-        ) else {
-            return []
-        }
-
-        let budgetFiles = files.filter { $0.pathExtension == "budget" }
-
-        var budgets: [BWBudget] = []
-
-        for file in budgetFiles {
-            guard let json = try? String(contentsOf: file, encoding: .utf8) else {
-                continue
+            defer {
+                if didStartAccessing {
+                    url.stopAccessingSecurityScopedResource()
+                }
             }
 
-            let result = BWCodec.decodeBudget(json: json)
+        do {
+            let files = try FileManager.default.contentsOfDirectory(
+                    at: url,
+                    includingPropertiesForKeys: nil
+                    )
 
-            switch result {
-            case .success(let budget):
-                budgets.append(budget)
+                let budgetFiles = files.filter {
+                    $0.pathExtension.lowercased() == "budget"
+                }
 
-            case .failure:
-                continue
-            }
+            var budgets: [BWBudget] = []
+
+                for file in budgetFiles {
+                    guard let json = try? String(contentsOf: file, encoding: .utf8) else {
+                        continue
+                    }
+
+                    switch BWCodec.decodeBudget(json: json) {
+                        case .success(let budget):
+                            budgets.append(budget)
+
+                        case .failure:
+                                continue
+                    }
+                }
+
+            return .success(budgets)
+        } catch {
+            print(error)
+                return .failure(.vaultNotSet)
         }
-
-        return budgets
     }
 }
