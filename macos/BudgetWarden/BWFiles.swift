@@ -13,7 +13,7 @@ import UniformTypeIdentifiers
 
 private let budgetFileType = UTType(filenameExtension: "budget") ?? .data
 
-struct BWFiles {
+class BWFiles {
     static func openAndReadFile() -> String? {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [budgetFileType]

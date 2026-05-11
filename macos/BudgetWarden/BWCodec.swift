@@ -10,7 +10,7 @@
 
 import Foundation
 
-struct BWCodec {
+nonisolated class BWCodec {
     private static let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
@@ -36,15 +36,18 @@ struct BWCodec {
         return .success(json)
     }
 
-    static func decodeBudget(json: String) -> Result<BWBudget, BWError> {
+    static func decodeBudget(json: String, url: URL) -> Result<BWBudget, BWError> {
         guard let data = json.data(using: .utf8) else {
             return .failure(.decodingJson)
         }
 
-        guard let budget = try? Self.decoder.decode(BWBudget.self, from: data) else {
+        guard var budget = try? Self.decoder.decode(BWBudget.self, from: data) else {
             return .failure(.decodingJson)
         }
+        
+        budget.url = url
 
         return .success(budget)
     }
 }
+

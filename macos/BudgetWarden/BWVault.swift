@@ -11,10 +11,9 @@
 import Foundation
 import AppKit
 
-private let VAULT_BOOKMARK_KEY = "BW_VAULT_BOOKMARK"
-
 actor BWVault: Sendable {
     var url: URL?
+    
 
     private var fileManager: FileManager {
         FileManager.default
@@ -24,7 +23,7 @@ actor BWVault: Sendable {
         // Vault folder is saved to "UserDefaults" as a "security bookmark"
         // which gives permissions to the app to access a folder, and stores
         // some details about the folder, like the URL
-        guard let bookmark = UserDefaults.standard.data(forKey: VAULT_BOOKMARK_KEY) else {
+        guard let bookmark = UserDefaults.standard.data(forKey: "BW_VAULT_BOOKMARK") else {
             return
         }
 
@@ -65,7 +64,7 @@ actor BWVault: Sendable {
                 options: .withSecurityScope,
             )
 
-            UserDefaults.standard.set(bookmark, forKey: VAULT_BOOKMARK_KEY)
+            UserDefaults.standard.set(bookmark, forKey: "BW_VAULT_BOOKMARK")
 
             await setUrl(url);
             
@@ -118,7 +117,7 @@ actor BWVault: Sendable {
                         continue
                     }
 
-                    switch BWCodec.decodeBudget(json: json) {
+                    switch BWCodec.decodeBudget(json: json, url: file) {
                         case .success(let budget):
                             budgets.append(budget)
 

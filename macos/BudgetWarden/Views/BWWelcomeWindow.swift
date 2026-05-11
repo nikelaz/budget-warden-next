@@ -16,26 +16,117 @@ private let WINDOW_HEIGHT: CGFloat = 420
 struct BWWelcomeWindow: Scene { 
     @EnvironmentObject var store: BWStore
 
+    var leftColumn: some View {
+        VStack(alignment: .center, spacing: 20) {
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .frame(width: 130, height: 130)
+                .accessibilityHidden(true)
+            
+            Text("Budget Warden")
+                .font(.largeTitle)
+                .fontWeight(.semibold)
+            
+            VStack(alignment: .center, spacing: 10) {
+                Button("Create New Budget", systemImage: "plus") {
+                }
+                
+                Button("Open Budget", systemImage: "folder") {
+                }
+                
+                Button("Select Vault Folder", systemImage: "externaldrive") {
+                    Task {
+                        await store.selectVaultFolder()
+                    }
+                }
+            }
+            
+            Spacer()
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity)
+    }
+
+    var noBudgetsMessage: some View {
+        ContentUnavailableView(
+            "No Budgets",
+            systemImage: "tray",
+            description: Text("Create a new budget to get started")
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    var budgetsScrollView: some View {
+        ScrollView {
+             VStack(spacing: 5) {
+                 ForEach(store.budgetsInVault) { budget in
+                     Button {
+                         //store.selectBudget(budget)
+                         //openMainWindow()
+                     } label: {
+                         BudgetRowView(budget: budget)
+                             .frame(maxWidth: .infinity, alignment: .leading)
+                     }
+                     .contextMenu {
+                         Button {
+                             if budget.url == nil {
+                                 return
+                             }
+                             NSWorkspace.shared.activateFileViewerSelecting([budget.url!])
+                         } label: {
+                             Label("Show in Finder", systemImage: "folder")
+                         }
+
+                         Button(role: .destructive) {
+                             //onRemoveBudget(budget)
+                         } label: {
+                             Label("Remove from Vault", systemImage: "trash")
+                         }
+                     }
+                 }
+             }
+         }
+    }
+
+    var rightColumn: some View {
+        VStack(alignment: .center, spacing: 10) {
+            Spacer()
+            
+            Text("Budgets in Vault")
+                .font(.headline)
+
+            if store.isVaultNotSet {
+                noBudgetsMessage
+            }
+            else if !store.budgetsInVaultLoaded {
+                ProgressView()
+                    .controlSize(.large)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            else if store.budgetsInVault.isEmpty {
+                noBudgetsMessage
+            }
+            else {
+                budgetsScrollView
+            }
+            
+            Spacer()
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity)
+    }
+
     var body: some Scene {
         WindowGroup("Budget Warden", id: "welcome") {
             HStack(spacing: 30) {
-                VStack(spacing: 10) {
-                    Text("Budget Warden")
-                    Button("Select Vault Folder") {
-                        Task {
-                            await store.selectVaultFolder()
-                        }
-                    }
-                }
+                leftColumn
 
                 if store.isVaultNotSet {
                     Text("Vault is not set")
                 } else if !store.budgetsInVaultLoaded {
                     ProgressView("Loading budgets...")
                 } else {
-                    List(store.budgetsInVault, id: \.id) { budget in
-                        Text(budget.title)
-                    }
+                    rightColumn
                 }
             }
             .frame(
@@ -55,5 +146,23 @@ struct BWWelcomeWindow: Scene {
         .defaultLaunchBehavior(.presented)
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
+    }
+}
+
+struct BudgetRowView: View {
+    let budget: BWBudget
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(budget.title)
+                .font(.headline)
+
+            if (budget.url != nil) {
+                Text(budget.url!.lastPathComponent)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
