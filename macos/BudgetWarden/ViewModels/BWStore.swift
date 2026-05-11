@@ -26,7 +26,7 @@ class BWStore: ObservableObject {
             case .success:
                 await loadBudgetsFromVault()
             case .failure:
-                isVaultNotSet = true
+                break
         }
     }
 

@@ -15,6 +15,37 @@ private let WINDOW_HEIGHT: CGFloat = 420
 
 struct BWWelcomeWindow: Scene { 
     @EnvironmentObject var store: BWStore
+    @StateObject private var windowStore = BWWindowStore()
+
+    var body: some Scene {
+        WindowGroup("Budget Warden", id: "welcome") {
+            HStack(spacing: 0) {
+                leftColumn
+                rightColumn
+            }
+            .frame(
+                minWidth: WINDOW_WIDTH,
+                idealWidth: WINDOW_WIDTH,
+                maxWidth: WINDOW_WIDTH,
+                minHeight: WINDOW_HEIGHT,
+                idealHeight: WINDOW_HEIGHT,
+                maxHeight: WINDOW_HEIGHT
+            )
+            .containerBackground(.thinMaterial, for: .window)
+            .task {
+                await store.loadBudgetsFromVault()
+            }
+            .sheet(isPresented: $windowStore.isBudgetDialogOpen) {
+                CreateBudgetView()
+                .environmentObject(windowStore)
+                .frame(minWidth: 420)
+            }
+        }
+        .defaultSize(width: WINDOW_WIDTH, height: WINDOW_HEIGHT)
+        .defaultLaunchBehavior(.presented)
+        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentSize)
+    }
 
     var leftColumn: some View {
         VStack(alignment: .center, spacing: 20) {
@@ -29,6 +60,7 @@ struct BWWelcomeWindow: Scene {
             
             VStack(alignment: .center, spacing: 10) {
                 Button("Create New Budget", systemImage: "plus") {
+                    windowStore.openBudgetDialog()
                 }
                 
                 Button("Open Budget", systemImage: "folder") {
@@ -114,38 +146,6 @@ struct BWWelcomeWindow: Scene {
         }
         .padding(20)
         .frame(maxWidth: .infinity)
-    }
-
-    var body: some Scene {
-        WindowGroup("Budget Warden", id: "welcome") {
-            HStack(spacing: 30) {
-                leftColumn
-
-                if store.isVaultNotSet {
-                    Text("Vault is not set")
-                } else if !store.budgetsInVaultLoaded {
-                    ProgressView("Loading budgets...")
-                } else {
-                    rightColumn
-                }
-            }
-            .frame(
-                minWidth: WINDOW_WIDTH,
-                idealWidth: WINDOW_WIDTH,
-                maxWidth: WINDOW_WIDTH,
-                minHeight: WINDOW_HEIGHT,
-                idealHeight: WINDOW_HEIGHT,
-                maxHeight: WINDOW_HEIGHT
-            )
-            .containerBackground(.thinMaterial, for: .window)
-            .task {
-                await store.loadBudgetsFromVault()
-            }
-        }
-        .defaultSize(width: WINDOW_WIDTH, height: WINDOW_HEIGHT)
-        .defaultLaunchBehavior(.presented)
-        .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
     }
 }
 
