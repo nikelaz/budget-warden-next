@@ -12,4 +12,5 @@ enum BWError: Error {
     case encodingJson 
     case decodingJson
     case savingFile
+    case vaultNotSet
 }

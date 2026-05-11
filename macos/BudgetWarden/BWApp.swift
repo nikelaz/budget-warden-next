@@ -13,16 +13,11 @@ import SwiftUI
 @main
 struct BWApp: App {
     init() {
-        let fileContentsOptional = BWFiles.openAndReadFile();
+        var vault = BWVault()
 
-        if fileContentsOptional == nil {
-            print("file contents are nil")
-            return
-        }
-
-        let fileContents = fileContentsOptional!
-
-        print(fileContents)
+        let start = CFAbsoluteTimeGetCurrent()
+        vault.readBudgetsFromVault()
+        print("Took \((CFAbsoluteTimeGetCurrent() - start) * 1000) ms")
     }
 
     var body: some Scene {
