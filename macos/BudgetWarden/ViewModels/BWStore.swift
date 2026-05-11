@@ -17,12 +17,25 @@ class BWStore: ObservableObject {
     @Published var budgetsInVaultLoaded: Bool = false
     @Published var isVaultNotSet: Bool = false
 
-    private let vault: BWVault = BWVault()
+    private var vault: BWVault = BWVault()
+    
+    func selectVaultFolder() {
+        let selectVaultRes = vault.selectVaultFolder()
+       
+        switch selectVaultRes {
+            case .success:
+                loadBudgetsFromVault()
+            case .failure:
+                break
+        }
+    }
 
     func loadBudgetsFromVault() {
         budgetsInVault = []
         budgetsInVaultLoaded = false
         isVaultNotSet = false
+
+        let vault = self.vault
 
         let vaultReadRes = vault.readBudgetsFromVault()
 

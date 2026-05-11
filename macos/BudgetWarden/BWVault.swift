@@ -11,37 +11,67 @@
 import Foundation
 import AppKit
 
-private let VAULT_PATH_KEY = "BW_VAULT_PATH"
+private let VAULT_BOOKMARK_KEY = "BW_VAULT_BOOKMARK"
 
-struct BWVault {
-    private let fileManager = FileManager.default
+struct BWVault: Sendable {
     var url: URL?
 
+    private var fileManager: FileManager {
+        FileManager.default
+    }
+
     init() {
-        if let path = UserDefaults.standard.string(forKey: VAULT_PATH_KEY) {
-            self.url = URL(fileURLWithPath: path)
-        } else {
+        // Vault folder is saved to "UserDefaults" as a "security bookmark"
+        // which gives permissions to the app to access a folder, and stores
+        // some details about the folder, like the URL
+        guard let bookmark = UserDefaults.standard.data(forKey: VAULT_BOOKMARK_KEY) else {
+            return
+        }
+
+        do {
+            var isStale = false
+
+            let resolvedUrl = try URL(
+                resolvingBookmarkData: bookmark,
+                options: .withSecurityScope,
+                bookmarkDataIsStale: &isStale
+            )
+
+            self.url = resolvedUrl
+        }
+        catch {
             self.url = nil
         }
     }
 
-    mutating func selectVaultFolder() -> URL? {
+    mutating func selectVaultFolder() -> Result<Void, BWError> {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
 
-        if panel.runModal() != .OK {
-            return nil
+        guard panel.runModal() == .OK else {
+            return .failure(.vaultNotSet)
         }
 
-        if let selectedUrl = panel.url {
-            UserDefaults.standard.set(selectedUrl.path, forKey: VAULT_PATH_KEY)
-            self.url = selectedUrl
-            return url
+        guard let url = panel.url else {
+            return .failure(.vaultNotSet)
         }
 
-        return nil
+        do {
+            let bookmark = try url.bookmarkData(
+                options: .withSecurityScope,
+            )
+
+            UserDefaults.standard.set(bookmark, forKey: VAULT_BOOKMARK_KEY)
+
+
+            self.url = url
+            return .success(())
+        }
+        catch {
+            return .failure(.vaultNotSet)
+        }
     }
 
     func readBudgetsFromVault() -> Result<[BWBudget], BWError> {
@@ -49,12 +79,22 @@ struct BWVault {
             return .failure(.vaultNotSet)
         }
 
+        // This startAccessing... call is needed in order to use the permissions
+        // granted from the "security bookmark"
+        let didStartAccessing = url.startAccessingSecurityScopedResource()
+
+        defer {
+            if didStartAccessing {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
         let budgets = readBudgetsFromDirectory(url: url)
 
         return .success(budgets)
     }
  
-    func readBudgetsFromDirectory(url: URL) -> [BWBudget] {
+    private func readBudgetsFromDirectory(url: URL) -> [BWBudget] {
         guard let files = try? fileManager.contentsOfDirectory(
             at: url,
             includingPropertiesForKeys: nil

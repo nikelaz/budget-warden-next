@@ -10,7 +10,7 @@
 
 import Foundation
 
-struct BWBudget: Codable {
+struct BWBudget: Codable, Sendable {
     var id: UUID = UUID()
     //var url: URL
     var title: String

@@ -8,7 +8,7 @@
  *
  */
 
-enum BWError: Error {
+enum BWError: Error, Sendable {
     case encodingJson 
     case decodingJson
     case savingFile

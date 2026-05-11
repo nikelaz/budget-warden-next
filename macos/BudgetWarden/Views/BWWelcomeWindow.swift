@@ -19,7 +19,12 @@ struct BWWelcomeWindow: Scene {
     var body: some Scene {
         WindowGroup("Budget Warden", id: "welcome") {
             HStack(spacing: 30) {
-                Text("Budget Warden")
+                VStack(spacing: 10) {
+                    Text("Budget Warden")
+                    Button("Select Vault Folder") {
+                        store.selectVaultFolder()
+                    }
+                }
 
                 if store.isVaultNotSet {
                     Text("Vault is not set")
