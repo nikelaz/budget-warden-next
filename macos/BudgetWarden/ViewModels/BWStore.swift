@@ -46,4 +46,18 @@ class BWStore: ObservableObject {
                 budgetsInVaultLoaded = true
         }
     }
+
+    func createBudget(
+        title: String,
+        template: BudgetTemplateSelection,
+        windowStore: BWWindowStore
+    ) async {
+        BWRepository.createBudget(
+            title: title,
+            template: template,
+            vault: vault
+        )
+        windowStore.closeBudgetDialog()
+        await loadBudgetsFromVault()
+    }
 }

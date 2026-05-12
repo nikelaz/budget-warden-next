@@ -153,7 +153,7 @@ struct BudgetRowView: View {
     let budget: BWBudget
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 5) {
             Text(budget.title)
                 .font(.headline)
 
@@ -163,6 +163,6 @@ struct BudgetRowView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 5)
     }
 }

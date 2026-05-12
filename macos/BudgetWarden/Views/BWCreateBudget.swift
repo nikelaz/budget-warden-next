@@ -12,7 +12,7 @@
 import Foundation
 import SwiftUI
 
-private enum BudgetTemplateSelection: Hashable {
+enum BudgetTemplateSelection: Hashable {
     case basic
     case blank
     case previous(URL)
@@ -76,7 +76,13 @@ struct CreateBudgetView: View {
                 .keyboardShortcut(.cancelAction)
 
                 Button("Save") {
-                    print("save budget");
+                    Task {
+                        await store.createBudget(
+                            title: title,
+                            template: selectedTemplate,
+                            windowStore: windowStore
+                        )
+                    }
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(!isValid)
