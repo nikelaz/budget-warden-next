@@ -90,7 +90,6 @@ actor BWVault: Sendable {
         }.value
     }
 
-    // @TODO(Niki): I don't like this and the conflict in naming
     func saveFileInVault(
         fileName: String,
         fileExtension: String,
