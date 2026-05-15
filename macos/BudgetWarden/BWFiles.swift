@@ -36,9 +36,9 @@ class BWFiles {
         return try? String(contentsOf: url, encoding: .utf8)
     }
 
-    static func saveFile(url: URL, json: String) -> Result<Void, BWError> {
+    nonisolated static func saveFile(url: URL, contents: String) -> Result<Void, BWError> {
         do {
-            try json.write(to: url, atomically: true, encoding: .utf8) 
+            try contents.write(to: url, atomically: true, encoding: .utf8)
             return .success(())
         }
         catch {

@@ -35,6 +35,14 @@ struct BWWelcomeWindow: Scene {
             .task {
                 await store.loadBudgetsFromVault()
             }
+            .alert("Error", isPresented: $store.isErrorState) {
+                Button("OK") {
+                    store.isErrorState = false
+                    store.errorMessage = ""
+                }
+            } message: {
+                Text(store.errorMessage)
+            }
             .sheet(isPresented: $windowStore.isBudgetDialogOpen) {
                 CreateBudgetView()
                 .environmentObject(windowStore)

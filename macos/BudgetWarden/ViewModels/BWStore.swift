@@ -16,6 +16,8 @@ class BWStore: ObservableObject {
     @Published var budgetsInVault: [BWBudget] = []
     @Published var budgetsInVaultLoaded: Bool = false
     @Published var isVaultNotSet: Bool = false
+    @Published var isErrorState: Bool = false
+    @Published var errorMessage: String = ""
 
     private var vault: BWVault = BWVault()
     
@@ -47,17 +49,38 @@ class BWStore: ObservableObject {
         }
     }
 
+    func reloadBudgetsFromVault() async {
+        let vaultReadRes = await vault.readBudgetsFromVault()
+
+        switch vaultReadRes {
+            case .failure:
+                return
+            case .success(let budgets):
+                budgetsInVault = budgets
+        }
+    }
+
     func createBudget(
         title: String,
         template: BudgetTemplateSelection,
         windowStore: BWWindowStore
     ) async {
-        BWRepository.createBudget(
+        let budgetCreationRes = await BWBudgetService.createBudget(
             title: title,
             template: template,
             vault: vault
         )
+
+        switch budgetCreationRes {
+            case .failure:
+                isErrorState = true
+                errorMessage = "Error creating budget"
+                break 
+            case .success:
+                break
+        }
+
         windowStore.closeBudgetDialog()
-        await loadBudgetsFromVault()
+        await reloadBudgetsFromVault()
     }
 }

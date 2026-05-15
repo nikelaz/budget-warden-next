@@ -1,0 +1,16 @@
+/Users/nikolalazarov/Developer/budget-warden-next/macos/BudgetWarden/Models/BWBudget.swift
+/Users/nikolalazarov/Developer/budget-warden-next/macos/BudgetWarden/Models/BWCategory.swift
+/Users/nikolalazarov/Developer/budget-warden-next/macos/BudgetWarden/Models/BWCategoryType.swift
+/Users/nikolalazarov/Developer/budget-warden-next/macos/BudgetWarden/Models/BWTransaction.swift
+/Users/nikolalazarov/Developer/budget-warden-next/macos/BudgetWarden/Services/BWBudgetService.swift
+/Users/nikolalazarov/Developer/budget-warden-next/macos/BudgetWarden/ViewModels/BWStore.swift
+/Users/nikolalazarov/Developer/budget-warden-next/macos/BudgetWarden/ViewModels/BWWindowStore.swift
+/Users/nikolalazarov/Developer/budget-warden-next/macos/BudgetWarden/Views/BWCreateBudget.swift
+/Users/nikolalazarov/Developer/budget-warden-next/macos/BudgetWarden/Views/BWWelcomeWindow.swift
+/Users/nikolalazarov/Developer/budget-warden-next/macos/BudgetWarden/BWApp.swift
+/Users/nikolalazarov/Developer/budget-warden-next/macos/BudgetWarden/BWCodec.swift
+/Users/nikolalazarov/Developer/budget-warden-next/macos/BudgetWarden/BWError.swift
+/Users/nikolalazarov/Developer/budget-warden-next/macos/BudgetWarden/BWFiles.swift
+/Users/nikolalazarov/Developer/budget-warden-next/macos/BudgetWarden/BWTemplates.swift
+/Users/nikolalazarov/Developer/budget-warden-next/macos/BudgetWarden/BWVault.swift
+/Users/nikolalazarov/Developer/budget-warden-next/macos/.build/Build/Intermediates.noindex/BudgetWarden.build/Debug/BudgetWarden.build/DerivedSources/GeneratedAssetSymbols.swift

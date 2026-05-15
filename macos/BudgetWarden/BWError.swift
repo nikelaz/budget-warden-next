@@ -14,4 +14,6 @@ enum BWError: Error, Sendable {
     case savingFile
     case vaultNotSet
     case creatingBudget
+    case saveFailed
+    case saveCancelled
 }

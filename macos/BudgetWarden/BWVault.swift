@@ -14,7 +14,6 @@ import AppKit
 actor BWVault: Sendable {
     var url: URL?
     
-
     private var fileManager: FileManager {
         FileManager.default
     }
@@ -91,14 +90,53 @@ actor BWVault: Sendable {
         }.value
     }
 
-    private static func readBudgetsFromDirectory(url: URL) -> Result<[BWBudget], BWError> {
-        let didStartAccessing = url.startAccessingSecurityScopedResource()
+    // @TODO(Niki): I don't like this and the conflict in naming
+    func saveFileInVault(
+        fileName: String,
+        fileExtension: String,
+        contents: String
+    ) async -> Result<URL, BWError> {
+        guard let url else {
+            return .failure(.vaultNotSet)
+        }
+
+        return await Task.detached(priority: .userInitiated) {
+            let didStartAccessing = url.startAccessingSecurityScopedResource()
 
             defer {
                 if didStartAccessing {
                     url.stopAccessingSecurityScopedResource()
                 }
             }
+
+            let fileUrl = BWVault.makeUniqueVaultFileURL(
+                directoryURL: url,
+                fileName: fileName,
+                fileExtension: fileExtension
+            )
+
+            let saveFileRes = BWFiles.saveFile(
+                url: fileUrl,
+                contents: contents
+            )
+
+            switch saveFileRes {
+                case .failure(let error):
+                    return .failure(error)
+                case .success:
+                    return .success(fileUrl)
+            }
+        }.value
+    }
+
+    private static func readBudgetsFromDirectory(url: URL) -> Result<[BWBudget], BWError> {
+        let didStartAccessing = url.startAccessingSecurityScopedResource()
+
+        defer {
+            if didStartAccessing {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
 
         do {
             let files = try FileManager.default.contentsOfDirectory(
@@ -131,5 +169,27 @@ actor BWVault: Sendable {
             print(error)
                 return .failure(.vaultNotSet)
         }
+    }
+
+    private static func makeUniqueVaultFileURL(
+        directoryURL: URL,
+        fileName: String,
+        fileExtension: String
+    ) -> URL {
+        var candidateURL = directoryURL
+            .appendingPathComponent(fileName)
+            .appendingPathExtension(fileExtension)
+
+        var index = 2
+
+        while FileManager.default.fileExists(atPath: candidateURL.path) {
+            candidateURL = directoryURL
+                .appendingPathComponent("\(fileName) \(index)")
+                .appendingPathExtension(fileExtension)
+
+            index += 1
+        }
+
+        return candidateURL
     }
 }

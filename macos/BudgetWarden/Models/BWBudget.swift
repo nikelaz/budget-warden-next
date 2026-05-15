@@ -10,7 +10,7 @@
 
 import Foundation
 
-struct BWBudget: Codable, Sendable, Identifiable {
+nonisolated struct BWBudget: Codable, Sendable, Identifiable {
     // Encoded
     var id: UUID = UUID()
     var title: String
