@@ -85,11 +85,20 @@ struct BWWelcomeWindow: Scene {
                 .environmentObject(windowStore)
                 .frame(minWidth: 420)
             }
+            .sheet(isPresented: $windowStore.isVaultConfigDialogOpen) {
+                ConfigureVaultView() 
+                .environmentObject(store)
+                .environmentObject(windowStore)
+                .frame(minWidth: 420)
+            }
         }
         .defaultSize(width: WINDOW_WIDTH, height: WINDOW_HEIGHT)
         .defaultLaunchBehavior(.presented)
         .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
+        .windowResizability(.contentSize)  
+        .commands {
+            BWCommands(windowStore: windowStore)
+        }
     }
 
     var leftColumn: some View {
@@ -115,10 +124,8 @@ struct BWWelcomeWindow: Scene {
                     }
                 }
                 
-                Button("Select Vault Folder", systemImage: "externaldrive") {
-                    Task {
-                        await store.selectVaultFolder()
-                    }
+                Button("Configure Vault", systemImage: "externaldrive") {
+                    windowStore.openVaultConfigDialog()
                 }
             }
             

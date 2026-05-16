@@ -18,7 +18,7 @@ class BWStore: ObservableObject {
     @Published var budgetsInVaultLoaded: Bool = false
     @Published var isVaultNotSet: Bool = false
 
-    private var vault: BWVault = BWVault()
+    var vault: BWVault = BWVault()
     
     func selectVaultFolder() async {
         let selectVaultRes = await vault.selectVaultFolder()
@@ -64,6 +64,10 @@ class BWStore: ObservableObject {
         template: BudgetTemplateSelection,
         windowStore: BWWindowStore
     ) async {
+        if await vault.currentURL() == nil {
+            await selectVaultFolder()
+        }
+
         let budgetCreationRes = await BWBudgetService.createBudget(
             title: title,
             template: template,

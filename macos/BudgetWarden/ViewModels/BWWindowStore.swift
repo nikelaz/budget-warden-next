@@ -14,6 +14,7 @@ import SwiftUI
 @MainActor
 class BWWindowStore: ObservableObject {
     @Published var isBudgetDialogOpen = false
+    @Published var isVaultConfigDialogOpen = false
     @Published var isErrorState: Bool = false
     @Published var errorMessage: String = ""
 
@@ -33,5 +34,13 @@ class BWWindowStore: ObservableObject {
 
     func clearError() {
         isErrorState = false
+    }
+
+    func openVaultConfigDialog() {
+        isVaultConfigDialogOpen = true
+    }
+
+    func closeVaultConfigDialog() {
+        isVaultConfigDialogOpen = false
     }
 }

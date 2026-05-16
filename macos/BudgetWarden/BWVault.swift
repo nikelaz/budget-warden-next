@@ -12,6 +12,9 @@ import Foundation
 import AppKit
 
 actor BWVault: Sendable {
+    private static let vaultBookmarkKey = "BW_VAULT_BOOKMARK"
+    private static let defaultVaultFolderName = "Budget Warden Vaults"
+
     var url: URL?
     
     private var fileManager: FileManager {
@@ -22,7 +25,7 @@ actor BWVault: Sendable {
         // Vault folder is saved to "UserDefaults" as a "security bookmark"
         // which gives permissions to the app to access a folder, and stores
         // some details about the folder, like the URL
-        guard let bookmark = UserDefaults.standard.data(forKey: "BW_VAULT_BOOKMARK") else {
+        guard let bookmark = UserDefaults.standard.data(forKey: Self.vaultBookmarkKey) else {
             return
         }
 
@@ -63,7 +66,7 @@ actor BWVault: Sendable {
                 options: .withSecurityScope,
             )
 
-            UserDefaults.standard.set(bookmark, forKey: "BW_VAULT_BOOKMARK")
+            UserDefaults.standard.set(bookmark, forKey: Self.vaultBookmarkKey)
 
             await setUrl(url);
             
@@ -88,6 +91,10 @@ actor BWVault: Sendable {
         return await Task.detached(priority: .userInitiated) {
             Self.readBudgetsFromDirectory(url: url)
         }.value
+    }
+
+    func currentURL() -> URL? {
+        url
     }
 
     func saveFileInVault(
