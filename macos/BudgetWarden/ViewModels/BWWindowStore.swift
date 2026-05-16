@@ -14,6 +14,8 @@ import SwiftUI
 @MainActor
 class BWWindowStore: ObservableObject {
     @Published var isBudgetDialogOpen = false
+    @Published var isErrorState: Bool = false
+    @Published var errorMessage: String = ""
 
     func openBudgetDialog() {
         isBudgetDialogOpen = true
@@ -21,5 +23,15 @@ class BWWindowStore: ObservableObject {
 
     func closeBudgetDialog() {
         isBudgetDialogOpen = false
+    }
+
+    func setError(_ err: BWError) {
+        isErrorState = true
+        errorMessage = err.localizedDescription
+        bwLog(err)
+    }
+
+    func clearError() {
+        isErrorState = false
     }
 }

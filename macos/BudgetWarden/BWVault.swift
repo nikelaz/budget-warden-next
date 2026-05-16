@@ -51,11 +51,11 @@ actor BWVault: Sendable {
         panel.allowsMultipleSelection = false
 
         guard panel.runModal() == .OK else {
-            return .failure(.vaultNotSet)
+            return .failure(.vaultNotSet())
         }
 
         guard let url = panel.url else {
-            return .failure(.vaultNotSet)
+            return .failure(.vaultNotSet())
         }
 
         do {
@@ -70,7 +70,7 @@ actor BWVault: Sendable {
             return .success(())
         }
         catch {
-            return .failure(.vaultNotSet)
+            return .failure(.vaultNotSet())
         }
     }
 
@@ -82,7 +82,7 @@ actor BWVault: Sendable {
  
     func readBudgetsFromVault() async -> Result<[BWBudget], BWError> {
         guard let url else {
-            return .failure(.vaultNotSet)
+            return .failure(.vaultNotSet())
         }
 
         return await Task.detached(priority: .userInitiated) {
@@ -96,7 +96,7 @@ actor BWVault: Sendable {
         contents: String
     ) async -> Result<URL, BWError> {
         guard let url else {
-            return .failure(.vaultNotSet)
+            return .failure(.vaultNotSet())
         }
 
         return await Task.detached(priority: .userInitiated) {
@@ -166,7 +166,7 @@ actor BWVault: Sendable {
             return .success(budgets)
         } catch {
             print(error)
-                return .failure(.vaultNotSet)
+                return .failure(.vaultNotSet())
         }
     }
 

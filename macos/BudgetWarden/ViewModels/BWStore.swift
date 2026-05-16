@@ -16,8 +16,6 @@ class BWStore: ObservableObject {
     @Published var budgetsInVault: [BWBudget] = []
     @Published var budgetsInVaultLoaded: Bool = false
     @Published var isVaultNotSet: Bool = false
-    @Published var isErrorState: Bool = false
-    @Published var errorMessage: String = ""
 
     private var vault: BWVault = BWVault()
     
@@ -72,10 +70,10 @@ class BWStore: ObservableObject {
         )
 
         switch budgetCreationRes {
-            case .failure:
-                isErrorState = true
-                errorMessage = "Error creating budget"
-                break 
+            case .failure(let error):
+                windowStore.closeBudgetDialog()
+                windowStore.setError(error)
+                return
             case .success:
                 break
         }

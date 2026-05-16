@@ -25,12 +25,17 @@ nonisolated class BWCodec {
     }()
 
     static func encodeBudget(budget: BWBudget) -> Result<String, BWError> {
-        guard let data = try? Self.encoder.encode(budget) else {
-            return .failure(BWError.encodingJson)
+        let data: Data
+
+        do {
+            data = try Self.encoder.encode(budget)
         }
-        
+        catch {
+            return .failure(BWError.encodingJson(underlying: error))
+        }
+ 
         guard let json = String(data: data, encoding: .utf8) else { 
-            return .failure(BWError.encodingJson)
+            return .failure(BWError.encodingJson())
         }
         
         return .success(json)
@@ -38,11 +43,16 @@ nonisolated class BWCodec {
 
     static func decodeBudget(json: String, url: URL) -> Result<BWBudget, BWError> {
         guard let data = json.data(using: .utf8) else {
-            return .failure(.decodingJson)
+            return .failure(.decodingJson())
         }
+        
+        var budget: BWBudget
 
-        guard var budget = try? Self.decoder.decode(BWBudget.self, from: data) else {
-            return .failure(.decodingJson)
+        do {
+            budget = try Self.decoder.decode(BWBudget.self, from: data)
+        }
+        catch {
+            return .failure(.decodingJson(underlying: error))
         }
         
         budget.url = url

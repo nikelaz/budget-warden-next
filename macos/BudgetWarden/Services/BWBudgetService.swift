@@ -27,8 +27,8 @@ class BWBudgetService {
         var json: String = ""
 
         switch jsonRes {
-            case .failure:
-                return .failure(.creatingBudget)
+            case .failure(let error):
+                return .failure(.creatingBudget(underlying: error))
             case .success(let resJson):
                 json = resJson
         }
@@ -41,8 +41,8 @@ class BWBudgetService {
         )
 
         switch saveFileRes {
-            case .failure:
-                return .failure(.creatingBudget)
+            case .failure(let error):
+                return .failure(.creatingBudget(underlying: error))
             case .success(let fileUrl):
                 budget.url = fileUrl
 

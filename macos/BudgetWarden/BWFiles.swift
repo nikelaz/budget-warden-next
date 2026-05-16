@@ -42,7 +42,7 @@ class BWFiles {
             return .success(())
         }
         catch {
-            return .failure(.savingFile)
+            return .failure(.savingFile(underlying: error))
         }
     }
 }
