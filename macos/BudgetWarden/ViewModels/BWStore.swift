@@ -66,7 +66,8 @@ class BWStore: ObservableObject {
         let budgetCreationRes = await BWBudgetService.createBudget(
             title: title,
             template: template,
-            vault: vault
+            vault: vault,
+            budgetsInVault: budgetsInVault
         )
 
         switch budgetCreationRes {

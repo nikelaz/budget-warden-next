@@ -27,3 +27,13 @@ nonisolated struct BWBudget: Codable, Sendable, Identifiable {
         case categories
     }
 }
+
+extension BWBudget {
+    func cloneAsTemplate(newTitle: String) -> BWBudget {
+        BWBudget(
+            title: newTitle,
+            categories: categories.map { $0.cloneAsTemplate() },
+            url: nil
+        )
+    }
+}

@@ -5,7 +5,8 @@ class BWBudgetService {
     static func createBudget(
         title: String,
         template: BudgetTemplateSelection,
-        vault: BWVault
+        vault: BWVault,
+        budgetsInVault: [BWBudget]
     ) async -> Result<BWBudget, BWError> {
         var budget: BWBudget
 
@@ -16,9 +17,13 @@ class BWBudgetService {
             case .blank:
                 budget = BWBudget(title: title)
                 break
-            case .previous:
-                // @TODO(Niki): Not yet implemented
-                budget = BWBudget(title: title)
+            case .previous(let url):
+                if let prevBudget = budgetsInVault.first(where: { $0.url == url }) {
+                    budget = prevBudget.cloneAsTemplate(newTitle: title)
+                }
+                else {
+                    return .failure(.findPreviousBudget())
+                }
                 break
         }
 

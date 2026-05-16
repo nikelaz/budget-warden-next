@@ -18,6 +18,7 @@ enum BWError: Error, Sendable {
     case creatingBudget(underlying: Error? = nil)
     case saveFailed(underlying: Error? = nil)
     case saveCancelled(underlying: Error? = nil)
+    case findPreviousBudget(underlying: Error? = nil)
 }
 
 extension BWError: LocalizedError {
@@ -37,6 +38,8 @@ extension BWError: LocalizedError {
                 return "Saving failed."
             case .saveCancelled:
                 return "Saving was cancelled."
+            case .findPreviousBudget:
+                return "Could not find previous budget."
         }
     }
 }
@@ -50,7 +53,8 @@ extension BWError {
                  .creatingBudget(let error),
                  .saveFailed(let error),
                  .vaultNotSet(let error),
-                 .saveCancelled(let error):
+                 .saveCancelled(let error),
+                 .findPreviousBudget(let error):
                 return error
         }
     }

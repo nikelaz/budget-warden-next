@@ -20,3 +20,15 @@ nonisolated struct BWCategory: Codable, Sendable {
     var categoryType: BWCategoryType
     var transactions: [BWTransaction] = []
 }
+
+extension BWCategory {
+    func cloneAsTemplate() -> BWCategory {
+        BWCategory(
+            ordinal: ordinal,
+            title: title,
+            amountPlanned: amountPlanned,
+            amountAccumulated: amountAccumulated,
+            categoryType: categoryType
+        )
+    }
+}
