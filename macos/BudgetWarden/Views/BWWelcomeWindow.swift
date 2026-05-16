@@ -15,10 +15,17 @@ private let WINDOW_HEIGHT: CGFloat = 420
 
 struct BWWelcomeWindow: Scene { 
     @EnvironmentObject var store: BWStore
+
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
+
     @StateObject private var windowStore = BWWindowStore()
 
+    @State private var isDeleteBudgetDialogPresented: Bool = false
+    @State private var budgetPendingRemoval: BWBudget? = nil
+
     var body: some Scene {
-        WindowGroup("Budget Warden", id: "welcome") {
+        Window("Budget Warden", id: "window-welcome") {
             HStack(spacing: 0) {
                 leftColumn
                 rightColumn
@@ -41,6 +48,37 @@ struct BWWelcomeWindow: Scene {
                 }
             } message: {
                 Text(windowStore.errorMessage)
+            }
+            .alert(
+                "Remove Budget?",
+                isPresented: $isDeleteBudgetDialogPresented,
+                presenting: budgetPendingRemoval
+            ) { budget in
+                Button("Move to Trash", role: .destructive) {
+                    guard let budgetUrl = budget.url else {
+                        windowStore.setError(.budgetRemove())
+                        return
+                    }
+
+                    Task {
+                        await store.removeBudget(
+                            url: budgetUrl,
+                            windowStore: windowStore
+                        )
+                        budgetPendingRemoval = nil
+                    }
+                }
+
+                Button("Cancel", role: .cancel) {
+                    budgetPendingRemoval = nil
+                }
+            } message: { budget in
+                if budget.url != nil {
+                    Text("Move \(budget.url!.lastPathComponent) to Trash?")
+                }
+                else {
+                    Text("Move budget to trash?")
+                }
             }
             .sheet(isPresented: $windowStore.isBudgetDialogOpen) {
                 CreateBudgetView()
@@ -100,8 +138,9 @@ struct BWWelcomeWindow: Scene {
              VStack(spacing: 5) {
                  ForEach(store.budgetsInVault) { budget in
                      Button {
-                         //store.selectBudget(budget)
-                         //openMainWindow()
+                         store.selectBudget(budget)
+                         openWindow(id: "window-main")
+                         dismissWindow(id: "window-welcome")
                      } label: {
                          BudgetRowView(budget: budget)
                              .frame(maxWidth: .infinity, alignment: .leading)
@@ -117,7 +156,8 @@ struct BWWelcomeWindow: Scene {
                          }
 
                          Button(role: .destructive) {
-                             //onRemoveBudget(budget)
+                             budgetPendingRemoval = budget
+                             isDeleteBudgetDialogPresented = true
                          } label: {
                              Label("Remove from Vault", systemImage: "trash")
                          }

@@ -13,6 +13,7 @@ import Combine
 
 @MainActor
 class BWStore: ObservableObject {
+    @Published var currentBudget: BWBudget? = nil
     @Published var budgetsInVault: [BWBudget] = []
     @Published var budgetsInVaultLoaded: Bool = false
     @Published var isVaultNotSet: Bool = false
@@ -81,5 +82,21 @@ class BWStore: ObservableObject {
 
         windowStore.closeBudgetDialog()
         await reloadBudgetsFromVault()
+    }
+
+    func selectBudget(_ budget: BWBudget) {
+        currentBudget = budget
+    }
+
+    func removeBudget(url: URL, windowStore: BWWindowStore) async {
+        let removeBudgetRes = await vault.removeBudgetFromVault(url: url)
+
+        switch removeBudgetRes {
+            case .failure(let error):
+                windowStore.setError(error) 
+                return
+            case .success:
+                await reloadBudgetsFromVault()
+        }
     }
 }

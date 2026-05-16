@@ -17,5 +17,8 @@ struct BWApp: App {
     var body: some Scene {
         BWWelcomeWindow()
             .environmentObject(store)
+
+        BWMainWindow()
+            .environmentObject(store)
     }
 }

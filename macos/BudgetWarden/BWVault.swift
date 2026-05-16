@@ -128,6 +128,41 @@ actor BWVault: Sendable {
         }.value
     }
 
+    func removeBudgetFromVault(url budgetURL: URL) async -> Result<Void, BWError> {
+        guard let url else {
+            return .failure(.vaultNotSet())
+        }
+
+        return await Task.detached(priority: .userInitiated) {
+            let didStartAccessing = url.startAccessingSecurityScopedResource()
+
+            defer {
+                if didStartAccessing {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+
+            let directoryURL = url.standardizedFileURL
+            let fileURL = budgetURL.standardizedFileURL
+
+            guard fileURL.pathExtension.lowercased() == "budget" else {
+                return .failure(.budgetRemove())
+            }
+
+            guard fileURL.deletingLastPathComponent() == directoryURL else {
+                return .failure(.budgetRemove())
+            }
+
+            do {
+                try FileManager.default.trashItem(at: fileURL, resultingItemURL: nil)
+                return .success(())
+            }
+            catch {
+                return .failure(.budgetRemove(underlying: error))
+            }
+        }.value
+    }
+
     private static func readBudgetsFromDirectory(url: URL) -> Result<[BWBudget], BWError> {
         let didStartAccessing = url.startAccessingSecurityScopedResource()
 
