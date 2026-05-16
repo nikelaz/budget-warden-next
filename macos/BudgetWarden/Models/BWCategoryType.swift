@@ -13,4 +13,17 @@ enum BWCategoryType: Int, Codable, Sendable {
     case expenses = 2
     case savings = 3
     case debt = 4
+
+    var title: String {
+        switch self {
+        case .income:
+            return "Income"
+        case .expenses:
+            return "Expenses"
+        case .savings:
+            return "Savings"
+        case .debt:
+            return "Debt"
+        }
+    }
 }

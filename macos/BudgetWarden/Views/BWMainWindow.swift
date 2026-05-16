@@ -67,6 +67,7 @@ struct BWMainWindow: Scene {
         .defaultSize(width: 1040, height: 700)
         // @TODO(Niki): Check what this does actually
         //.windowToolbarStyle(.unified)
+        .defaultLaunchBehavior(.suppressed)
         .commands {
             BWCommands(windowStore: windowStore)
         }
