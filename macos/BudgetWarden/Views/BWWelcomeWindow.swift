@@ -109,6 +109,10 @@ struct BWWelcomeWindow: Scene {
                 }
                 
                 Button("Open Budget", systemImage: "folder") {
+                    if store.openBudget(windowStore: windowStore) {
+                        openWindow(id: "window-main")
+                        dismissWindow(id: "window-welcome")
+                    }
                 }
                 
                 Button("Select Vault Folder", systemImage: "externaldrive") {

@@ -99,4 +99,22 @@ class BWStore: ObservableObject {
                 await reloadBudgetsFromVault()
         }
     }
+
+    func openBudget(windowStore: BWWindowStore) -> Bool {
+        guard let openFileRes  = BWFiles.openAndReadFile() else {
+            return false
+        }
+
+        let budgetRes = BWCodec.decodeBudget(json: openFileRes.contents, url: openFileRes.url)
+
+        switch budgetRes {
+            case .failure(let error):
+                windowStore.setError(error)
+                return false
+            case .success(let budget):
+                currentBudget = budget
+        }
+        
+        return true
+    }
 }
