@@ -63,7 +63,7 @@ class BWStore: ObservableObject {
         title: String,
         template: BudgetTemplateSelection,
         windowStore: BWWindowStore
-    ) async {
+    ) async -> Bool {
         if await vault.currentURL() == nil {
             await selectVaultFolder()
         }
@@ -79,13 +79,12 @@ class BWStore: ObservableObject {
             case .failure(let error):
                 windowStore.closeBudgetDialog()
                 windowStore.setError(error)
-                return
-            case .success:
-                break
+                return false
+            case .success(let budget):
+                selectBudget(budget)
         }
 
-        windowStore.closeBudgetDialog()
-        await reloadBudgetsFromVault()
+        return true
     }
 
     func selectBudget(_ budget: BWBudget) {

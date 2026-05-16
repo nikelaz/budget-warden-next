@@ -22,10 +22,16 @@ struct CreateBudgetView: View {
     @EnvironmentObject var store: BWStore
     @EnvironmentObject var windowStore: BWWindowStore
 
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
+
     @State private var title: Swift.String
     @State private var selectedTemplate: BudgetTemplateSelection = .basic
 
-    init() {
+    let onCreateSuccess: () -> Void
+
+    init(onCreateSuccess: @escaping () -> Void = {}) {
+        self.onCreateSuccess = onCreateSuccess
         self._title = State(initialValue: Self.currentMonthTitle())
     }
 
@@ -77,11 +83,13 @@ struct CreateBudgetView: View {
 
                 Button("Save") {
                     Task {
-                        await store.createBudget(
+                        if await store.createBudget(
                             title: title,
                             template: selectedTemplate,
                             windowStore: windowStore
-                        )
+                        ) {
+                            onCreateSuccess()
+                        }
                     }
                 }
                 .keyboardShortcut(.defaultAction)

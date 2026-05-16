@@ -81,7 +81,9 @@ struct BWWelcomeWindow: Scene {
                 }
             }
             .sheet(isPresented: $windowStore.isBudgetDialogOpen) {
-                CreateBudgetView()
+                CreateBudgetView(
+                    onCreateSuccess: openMainOnBudgetCreation
+                )
                 .environmentObject(windowStore)
                 .frame(minWidth: 420)
             }
@@ -204,6 +206,18 @@ struct BWWelcomeWindow: Scene {
         }
         .padding(20)
         .frame(maxWidth: .infinity)
+    }
+
+    func openMainOnBudgetCreation() {
+        windowStore.closeBudgetDialog()
+        
+        // This DispatchQueue is needed, because closeBudgetDialog is async and cannot be awaited
+        // sheet closing is managed internally by SwiftUI, we just flip a flag state variable
+        // The DispatchQueue allows us to queue something to be executed after that
+        DispatchQueue.main.async {
+            dismissWindow(id: "window-welcome")
+            openWindow(id: "window-main")
+        }
     }
 }
 
