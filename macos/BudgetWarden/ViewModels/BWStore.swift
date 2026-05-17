@@ -39,14 +39,28 @@ class BWStore: ObservableObject {
         _selectedCurrency = Published(initialValue: savedCurrency ?? .defaultCurrency)
     }
     
-    func selectVaultFolder() async {
+    @discardableResult
+    func selectVaultFolder() async -> BWError? {
         let selectVaultRes = await vault.selectVaultFolder()
        
         switch selectVaultRes {
             case .success:
                 await loadBudgetsFromVault()
+                return nil
             case .failure:
-                break
+                return nil
+        }
+    }
+
+    func setVaultLocation(_ location: BWVaultLocation) async -> BWError? {
+        let setLocationRes = await vault.setLocation(location)
+
+        switch setLocationRes {
+            case .success:
+                await loadBudgetsFromVault()
+                return nil
+            case .failure(let error):
+                return error
         }
     }
 
@@ -100,6 +114,7 @@ class BWStore: ObservableObject {
                 windowStore.setError(error)
                 return false
             case .success(let budget):
+                upsertBudgetInVaultList(budget)
                 selectBudget(budget)
         }
 
@@ -131,7 +146,7 @@ class BWStore: ObservableObject {
 
         budget.categories.append(category)
         currentBudget = budget
-        updateBudgetInVaultList(budget)
+        upsertBudgetInVaultList(budget)
         cancelPendingBudgetSave(for: budget.id)
 
         let saveBudgetRes = await BWBudgetService.saveBudget(
@@ -391,7 +406,7 @@ class BWStore: ObservableObject {
 
     private func updateBudget(_ budget: BWBudget, windowStore: BWWindowStore) {
         currentBudget = budget
-        updateBudgetInVaultList(budget)
+        upsertBudgetInVaultList(budget)
         scheduleBudgetSave(budget, windowStore: windowStore)
     }
 
@@ -508,8 +523,9 @@ class BWStore: ObservableObject {
         pendingBudgetSaveSnapshots[budgetID] = nil
     }
 
-    private func updateBudgetInVaultList(_ budget: BWBudget) {
+    private func upsertBudgetInVaultList(_ budget: BWBudget) {
         guard let index = budgetsInVault.firstIndex(where: { $0.id == budget.id }) else {
+            budgetsInVault.append(budget)
             return
         }
 

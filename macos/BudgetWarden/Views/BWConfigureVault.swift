@@ -5,6 +5,7 @@ struct ConfigureVaultView: View {
     @EnvironmentObject var windowStore: BWWindowStore
 
     @State private var vaultUrl: URL? = nil
+    @State private var selectedLocation: BWVaultLocation = .local
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -17,14 +18,22 @@ struct ConfigureVaultView: View {
                     .foregroundStyle(.secondary)
             }
 
-            /*
-            @TODO(Niki): iCloud vault
             Picker("Location", selection: $selectedLocation) {
-                Text("iCloud Drive").tag(VaultLocation.iCloud)
-                Text("Local Folder").tag(VaultLocation.local)
+                ForEach(BWVaultLocation.allCases) { location in
+                    Text(location.title).tag(location)
+                }
             }
             .pickerStyle(.radioGroup)
-            */
+            .onChange(of: selectedLocation) { _, newLocation in
+                Task {
+                    if let error = await store.setVaultLocation(newLocation) {
+                        windowStore.setError(error)
+                    }
+
+                    vaultUrl = await store.vault.currentURL()
+                    selectedLocation = await store.vault.currentLocation()
+                }
+            }
 
             VStack(alignment: .leading, spacing: 10) {
                 Text("Location")
@@ -55,6 +64,7 @@ struct ConfigureVaultView: View {
         }
         .padding()
         .task {
+            selectedLocation = await store.vault.currentLocation()
             vaultUrl = await store.vault.currentURL()
         }
     }

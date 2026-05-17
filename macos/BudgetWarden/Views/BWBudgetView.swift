@@ -192,6 +192,7 @@ struct BudgetView: View {
                                 fromTypeToCreateLabel(categoryType: tableRow.categoryType),
                                 systemImage: "plus.circle"
                             )
+                            .foregroundColor(.accentColor)
                         }
                 }
             }

@@ -15,6 +15,7 @@ enum BWError: Error, Sendable {
     case decodingJson(underlying: Error? = nil)
     case savingFile(underlying: Error? = nil)
     case vaultNotSet(underlying: Error? = nil)
+    case iCloudUnavailable(underlying: Error? = nil)
     case creatingBudget(underlying: Error? = nil)
     case saveFailed(underlying: Error? = nil)
     case saveCancelled(underlying: Error? = nil)
@@ -33,6 +34,8 @@ extension BWError: LocalizedError {
                 return "Could not save the file."
             case .vaultNotSet:
                 return "No vault has been selected."
+            case .iCloudUnavailable:
+                return "iCloud Drive is not available. Make sure iCloud Drive is enabled for this Mac."
             case .creatingBudget:
                 return "Could not create the budget."
             case .saveFailed:
@@ -53,6 +56,7 @@ extension BWError {
             case .encodingJson(let error),
                  .decodingJson(let error),
                  .savingFile(let error),
+                 .iCloudUnavailable(let error),
                  .creatingBudget(let error),
                  .saveFailed(let error),
                  .vaultNotSet(let error),

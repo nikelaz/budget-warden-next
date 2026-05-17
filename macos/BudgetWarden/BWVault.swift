@@ -11,37 +11,48 @@
 import Foundation
 import AppKit
 
+enum BWVaultLocation: String, CaseIterable, Identifiable, Sendable {
+    case local
+    case iCloud
+
+    var id: String {
+        rawValue
+    }
+
+    var title: String {
+        switch self {
+            case .local:
+                return "Local Folder"
+            case .iCloud:
+                return "iCloud Drive"
+        }
+    }
+}
+
 actor BWVault: Sendable {
     private static let vaultBookmarkKey = "BW_VAULT_BOOKMARK"
+    private static let vaultLocationKey = "BW_VAULT_LOCATION"
+    private static let localVaultBookmarkKey = "BW_LOCAL_VAULT_BOOKMARK"
+    private static let iCloudVaultBookmarkKey = "BW_ICLOUD_VAULT_BOOKMARK"
     private static let defaultVaultFolderName = "Budget Warden Vaults"
 
     var url: URL?
+    private var location: BWVaultLocation
     
     private var fileManager: FileManager {
         FileManager.default
     }
 
     init() {
-        // Vault folder is saved to "UserDefaults" as a "security bookmark"
-        // which gives permissions to the app to access a folder, and stores
-        // some details about the folder, like the URL
-        guard let bookmark = UserDefaults.standard.data(forKey: Self.vaultBookmarkKey) else {
-            return
-        }
+        let savedLocation = UserDefaults.standard.string(forKey: Self.vaultLocationKey)
+            .flatMap(BWVaultLocation.init(rawValue:))
+        self.location = savedLocation ?? .local
 
-        do {
-            var isStale = false
-
-            let resolvedUrl = try URL(
-                resolvingBookmarkData: bookmark,
-                options: .withSecurityScope,
-                bookmarkDataIsStale: &isStale
-            )
-
-            self.url = resolvedUrl
-        }
-        catch {
-            self.url = nil
+        switch Self.resolveVaultURL(location: location) {
+            case .success(let url):
+                self.url = url
+            case .failure:
+                self.url = nil
         }
     }
 
@@ -66,9 +77,9 @@ actor BWVault: Sendable {
                 options: .withSecurityScope,
             )
 
-            UserDefaults.standard.set(bookmark, forKey: Self.vaultBookmarkKey)
+            UserDefaults.standard.set(bookmark, forKey: Self.bookmarkKey(location: await currentLocation()))
 
-            await setUrl(url);
+            await setUrl(url)
             
             return .success(())
         }
@@ -82,10 +93,36 @@ actor BWVault: Sendable {
     private func setUrl(_ url: URL) {
         self.url = url
     }
+
+    func currentLocation() -> BWVaultLocation {
+        location
+    }
+
+    func setLocation(_ location: BWVaultLocation) async -> Result<Void, BWError> {
+        self.location = location
+        UserDefaults.standard.set(location.rawValue, forKey: Self.vaultLocationKey)
+
+        switch Self.resolveVaultURL(location: location) {
+            case .success(let url):
+                self.url = url
+                return .success(())
+            case .failure(let error):
+                self.url = nil
+                return .failure(error)
+        }
+    }
  
     func readBudgetsFromVault() async -> Result<[BWBudget], BWError> {
         guard let url else {
-            return .failure(.vaultNotSet())
+            let resolveRes = Self.resolveVaultURL(location: location)
+
+            switch resolveRes {
+                case .success(let url):
+                    self.url = url
+                    return await readBudgetsFromVault()
+                case .failure(let error):
+                    return .failure(error)
+            }
         }
 
         return await Task.detached(priority: .userInitiated) {
@@ -227,6 +264,11 @@ actor BWVault: Sendable {
         }
 
         do {
+            try FileManager.default.createDirectory(
+                at: url,
+                withIntermediateDirectories: true
+            )
+
             let files = try FileManager.default.contentsOfDirectory(
                     at: url,
                     includingPropertiesForKeys: nil
@@ -257,6 +299,102 @@ actor BWVault: Sendable {
             print(error)
                 return .failure(.vaultNotSet())
         }
+    }
+
+    private static func resolveVaultURL(location: BWVaultLocation) -> Result<URL, BWError> {
+        if let bookmarkedUrl = resolveBookmarkedVaultURL(location: location) {
+            return .success(bookmarkedUrl)
+        }
+
+        do {
+            let url: URL
+
+            switch location {
+                case .local:
+                    url = try defaultLocalVaultURL()
+                case .iCloud:
+                    url = try defaultICloudVaultURL()
+            }
+
+            try FileManager.default.createDirectory(
+                at: url,
+                withIntermediateDirectories: true
+            )
+
+            return .success(url)
+        }
+        catch {
+            switch location {
+                case .local:
+                    return .failure(.vaultNotSet(underlying: error))
+                case .iCloud:
+                    return .failure(.iCloudUnavailable(underlying: error))
+            }
+        }
+    }
+
+    private static func resolveBookmarkedVaultURL(location: BWVaultLocation) -> URL? {
+        // Legacy key keeps existing users on their previously selected local vault.
+        let key = bookmarkKey(location: location)
+        let bookmark = UserDefaults.standard.data(forKey: key)
+            ?? (location == .local ? UserDefaults.standard.data(forKey: vaultBookmarkKey) : nil)
+
+        guard let bookmark else {
+            return nil
+        }
+
+        do {
+            var isStale = false
+
+            return try URL(
+                resolvingBookmarkData: bookmark,
+                options: .withSecurityScope,
+                bookmarkDataIsStale: &isStale
+            )
+        }
+        catch {
+            return nil
+        }
+    }
+
+    private static func bookmarkKey(location: BWVaultLocation) -> String {
+        switch location {
+            case .local:
+                return localVaultBookmarkKey
+            case .iCloud:
+                return iCloudVaultBookmarkKey
+        }
+    }
+
+    private static func defaultLocalVaultURL() throws -> URL {
+        let documentsURL = try FileManager.default.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+
+        return documentsURL.appendingPathComponent(defaultVaultFolderName)
+    }
+
+    private static func defaultICloudVaultURL() throws -> URL {
+        if let containerURL = FileManager.default.url(forUbiquityContainerIdentifier: nil) {
+            return containerURL
+                .appendingPathComponent("Documents")
+                .appendingPathComponent(defaultVaultFolderName)
+        }
+
+        let cloudDocsURL = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library")
+            .appendingPathComponent("Mobile Documents")
+            .appendingPathComponent("com~apple~CloudDocs")
+
+        guard FileManager.default.fileExists(atPath: cloudDocsURL.path) else {
+            throw BWError.iCloudUnavailable()
+        }
+
+        return cloudDocsURL
+            .appendingPathComponent(defaultVaultFolderName)
     }
 
     private static func makeUniqueVaultFileURL(
