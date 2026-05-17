@@ -93,6 +93,15 @@ struct BWWelcomeWindow: Scene {
                 .environmentObject(windowStore)
                 .frame(minWidth: 420)
             }
+            .sheet(isPresented: $windowStore.isPreferencesDialogOpen) {
+                BWPreferencesView(
+                    selectedCurrency: $store.selectedCurrency,
+                    onClose: {
+                        windowStore.closePreferencesDialog()
+                    }
+                )
+                .frame(minWidth: 420)
+            }
         }
         .defaultSize(width: WINDOW_WIDTH, height: WINDOW_HEIGHT)
         .defaultLaunchBehavior(.presented)

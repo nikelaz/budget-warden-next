@@ -19,5 +19,22 @@ struct BWApp: App {
             .environmentObject(store)
         BWMainWindow()
             .environmentObject(store)
+        WindowGroup(
+            "Category Transactions",
+            id: "window-category-transactions",
+            for: BWCategoryTransactionsWindowValue.self
+        ) { $value in
+            if let value {
+                BWCategoryTransactionsWindow(value: value)
+                    .environmentObject(store)
+            }
+            else {
+                ContentUnavailableView(
+                    "Category Not Found",
+                    systemImage: "folder.badge.questionmark"
+                )
+            }
+        }
+        .defaultSize(width: 900, height: 560)
     }
 }

@@ -11,12 +11,39 @@
 import Foundation
 
 extension UInt64 {
-    var formattedEUR: String {
-        let amount = Decimal(self) / 100
+    var moneyInputText: String {
+        let wholePart = self / 100
+        let fractionPart = self % 100
+        let fractionText = fractionPart < 10 ? "0\(fractionPart)" : "\(fractionPart)"
 
-        return amount.formatted(
-            .currency(code: "EUR").locale(.current)
-        )
+        return "\(wholePart).\(fractionText)"
+    }
+
+    func formattedMoneyAmount(currency: BWCurrency) -> Swift.String {
+        let formatter = NumberFormatter()
+        formatter.locale = .current
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currency.rawValue
+        formatter.currencySymbol = currency.symbol
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+
+        return formatter.string(from: majorAmountNumber) ?? "\(formattedMajorAmount) \(currency.symbol)"
+    }
+
+    private var majorAmountNumber: NSDecimalNumber {
+        let majorAmount = Decimal(self / 100)
+        let minorAmount = Decimal(self % 100) / 100
+        return NSDecimalNumber(decimal: majorAmount + minorAmount)
+    }
+
+    private var formattedMajorAmount: Swift.String {
+        let majorAmount = self / 100
+        let minorAmount = self % 100
+        let minorText = minorAmount < 10 ? "0\(minorAmount)" : "\(minorAmount)"
+        let separator = Locale.current.decimalSeparator ?? "."
+
+        return "\(majorAmount.formatted(.number.grouping(.automatic)))\(separator)\(minorText)"
     }
 
     static func parseMoneyAmount(_ text: Swift.String, emptyValue: UInt64? = nil) -> UInt64? {

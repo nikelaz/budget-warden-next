@@ -38,6 +38,7 @@ struct BWMainWindow: Scene {
                                 store: store,
                                 windowStore: windowStore
                             )
+                            .environmentObject(windowStore)
                         case .reporting:
                             Text("Reporting View")
                         case .transactions:

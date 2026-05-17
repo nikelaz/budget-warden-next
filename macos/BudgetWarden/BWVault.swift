@@ -97,7 +97,22 @@ actor BWVault: Sendable {
         url
     }
 
-    func saveFileInVault(
+    func containsBudgetFile(url budgetURL: URL) -> Bool {
+        guard let url else {
+            return false
+        }
+
+        let directoryURL = url.standardizedFileURL
+        let fileURL = budgetURL.standardizedFileURL
+
+        guard fileURL.pathExtension.lowercased() == "budget" else {
+            return false
+        }
+
+        return fileURL.deletingLastPathComponent() == directoryURL
+    }
+
+    func saveNewBudgetInVault(
         fileName: String,
         fileExtension: String,
         contents: String
@@ -132,6 +147,38 @@ actor BWVault: Sendable {
                 case .success:
                     return .success(fileUrl)
             }
+        }.value
+    }
+
+    func saveBudgetFile(url budgetURL: URL, contents: String) async -> Result<Void, BWError> {
+        guard let url else {
+            return .failure(.vaultNotSet())
+        }
+
+        return await Task.detached(priority: .userInitiated) {
+            let didStartAccessing = url.startAccessingSecurityScopedResource()
+
+            defer {
+                if didStartAccessing {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+
+            let directoryURL = url.standardizedFileURL
+            let fileURL = budgetURL.standardizedFileURL
+
+            guard fileURL.pathExtension.lowercased() == "budget" else {
+                return .failure(.savingFile())
+            }
+
+            guard fileURL.deletingLastPathComponent() == directoryURL else {
+                return .failure(.savingFile())
+            }
+
+            return BWFiles.saveFile(
+                url: fileURL,
+                contents: contents
+            )
         }.value
     }
 

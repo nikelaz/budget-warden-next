@@ -21,7 +21,7 @@ struct BWCommands: Commands {
     var body: some Commands {
         CommandGroup(replacing: .appSettings) {
             Button("Preferences") {
-                //windowStore.showPreferences()
+                windowStore.openPreferencesDialog()
             }
             .keyboardShortcut(",", modifiers: .command)
         }

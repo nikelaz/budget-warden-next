@@ -15,8 +15,17 @@ import SwiftUI
 class BWWindowStore: ObservableObject {
     @Published var isBudgetDialogOpen = false
     @Published var isVaultConfigDialogOpen = false
+    @Published var isPreferencesDialogOpen = false
     @Published var isErrorState: Bool = false
     @Published var errorMessage: String = ""
+
+    func openPreferencesDialog() {
+        isPreferencesDialogOpen = true
+    }
+
+    func closePreferencesDialog() {
+        isPreferencesDialogOpen = false
+    }
 
     func openBudgetDialog() {
         isBudgetDialogOpen = true

@@ -8,7 +8,7 @@
  *
  */
 
-enum BWCategoryType: Int, Codable, Sendable {
+enum BWCategoryType: Int, CaseIterable, Codable, Hashable, Sendable {
     case income = 1
     case expenses = 2
     case savings = 3
