@@ -38,7 +38,7 @@ struct BWWelcomeWindow: Scene {
                 idealHeight: WINDOW_HEIGHT,
                 maxHeight: WINDOW_HEIGHT
             )
-            .containerBackground(.thinMaterial, for: .window)
+            .containerBackground(.regularMaterial, for: .window)
             .task {
                 await store.loadBudgetsFromVault()
             }
