@@ -347,6 +347,48 @@ class BWStore: ObservableObject {
         updateBudget(budget, windowStore: windowStore)
     }
 
+    func moveTransaction(
+        transactionID: UUID,
+        from sourceCategoryID: UUID,
+        to destinationCategoryID: UUID,
+        windowStore: BWWindowStore
+    ) -> Bool {
+        guard sourceCategoryID != destinationCategoryID else {
+            return true
+        }
+
+        guard var budget = currentBudget else {
+            return false
+        }
+
+        guard let sourceCategoryIndex = budget.categories.firstIndex(where: { $0.id == sourceCategoryID }) else {
+            return false
+        }
+
+        guard let destinationCategoryIndex = budget.categories.firstIndex(where: { $0.id == destinationCategoryID }) else {
+            return false
+        }
+
+        guard let transactionIndex = budget.categories[sourceCategoryIndex].transactions.firstIndex(where: { $0.id == transactionID }) else {
+            return false
+        }
+
+        let transaction = budget.categories[sourceCategoryIndex].transactions[transactionIndex]
+
+        guard UInt64.max - budget.categories[destinationCategoryIndex].amountActual >= transaction.amount else {
+            windowStore.setError(.saveFailed())
+            return false
+        }
+
+        budget.categories[sourceCategoryIndex].transactions.remove(at: transactionIndex)
+        budget.categories[sourceCategoryIndex].amountActual -= transaction.amount
+        budget.categories[destinationCategoryIndex].transactions.append(transaction)
+        budget.categories[destinationCategoryIndex].amountActual += transaction.amount
+
+        updateBudget(budget, windowStore: windowStore)
+        return true
+    }
+
     private func updateBudget(_ budget: BWBudget, windowStore: BWWindowStore) {
         currentBudget = budget
         updateBudgetInVaultList(budget)

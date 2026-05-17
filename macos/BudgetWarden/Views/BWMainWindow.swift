@@ -40,9 +40,16 @@ struct BWMainWindow: Scene {
                             )
                             .environmentObject(windowStore)
                         case .reporting:
-                            Text("Reporting View")
+                            BWReportingView(
+                                store: store,
+                                windowStore: windowStore
+                            )
                         case .transactions:
-                            Text("Transactions View")
+                            BWTransactionsView(
+                                store: store,
+                                windowStore: windowStore
+                            )
+                            .environmentObject(windowStore)
                     }
                 }
             }
@@ -69,6 +76,7 @@ struct BWMainWindow: Scene {
         // @TODO(Niki): Check what this does actually
         //.windowToolbarStyle(.unified)
         .defaultLaunchBehavior(.suppressed)
+        .restorationBehavior(.disabled)
         .commands {
             BWCommands(windowStore: windowStore)
         }

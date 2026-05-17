@@ -36,5 +36,6 @@ struct BWApp: App {
             }
         }
         .defaultSize(width: 900, height: 560)
+        .restorationBehavior(.disabled)
     }
 }

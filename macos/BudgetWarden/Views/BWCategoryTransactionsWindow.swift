@@ -448,18 +448,37 @@ private struct BWCreateCategoryTransactionView: View {
     }
 }
 
-private struct BWTransactionInspectorView: View {
+struct BWTransactionInspectorView: View {
     let categoryID: UUID
+    let categories: [BWCategory]
     let transaction: BWTransaction
     let deleteTransaction: () -> Void
     let saveTransaction: (BWTransaction) -> Void
+    let saveCategory: ((UUID) -> Void)?
 
     @State private var title = ""
     @State private var amount = ""
     @State private var description = ""
     @State private var date = Date()
+    @State private var selectedCategoryID: UUID?
     @State private var isDeleteConfirmationPresented = false
     @FocusState private var focusedField: Field?
+
+    init(
+        categoryID: UUID,
+        categories: [BWCategory] = [],
+        transaction: BWTransaction,
+        deleteTransaction: @escaping () -> Void,
+        saveTransaction: @escaping (BWTransaction) -> Void,
+        saveCategory: ((UUID) -> Void)? = nil
+    ) {
+        self.categoryID = categoryID
+        self.categories = categories
+        self.transaction = transaction
+        self.deleteTransaction = deleteTransaction
+        self.saveTransaction = saveTransaction
+        self.saveCategory = saveCategory
+    }
 
     private enum Field: Hashable {
         case title
@@ -470,6 +489,37 @@ private struct BWTransactionInspectorView: View {
     var body: some View {
         VStack {
             Form {
+                if saveCategory != nil {
+                    Picker("Category", selection: $selectedCategoryID) {
+                        ForEach(BWCategoryType.allCases, id: \.self) { type in
+                            let categories = orderedCategories(for: type)
+
+                            if !categories.isEmpty {
+                                Text(type.title)
+                                    .font(.headline)
+                                    .selectionDisabled(true)
+
+                                ForEach(categories) { category in
+                                    Text(category.title)
+                                        .tag(Optional(category.id))
+                                }
+                            }
+                        }
+                    }
+                    .onChange(of: selectedCategoryID) { oldValue, newValue in
+                        guard
+                            oldValue != nil,
+                            let newValue,
+                            newValue != categoryID
+                        else {
+                            return
+                        }
+
+                        saveIfValid()
+                        saveCategory?(newValue)
+                    }
+                }
+
                 TextField("Title", text: $title)
                     .focused($focusedField, equals: .title)
                     .onSubmit {
@@ -517,6 +567,9 @@ private struct BWTransactionInspectorView: View {
         .onChange(of: transaction.id) { _, _ in
             resetFields()
         }
+        .onChange(of: categoryID) { _, _ in
+            selectedCategoryID = categoryID
+        }
         .onDisappear {
             saveIfValid()
         }
@@ -546,11 +599,25 @@ private struct BWTransactionInspectorView: View {
         description.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private func orderedCategories(for type: BWCategoryType) -> [BWCategory] {
+        categories.enumerated()
+            .filter { $0.element.categoryType == type }
+            .sorted { lhs, rhs in
+                if lhs.element.ordinal == rhs.element.ordinal {
+                    return lhs.offset < rhs.offset
+                }
+
+                return lhs.element.ordinal < rhs.element.ordinal
+            }
+            .map(\.element)
+    }
+
     private func resetFields() {
         title = transaction.title
         amount = transaction.amount.moneyInputText
         description = transaction.description
         date = transaction.date
+        selectedCategoryID = categoryID
     }
 
     private func saveIfValid() {

@@ -105,6 +105,7 @@ struct BWWelcomeWindow: Scene {
         }
         .defaultSize(width: WINDOW_WIDTH, height: WINDOW_HEIGHT)
         .defaultLaunchBehavior(.presented)
+        .restorationBehavior(.disabled)
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)  
         .commands {
