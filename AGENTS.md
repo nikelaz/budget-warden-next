@@ -2,11 +2,10 @@
 
 ## Project Structure
 
-Budget Warden is a SwiftUI macOS budgeting app:
+Budget Warden is a swiftui macos budgeting app:
 
-- `macos/` contains the SwiftUI macOS app, Xcode project, app UI, model, file I/O, and test targets.
-- `macos-prototype` contains a vibe-coded prototype, ignore that project
-- `templates/` contains starter `.budget` files.
+* `macos/` - contains the swiftui macos app (xcode project)
+* `templates/` - budget templates are stored in this folder, they're not used in the apps from this folder 
 
 ## Development Commands
 
@@ -14,12 +13,6 @@ Budget Warden is a SwiftUI macOS budgeting app:
 
 ```sh
 ./macos/build.sh
-```
-
-- Run the macOS app:
-
-```sh
-./macos/run.sh
 ```
 
 ## Coding Style
