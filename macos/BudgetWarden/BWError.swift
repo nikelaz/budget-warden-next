@@ -10,46 +10,73 @@
 
 import Foundation
 
-enum BWError: LocalizedError {
-    case vaultNotConfigured
-    case vaultUnavailable
-    case budgetCreationFailed
-    case categoryCreationFailed
-    case categorySaveFailed
-    case categoryNotFound
-    case transactionCreationFailed
-    case transactionSaveFailed
-    case transactionNotFound
-    case jsonCreationFailed
-    case budgetReadFailed(URL)
-    case budgetRemoveFailed(URL)
+enum BWError: Error, Sendable {
+    case encodingJson(underlying: Error? = nil) 
+    case decodingJson(underlying: Error? = nil)
+    case readingFile(underlying: Error? = nil)
+    case invalidBudgetFile(message: String, underlying: Error? = nil)
+    case amountOverflow
+    case savingFile(underlying: Error? = nil)
+    case vaultNotSet(underlying: Error? = nil)
+    case iCloudUnavailable(underlying: Error? = nil)
+    case creatingBudget(underlying: Error? = nil)
+    case saveFailed(underlying: Error? = nil)
+    case saveCancelled(underlying: Error? = nil)
+    case findPreviousBudget(underlying: Error? = nil)
+    case budgetRemove(underlying: Error? = nil)
+}
 
-    var errorDescription: Swift.String? {
+extension BWError: LocalizedError {
+    var errorDescription: String? {
         switch self {
-        case .vaultNotConfigured:
-            return "Choose a budget vault before saving budgets."
-        case .vaultUnavailable:
-            return "The budget vault could not be found. Choose a vault folder again."
-        case .budgetCreationFailed:
-            return "The budget data could not be created."
-        case .categoryCreationFailed:
-            return "The category data could not be created."
-        case .categorySaveFailed:
-            return "The category could not be saved."
-        case .categoryNotFound:
-            return "Choose an existing category before saving category changes."
-        case .transactionCreationFailed:
-            return "The transaction data could not be created."
-        case .transactionSaveFailed:
-            return "The transaction could not be saved."
-        case .transactionNotFound:
-            return "Choose an existing transaction before saving transaction changes."
-        case .jsonCreationFailed:
-            return "The budget JSON could not be created."
-        case .budgetReadFailed(let url):
-            return "The budget file could not be read: \(url.lastPathComponent)"
-        case .budgetRemoveFailed(let url):
-            return "The budget file could not be moved to Trash: \(url.lastPathComponent)"
+            case .encodingJson:
+                return "Could not prepare your data for saving."
+            case .decodingJson:
+                return "Could not read the saved data."
+            case .readingFile:
+                return "Could not read the file."
+            case .invalidBudgetFile(let message, _):
+                return message
+            case .amountOverflow:
+                return "The budget contains an amount that is too large."
+            case .savingFile:
+                return "Could not save the file."
+            case .vaultNotSet:
+                return "No vault has been selected."
+            case .iCloudUnavailable:
+                return "iCloud Drive is not available. Make sure iCloud Drive is enabled for this Mac."
+            case .creatingBudget:
+                return "Could not create the budget."
+            case .saveFailed:
+                return "Saving failed."
+            case .saveCancelled:
+                return "Saving was cancelled."
+            case .findPreviousBudget:
+                return "Could not find previous budget."
+            case .budgetRemove:
+                return "Could not remove budget."
+        }
+    }
+}
+
+extension BWError {
+    var underlyingError: Error? {
+        switch self {
+            case .encodingJson(let error),
+                 .decodingJson(let error),
+                 .readingFile(let error),
+                 .invalidBudgetFile(_, let error),
+                 .savingFile(let error),
+                 .iCloudUnavailable(let error),
+                 .creatingBudget(let error),
+                 .saveFailed(let error),
+                 .vaultNotSet(let error),
+                 .saveCancelled(let error),
+                 .findPreviousBudget(let error),
+                 .budgetRemove(let error):
+                return error
+            case .amountOverflow:
+                return nil
         }
     }
 }

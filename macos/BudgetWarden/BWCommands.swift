@@ -11,22 +11,53 @@
 import SwiftUI
 
 struct BWCommands: Commands {
-    @FocusedValue(\.budgetWindowStore) private var windowStore
+    @EnvironmentObject var store: BWStore
+
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
+
+    var windowStore: BWWindowStore
 
     var body: some Commands {
         CommandGroup(replacing: .appSettings) {
             Button("Preferences") {
-                windowStore?.showPreferences()
+                windowStore.openPreferencesDialog()
             }
-            .disabled(windowStore == nil)
             .keyboardShortcut(",", modifiers: .command)
         }
-        
+
+        CommandGroup(after: .appSettings) {
+            Button("Configure Vault", systemImage: "externaldrive") {
+                windowStore.openVaultConfigDialog()
+            }
+        }
+
+        CommandGroup(replacing: .newItem) {
+            Button("New Budget", systemImage: "plus") {
+                windowStore.openBudgetDialog()
+            }
+            .keyboardShortcut("n", modifiers: [.command])
+        }
+
+        CommandGroup(after: .newItem) {
+            Button("Open Budget", systemImage: "folder") {
+                Task {
+                    if await store.openBudget(windowStore: windowStore) {
+                        openWindow(id: "window-main")
+                        dismissWindow(id: "window-welcome")
+                    }
+                }
+            }
+            .keyboardShortcut("o", modifiers: [.command])
+        }
+       
+        /*
         CommandGroup(after: .newItem) {
             Button("Configure Vault") {
                 windowStore?.showVaultSetup()
             }
             .disabled(windowStore == nil)
         }
+        */
     }
 }

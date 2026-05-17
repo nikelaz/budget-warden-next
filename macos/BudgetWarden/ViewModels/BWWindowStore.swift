@@ -12,74 +12,44 @@ import Combine
 import SwiftUI
 
 @MainActor
-final class BWWindowStore: ObservableObject {
-    @Published var isCreatingBudget = false
-    @Published var isConfiguringVault = false
-    @Published var isShowingPreferences = false
+class BWWindowStore: ObservableObject {
+    @Published var isBudgetDialogOpen = false
+    @Published var isVaultConfigDialogOpen = false
+    @Published var isPreferencesDialogOpen = false
+    @Published var isErrorState: Bool = false
+    @Published var errorMessage: String = ""
 
-    func showCreateBudget() {
-        isCreatingBudget = true
+    func openPreferencesDialog() {
+        isPreferencesDialogOpen = true
     }
 
-    func showVaultSetup() {
-        isConfiguringVault = true
+    func closePreferencesDialog() {
+        isPreferencesDialogOpen = false
     }
 
-    func showPreferences() {
-        isShowingPreferences = true
+    func openBudgetDialog() {
+        isBudgetDialogOpen = true
     }
 
-    func cancelCreateBudget() {
-        isCreatingBudget = false
+    func closeBudgetDialog() {
+        isBudgetDialogOpen = false
     }
 
-    func cancelVaultSetup(store: BWStore) {
-        isConfiguringVault = false
-        store.cancelVaultSetup()
+    func setError(_ err: BWError) {
+        isErrorState = true
+        errorMessage = err.localizedDescription
+        bwLog(err)
     }
 
-    func closePreferences() {
-        isShowingPreferences = false
+    func clearError() {
+        isErrorState = false
     }
 
-    func createBudget(_ draft: BudgetDraft, store: BWStore) -> Bool {
-        if store.createBudget(draft) {
-            isCreatingBudget = false
-            return true
-        }
-
-        if store.presentedError == nil {
-            isCreatingBudget = false
-            isConfiguringVault = true
-        }
-
-        return false
+    func openVaultConfigDialog() {
+        isVaultConfigDialogOpen = true
     }
 
-    func configureVault(preferICloud: Bool, store: BWStore) {
-        store.configureVault(preferICloud: preferICloud)
-        closeVaultSetupIfSuccessful(store: store)
-    }
-
-    func configureVault(parentURL: URL, store: BWStore) {
-        store.configureVault(parentURL: parentURL)
-        closeVaultSetupIfSuccessful(store: store)
-    }
-
-    private func closeVaultSetupIfSuccessful(store: BWStore) {
-        if store.presentedError == nil {
-            isConfiguringVault = false
-        }
-    }
-}
-
-private struct BudgetWindowStoreFocusedValueKey: FocusedValueKey {
-    typealias Value = BWWindowStore
-}
-
-extension FocusedValues {
-    var budgetWindowStore: BWWindowStore? {
-        get { self[BudgetWindowStoreFocusedValueKey.self] }
-        set { self[BudgetWindowStoreFocusedValueKey.self] = newValue }
+    func closeVaultConfigDialog() {
+        isVaultConfigDialogOpen = false
     }
 }
