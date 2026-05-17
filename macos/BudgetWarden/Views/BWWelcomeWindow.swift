@@ -49,6 +49,20 @@ struct BWWelcomeWindow: Scene {
             } message: {
                 Text(windowStore.errorMessage)
             }
+            .alert("Vault Warning", isPresented: Binding(
+                get: { store.vaultWarningMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        store.clearVaultWarning()
+                    }
+                }
+            )) {
+                Button("OK") {
+                    store.clearVaultWarning()
+                }
+            } message: {
+                Text(store.vaultWarningMessage ?? "")
+            }
             .alert(
                 "Remove Budget?",
                 isPresented: $isDeleteBudgetDialogPresented,
@@ -73,8 +87,8 @@ struct BWWelcomeWindow: Scene {
                     budgetPendingRemoval = nil
                 }
             } message: { budget in
-                if budget.url != nil {
-                    Text("Move \(budget.url!.lastPathComponent) to Trash?")
+                if let budgetUrl = budget.url {
+                    Text("Move \(budgetUrl.lastPathComponent) to Trash?")
                 }
                 else {
                     Text("Move budget to trash?")
@@ -130,9 +144,11 @@ struct BWWelcomeWindow: Scene {
                 }
                 
                 Button("Open Budget", systemImage: "folder") {
-                    if store.openBudget(windowStore: windowStore) {
-                        openWindow(id: "window-main")
-                        dismissWindow(id: "window-welcome")
+                    Task {
+                        if await store.openBudget(windowStore: windowStore) {
+                            openWindow(id: "window-main")
+                            dismissWindow(id: "window-welcome")
+                        }
                     }
                 }
                 
@@ -170,10 +186,11 @@ struct BWWelcomeWindow: Scene {
                      }
                      .contextMenu {
                          Button {
-                             if budget.url == nil {
+                             guard let budgetUrl = budget.url else {
                                  return
                              }
-                             NSWorkspace.shared.activateFileViewerSelecting([budget.url!])
+
+                             NSWorkspace.shared.activateFileViewerSelecting([budgetUrl])
                          } label: {
                              Label("Show in Finder", systemImage: "folder")
                          }
@@ -239,8 +256,8 @@ struct BudgetRowView: View {
             Text(budget.title)
                 .font(.headline)
 
-            if (budget.url != nil) {
-                Text(budget.url!.lastPathComponent)
+            if let budgetUrl = budget.url {
+                Text(budgetUrl.lastPathComponent)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

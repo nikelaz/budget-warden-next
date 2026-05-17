@@ -29,6 +29,11 @@ enum BWVaultLocation: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+struct BWVaultReadResult: Sendable {
+    var budgets: [BWBudget]
+    var skippedFiles: [String]
+}
+
 actor BWVault: Sendable {
     private static let vaultBookmarkKey = "BW_VAULT_BOOKMARK"
     private static let vaultLocationKey = "BW_VAULT_LOCATION"
@@ -65,7 +70,7 @@ actor BWVault: Sendable {
         panel.allowsMultipleSelection = false
 
         guard panel.runModal() == .OK else {
-            return .failure(.vaultNotSet())
+            return .failure(.saveCancelled())
         }
 
         guard let url = panel.url else {
@@ -84,7 +89,7 @@ actor BWVault: Sendable {
             return .success(())
         }
         catch {
-            return .failure(.vaultNotSet())
+            return .failure(.vaultNotSet(underlying: error))
         }
     }
 
@@ -99,20 +104,23 @@ actor BWVault: Sendable {
     }
 
     func setLocation(_ location: BWVaultLocation) async -> Result<Void, BWError> {
-        self.location = location
-        UserDefaults.standard.set(location.rawValue, forKey: Self.vaultLocationKey)
+        let oldLocation = self.location
+        let oldURL = self.url
 
         switch Self.resolveVaultURL(location: location) {
             case .success(let url):
+                self.location = location
                 self.url = url
+                UserDefaults.standard.set(location.rawValue, forKey: Self.vaultLocationKey)
                 return .success(())
             case .failure(let error):
-                self.url = nil
+                self.location = oldLocation
+                self.url = oldURL
                 return .failure(error)
         }
     }
  
-    func readBudgetsFromVault() async -> Result<[BWBudget], BWError> {
+    func readBudgetsFromVault() async -> Result<BWVaultReadResult, BWError> {
         guard let url else {
             let resolveRes = Self.resolveVaultURL(location: location)
 
@@ -254,7 +262,7 @@ actor BWVault: Sendable {
         }.value
     }
 
-    private static func readBudgetsFromDirectory(url: URL) -> Result<[BWBudget], BWError> {
+    private static func readBudgetsFromDirectory(url: URL) -> Result<BWVaultReadResult, BWError> {
         let didStartAccessing = url.startAccessingSecurityScopedResource()
 
         defer {
@@ -279,9 +287,11 @@ actor BWVault: Sendable {
                 }
 
             var budgets: [BWBudget] = []
+            var skippedFiles: [String] = []
 
                 for file in budgetFiles {
                     guard let json = try? String(contentsOf: file, encoding: .utf8) else {
+                        skippedFiles.append(file.lastPathComponent)
                         continue
                     }
 
@@ -290,14 +300,17 @@ actor BWVault: Sendable {
                             budgets.append(budget)
 
                         case .failure:
+                                skippedFiles.append(file.lastPathComponent)
                                 continue
                     }
                 }
 
-            return .success(budgets)
+            return .success(BWVaultReadResult(
+                budgets: budgets,
+                skippedFiles: skippedFiles
+            ))
         } catch {
-            print(error)
-                return .failure(.vaultNotSet())
+                return .failure(.vaultNotSet(underlying: error))
         }
     }
 
@@ -346,11 +359,18 @@ actor BWVault: Sendable {
         do {
             var isStale = false
 
-            return try URL(
+            let url = try URL(
                 resolvingBookmarkData: bookmark,
                 options: .withSecurityScope,
                 bookmarkDataIsStale: &isStale
             )
+
+            if isStale,
+               let freshBookmark = try? url.bookmarkData(options: .withSecurityScope) {
+                UserDefaults.standard.set(freshBookmark, forKey: key)
+            }
+
+            return url
         }
         catch {
             return nil

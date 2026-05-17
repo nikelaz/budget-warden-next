@@ -12,6 +12,7 @@ import SwiftUI
 
 struct BWMainWindow: Scene {
     @EnvironmentObject var store: BWStore
+    @Environment(\.scenePhase) private var scenePhase
 
     @StateObject private var windowStore = BWWindowStore()
 
@@ -60,6 +61,20 @@ struct BWMainWindow: Scene {
             } message: {
                 Text(windowStore.errorMessage)
             }
+            .alert("Vault Warning", isPresented: Binding(
+                get: { store.vaultWarningMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        store.clearVaultWarning()
+                    }
+                }
+            )) {
+                Button("OK") {
+                    store.clearVaultWarning()
+                }
+            } message: {
+                Text(store.vaultWarningMessage ?? "")
+            }
             .sheet(isPresented: $windowStore.isBudgetDialogOpen) {
                 CreateBudgetView(onCreateSuccess: {})
                 .environmentObject(windowStore)
@@ -70,6 +85,33 @@ struct BWMainWindow: Scene {
                 .environmentObject(store)
                 .environmentObject(windowStore)
                 .frame(minWidth: 420)
+            }
+            .sheet(isPresented: $windowStore.isPreferencesDialogOpen) {
+                BWPreferencesView(
+                    selectedCurrency: $store.selectedCurrency,
+                    onClose: {
+                        windowStore.closePreferencesDialog()
+                    }
+                )
+                .frame(minWidth: 420)
+            }
+            .onDisappear {
+                Task {
+                    if let error = await store.flushPendingSaves() {
+                        windowStore.setError(error)
+                    }
+                }
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                guard newPhase != .active else {
+                    return
+                }
+
+                Task {
+                    if let error = await store.flushPendingSaves() {
+                        windowStore.setError(error)
+                    }
+                }
             }
         }
         .defaultSize(width: 1040, height: 700)

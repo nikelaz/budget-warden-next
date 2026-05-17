@@ -294,8 +294,10 @@ struct BWBudgetReportingContent: View {
         for types: Set<BWCategoryType>,
         amount: KeyPath<BWCategory, UInt64>
     ) -> UInt64 {
-        budget.categories
-            .filter { types.contains($0.categoryType) }
-            .reduce(0) { $0 + $1[keyPath: amount] }
+        UInt64.sumMoneyAmounts(
+            budget.categories
+                .filter { types.contains($0.categoryType) }
+                .map { $0[keyPath: amount] }
+        ) ?? UInt64.max
     }
 }

@@ -14,7 +14,7 @@ import UniformTypeIdentifiers
 private let budgetFileType = UTType(filenameExtension: "budget") ?? .data
 
 class BWFiles {
-    static func openAndReadFile() -> (contents: String, url: URL)? {
+    static func openAndReadFile() -> Result<(contents: String, url: URL)?, BWError> {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [budgetFileType]
         panel.allowsMultipleSelection = false
@@ -24,21 +24,31 @@ class BWFiles {
         let panelResult = panel.runModal()
 
         if panelResult != .OK {
-            return nil
+            return .success(nil)
         }
 
         guard let url = panel.url else {
-            return nil
+            return .failure(.readingFile())
         }
 
-        guard let contents = try? String(contentsOf: url, encoding: .utf8) else {
-            return nil
+        do {
+            let contents = try String(contentsOf: url, encoding: .utf8)
+            return .success((contents, url))
         }
-
-        return (contents, url)
+        catch {
+            return .failure(.readingFile(underlying: error))
+        }
     }
 
     nonisolated static func saveFile(url: URL, contents: String) -> Result<Void, BWError> {
+        let didStartAccessing = url.startAccessingSecurityScopedResource()
+
+        defer {
+            if didStartAccessing {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
         do {
             try contents.write(to: url, atomically: true, encoding: .utf8)
             return .success(())

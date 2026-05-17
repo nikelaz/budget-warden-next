@@ -41,9 +41,11 @@ struct BWCommands: Commands {
 
         CommandGroup(after: .newItem) {
             Button("Open Budget", systemImage: "folder") {
-                if store.openBudget(windowStore: windowStore) {
-                    openWindow(id: "window-main")
-                    dismissWindow(id: "window-welcome")
+                Task {
+                    if await store.openBudget(windowStore: windowStore) {
+                        openWindow(id: "window-main")
+                        dismissWindow(id: "window-welcome")
+                    }
                 }
             }
             .keyboardShortcut("o", modifiers: [.command])

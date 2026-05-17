@@ -19,6 +19,7 @@ class BWStore: ObservableObject {
     @Published var budgetsInVault: [BWBudget] = []
     @Published var budgetsInVaultLoaded: Bool = false
     @Published var isVaultNotSet: Bool = false
+    @Published var vaultWarningMessage: String? = nil
 
     // Currency
     @Published var selectedCurrency: BWCurrency {
@@ -47,8 +48,33 @@ class BWStore: ObservableObject {
             case .success:
                 await loadBudgetsFromVault()
                 return nil
-            case .failure:
-                return nil
+            case .failure(let error):
+                if case .saveCancelled = error {
+                    return nil
+                }
+
+                return error
+        }
+    }
+
+    func clearVaultWarning() {
+        vaultWarningMessage = nil
+    }
+
+    private func setVaultWarning(skippedFiles: [String]) {
+        guard !skippedFiles.isEmpty else {
+            vaultWarningMessage = nil
+            return
+        }
+
+        let shownFiles = skippedFiles.prefix(3).joined(separator: ", ")
+        let remainingCount = skippedFiles.count - min(skippedFiles.count, 3)
+
+        if remainingCount > 0 {
+            vaultWarningMessage = "Some budget files could not be loaded: \(shownFiles), and \(remainingCount) more."
+        }
+        else {
+            vaultWarningMessage = "Some budget files could not be loaded: \(shownFiles)."
         }
     }
 
@@ -74,10 +100,12 @@ class BWStore: ObservableObject {
         switch vaultReadRes {
             case .failure:
                 isVaultNotSet = true
+                vaultWarningMessage = nil
                 return
-            case .success(let budgets):
-                budgetsInVault = budgets
+            case .success(let result):
+                budgetsInVault = result.budgets
                 budgetsInVaultLoaded = true
+                setVaultWarning(skippedFiles: result.skippedFiles)
         }
     }
 
@@ -87,8 +115,9 @@ class BWStore: ObservableObject {
         switch vaultReadRes {
             case .failure:
                 return
-            case .success(let budgets):
-                budgetsInVault = budgets
+            case .success(let result):
+                budgetsInVault = result.budgets
+                setVaultWarning(skippedFiles: result.skippedFiles)
         }
     }
 
@@ -274,10 +303,6 @@ class BWStore: ObservableObject {
             return false
         }
 
-        guard UInt64.max - budget.categories[categoryIndex].amountActual >= amount else {
-            return false
-        }
-
         let transaction = BWTransaction(
             title: trimmedTitle,
             description: trimmedDescription,
@@ -286,7 +311,10 @@ class BWStore: ObservableObject {
         )
 
         budget.categories[categoryIndex].transactions.append(transaction)
-        budget.categories[categoryIndex].amountActual += amount
+
+        guard normalizeActualAmounts(in: &budget, windowStore: windowStore) else {
+            return false
+        }
 
         updateBudget(budget, windowStore: windowStore)
         return true
@@ -313,27 +341,17 @@ class BWStore: ObservableObject {
 
         let oldTransaction = budget.categories[categoryIndex].transactions[transactionIndex]
 
-        if transaction.amount >= oldTransaction.amount {
-            let increase = transaction.amount - oldTransaction.amount
-
-            guard UInt64.max - budget.categories[categoryIndex].amountActual >= increase else {
-                windowStore.setError(.saveFailed())
-                return false
-            }
-
-            budget.categories[categoryIndex].amountActual += increase
-        }
-        else {
-            budget.categories[categoryIndex].amountActual -= oldTransaction.amount - transaction.amount
-        }
-
         budget.categories[categoryIndex].transactions[transactionIndex] = BWTransaction(
-            id: transaction.id,
+            id: oldTransaction.id,
             title: trimmedTitle,
             description: transaction.description.trimmingCharacters(in: .whitespacesAndNewlines),
             date: transaction.date,
             amount: transaction.amount
         )
+
+        guard normalizeActualAmounts(in: &budget, windowStore: windowStore) else {
+            return false
+        }
 
         updateBudget(budget, windowStore: windowStore)
         return true
@@ -356,8 +374,11 @@ class BWStore: ObservableObject {
             return
         }
 
-        let transaction = budget.categories[categoryIndex].transactions.remove(at: transactionIndex)
-        budget.categories[categoryIndex].amountActual -= transaction.amount
+        budget.categories[categoryIndex].transactions.remove(at: transactionIndex)
+
+        guard normalizeActualAmounts(in: &budget, windowStore: windowStore) else {
+            return
+        }
 
         updateBudget(budget, windowStore: windowStore)
     }
@@ -390,15 +411,12 @@ class BWStore: ObservableObject {
 
         let transaction = budget.categories[sourceCategoryIndex].transactions[transactionIndex]
 
-        guard UInt64.max - budget.categories[destinationCategoryIndex].amountActual >= transaction.amount else {
-            windowStore.setError(.saveFailed())
+        budget.categories[sourceCategoryIndex].transactions.remove(at: transactionIndex)
+        budget.categories[destinationCategoryIndex].transactions.append(transaction)
+
+        guard normalizeActualAmounts(in: &budget, windowStore: windowStore) else {
             return false
         }
-
-        budget.categories[sourceCategoryIndex].transactions.remove(at: transactionIndex)
-        budget.categories[sourceCategoryIndex].amountActual -= transaction.amount
-        budget.categories[destinationCategoryIndex].transactions.append(transaction)
-        budget.categories[destinationCategoryIndex].amountActual += transaction.amount
 
         updateBudget(budget, windowStore: windowStore)
         return true
@@ -408,6 +426,15 @@ class BWStore: ObservableObject {
         currentBudget = budget
         upsertBudgetInVaultList(budget)
         scheduleBudgetSave(budget, windowStore: windowStore)
+    }
+
+    private func normalizeActualAmounts(in budget: inout BWBudget, windowStore: BWWindowStore) -> Bool {
+        guard BWCodec.normalizeActualAmounts(in: &budget) else {
+            windowStore.setError(.amountOverflow)
+            return false
+        }
+
+        return true
     }
 
     private func nextOrdinal(in budget: BWBudget, for categoryType: BWCategoryType, except categoryID: UUID) -> Int {
@@ -499,16 +526,28 @@ class BWStore: ObservableObject {
     }
 
     private func saveBudget(_ budget: BWBudget, windowStore: BWWindowStore) async {
+        if let error = await saveBudgetReturningError(budget) {
+            windowStore.setError(error)
+        }
+    }
+
+    private func saveBudgetReturningError(_ budget: BWBudget) async -> BWError? {
+        var normalizedBudget = budget
+
+        guard BWCodec.normalizeActualAmounts(in: &normalizedBudget) else {
+            return .amountOverflow
+        }
+
         let saveBudgetRes = await BWBudgetService.saveBudget(
-            budget,
+            normalizedBudget,
             vault: vault
         )
 
         switch saveBudgetRes {
             case .failure(let error):
-                windowStore.setError(error)
+                return error
             case .success:
-                break
+                return nil
         }
     }
 
@@ -544,21 +583,48 @@ class BWStore: ObservableObject {
         }
     }
 
-    func openBudget(windowStore: BWWindowStore) -> Bool {
-        guard let openFileRes  = BWFiles.openAndReadFile() else {
+    func flushPendingSaves() async -> BWError? {
+        let budgets = Array(pendingBudgetSaveSnapshots.values)
+
+        pendingBudgetSaveTasks.values.forEach { $0.cancel() }
+        pendingBudgetSaveTasks = [:]
+        pendingBudgetSaveSnapshots = [:]
+
+        for budget in budgets {
+            if let error = await saveBudgetReturningError(budget) {
+                return error
+            }
+        }
+
+        return nil
+    }
+
+    func openBudget(windowStore: BWWindowStore) async -> Bool {
+        if let error = await flushPendingSaves() {
+            windowStore.setError(error)
             return false
         }
 
-        let budgetRes = BWCodec.decodeBudget(json: openFileRes.contents, url: openFileRes.url)
+        let openFileRes = BWFiles.openAndReadFile()
 
-        switch budgetRes {
+        switch openFileRes {
             case .failure(let error):
                 windowStore.setError(error)
                 return false
-            case .success(let budget):
-                currentBudget = budget
+            case .success(nil):
+                return false
+            case .success(.some(let file)):
+                let budgetRes = BWCodec.decodeBudget(json: file.contents, url: file.url)
+
+                switch budgetRes {
+                    case .failure(let error):
+                        windowStore.setError(error)
+                        return false
+                    case .success(let budget):
+                        currentBudget = budget
+                }
         }
-        
+
         return true
     }
 }

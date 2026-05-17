@@ -65,7 +65,7 @@ struct CreateTransactionView: View {
                             .textFieldStyle(.roundedBorder)
                             .foregroundStyle(parsedAmount == nil && !amount.isEmpty ? .red : .primary)
 
-                        Text("EUR")
+                        Text(store.selectedCurrency.rawValue)
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }

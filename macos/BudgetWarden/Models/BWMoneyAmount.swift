@@ -112,4 +112,20 @@ extension UInt64 {
 
         return scaledAmount.partialValue
     }
+
+    nonisolated static func sumMoneyAmounts(_ amounts: some Sequence<UInt64>) -> UInt64? {
+        var total: UInt64 = 0
+
+        for amount in amounts {
+            let result = total.addingReportingOverflow(amount)
+
+            guard !result.overflow else {
+                return nil
+            }
+
+            total = result.partialValue
+        }
+
+        return total
+    }
 }

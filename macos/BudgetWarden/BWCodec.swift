@@ -11,24 +11,24 @@
 import Foundation
 
 nonisolated class BWCodec {
-    private static let encoder: JSONEncoder = {
+    private static func makeEncoder() -> JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
         encoder.dateEncodingStrategy = .iso8601
         return encoder
-    }()
+    }
 
-    private static let decoder: JSONDecoder = {
+    private static func makeDecoder() -> JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return decoder
-    }()
+    }
 
     static func encodeBudget(budget: BWBudget) -> Result<String, BWError> {
         let data: Data
 
         do {
-            data = try Self.encoder.encode(budget)
+            data = try Self.makeEncoder().encode(budget)
         }
         catch {
             return .failure(BWError.encodingJson(underlying: error))
@@ -49,7 +49,7 @@ nonisolated class BWCodec {
         var budget: BWBudget
 
         do {
-            budget = try Self.decoder.decode(BWBudget.self, from: data)
+            budget = try Self.makeDecoder().decode(BWBudget.self, from: data)
         }
         catch {
             return .failure(.decodingJson(underlying: error))
@@ -57,7 +57,24 @@ nonisolated class BWCodec {
         
         budget.url = url
 
+        guard normalizeActualAmounts(in: &budget) else {
+            return .failure(.amountOverflow)
+        }
+
         return .success(budget)
     }
-}
 
+    static func normalizeActualAmounts(in budget: inout BWBudget) -> Bool {
+        for index in budget.categories.indices {
+            guard let amountActual = UInt64.sumMoneyAmounts(
+                budget.categories[index].transactions.map(\.amount)
+            ) else {
+                return false
+            }
+
+            budget.categories[index].amountActual = amountActual
+        }
+
+        return true
+    }
+}

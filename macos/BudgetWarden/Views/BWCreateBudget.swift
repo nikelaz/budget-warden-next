@@ -63,9 +63,9 @@ struct CreateBudgetView: View {
                         .selectionDisabled(true)
 
                     ForEach(store.budgetsInVault) { budget in
-                        if budget.url != nil {
+                        if let budgetUrl = budget.url {
                             Text(budget.title)
-                                .tag(BudgetTemplateSelection.previous(budget.url!))
+                                .tag(BudgetTemplateSelection.previous(budgetUrl))
                         }
                     }
                 }, label: {

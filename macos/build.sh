@@ -19,10 +19,16 @@ EOF
   exit 1
 fi
 
-xcodebuild \
-  -project "$PROJECT_PATH" \
-  -scheme BudgetWarden \
-  -configuration Debug \
-  -destination "platform=macOS,arch=arm64" \
-  -derivedDataPath "$DERIVED_DATA_PATH" \
-  build
+XCODEBUILD_ARGS=(
+  -project "$PROJECT_PATH"
+  -scheme BudgetWarden
+  -configuration Debug
+  -destination "platform=macOS,arch=arm64"
+  -derivedDataPath "$DERIVED_DATA_PATH"
+)
+
+if [[ -n "${CODE_SIGNING_ALLOWED:-}" ]]; then
+  XCODEBUILD_ARGS+=("CODE_SIGNING_ALLOWED=$CODE_SIGNING_ALLOWED")
+fi
+
+xcodebuild "${XCODEBUILD_ARGS[@]}" build

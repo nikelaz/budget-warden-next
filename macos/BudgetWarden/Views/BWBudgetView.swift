@@ -140,12 +140,27 @@ struct BudgetView: View {
     private func sectionTotal(
         categoryType: BWCategoryType,
         amount: (BWCategory) -> UInt64
-    ) -> UInt64 {
-        store.currentBudget!.categories
-            .filter { $0.categoryType == categoryType }
-            .reduce(0) { total, category in
-                total + amount(category)
-            }
+    ) -> UInt64? {
+        guard let budget = store.currentBudget else {
+            return 0
+        }
+
+        return UInt64.sumMoneyAmounts(
+            budget.categories
+                .filter { $0.categoryType == categoryType }
+                .map(amount)
+        )
+    }
+
+    private func formattedSectionTotal(
+        categoryType: BWCategoryType,
+        amount: (BWCategory) -> UInt64
+    ) -> String {
+        guard let total = sectionTotal(categoryType: categoryType, amount: amount) else {
+            return "Too large"
+        }
+
+        return total.formattedMoneyAmount(currency: store.selectedCurrency)
     }
 
     private func orderedCategories(for categoryType: BWCategoryType) -> [BWCategory] {
@@ -210,10 +225,10 @@ struct BudgetView: View {
                         }
                     case .footer:
                         if showsAccumulatedAmount(for: tableRow.categoryType) {
-                            Text(sectionTotal(
+                            Text(formattedSectionTotal(
                                 categoryType: tableRow.categoryType,
                                 amount: \.amountAccumulated
-                            ).formattedMoneyAmount(currency: store.selectedCurrency))
+                            ))
                             .fontWeight(.semibold)
                         }
                         else {
@@ -227,10 +242,10 @@ struct BudgetView: View {
                     case .regular:
                         Text(tableRow.category!.amountPlanned.formattedMoneyAmount(currency: store.selectedCurrency))
                     case .footer:
-                        Text(sectionTotal(
+                        Text(formattedSectionTotal(
                             categoryType: tableRow.categoryType,
                             amount: \.amountPlanned
-                        ).formattedMoneyAmount(currency: store.selectedCurrency))
+                        ))
                         .fontWeight(.semibold)
                 }
             }
@@ -240,10 +255,10 @@ struct BudgetView: View {
                     case .regular:
                         Text(tableRow.category!.amountActual.formattedMoneyAmount(currency: store.selectedCurrency))
                     case .footer:
-                        Text(sectionTotal(
+                        Text(formattedSectionTotal(
                             categoryType: tableRow.categoryType,
                             amount: \.amountActual
-                        ).formattedMoneyAmount(currency: store.selectedCurrency))
+                        ))
                         .fontWeight(.semibold)
                 }
             }
@@ -345,7 +360,7 @@ struct BudgetView: View {
                         Button {
                             store.selectBudget(budget)
                         } label: {
-                            if store.currentBudget!.id == budget.id {
+                            if store.currentBudget?.id == budget.id {
                                 Label(budget.title, systemImage: "checkmark")
                             }
                             else {
@@ -362,7 +377,7 @@ struct BudgetView: View {
                         Label("New Budget", systemImage: "plus")
                     }
                 } label: {
-                    Text(store.currentBudget!.title)
+                    Text(store.currentBudget?.title ?? "Budget")
                 }
                 
                 Menu {
@@ -460,15 +475,6 @@ struct BudgetView: View {
             )
             .frame(minWidth: 360)
         }
-        .sheet(isPresented: $windowStore.isPreferencesDialogOpen) {
-            BWPreferencesView(
-                selectedCurrency: $store.selectedCurrency,
-                onClose: {
-                    windowStore.closePreferencesDialog()
-                }
-            )
-            .frame(minWidth: 420)
-        }
         .confirmationDialog(
             "Delete \(categoryPendingDeletion?.title ?? "Category")?",
             isPresented: Binding(
@@ -498,4 +504,3 @@ struct BudgetView: View {
         }
     }
 }
-

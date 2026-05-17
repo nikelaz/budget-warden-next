@@ -123,8 +123,28 @@ struct BWReportingMetricGrid: View {
         total(for: [.savings], amount: \.amountPlanned)
     }
 
-    private var leftToBudgetTotal: Int64 {
-        Int64(incomeTotal) - Int64(plannedSpendingTotal) - Int64(plannedSavingsTotal)
+    private var leftToBudgetTotal: Int64? {
+        guard
+            let income = Int64(exactly: incomeTotal),
+            let plannedSpending = Int64(exactly: plannedSpendingTotal),
+            let plannedSavings = Int64(exactly: plannedSavingsTotal)
+        else {
+            return nil
+        }
+
+        let afterSpending = income.subtractingReportingOverflow(plannedSpending)
+
+        guard !afterSpending.overflow else {
+            return nil
+        }
+
+        let afterSavings = afterSpending.partialValue.subtractingReportingOverflow(plannedSavings)
+
+        guard !afterSavings.overflow else {
+            return nil
+        }
+
+        return afterSavings.partialValue
     }
 
     var body: some View {
@@ -147,11 +167,25 @@ struct BWReportingMetricGrid: View {
                 currency: currency
             )
             BWReportingMetricView(title: "Savings", value: plannedSavingsTotal, currency: currency)
+            leftToBudgetMetric
+        }
+    }
+
+    @ViewBuilder
+    private var leftToBudgetMetric: some View {
+        if let leftToBudgetTotal {
             BWReportingMetricView(
                 title: "Left to Budget",
                 signedValue: leftToBudgetTotal,
                 valueColor: leftToBudgetTotal < 0 ? Color(nsColor: .systemRed) : .primary,
                 currency: currency
+            )
+        }
+        else {
+            BWReportingMetricView(
+                title: "Left to Budget",
+                valueText: "Too large",
+                valueColor: Color(nsColor: .systemRed)
             )
         }
     }
@@ -160,9 +194,11 @@ struct BWReportingMetricGrid: View {
         for types: Set<BWCategoryType>,
         amount: KeyPath<BWCategory, UInt64>
     ) -> UInt64 {
-        budget.categories
-            .filter { types.contains($0.categoryType) }
-            .reduce(0) { $0 + $1[keyPath: amount] }
+        UInt64.sumMoneyAmounts(
+            budget.categories
+                .filter { types.contains($0.categoryType) }
+                .map { $0[keyPath: amount] }
+        ) ?? UInt64.max
     }
 }
 
@@ -281,9 +317,11 @@ struct BWIncomeVsAllocationChart: View {
         for types: Set<BWCategoryType>,
         amount: KeyPath<BWCategory, UInt64>
     ) -> UInt64 {
-        budget.categories
-            .filter { types.contains($0.categoryType) }
-            .reduce(0) { $0 + $1[keyPath: amount] }
+        UInt64.sumMoneyAmounts(
+            budget.categories
+                .filter { types.contains($0.categoryType) }
+                .map { $0[keyPath: amount] }
+        ) ?? UInt64.max
     }
 
     private func formattedChartAmount(_ amount: Double) -> String {
@@ -307,7 +345,7 @@ struct BWAllocationBreakdownChart: View {
     let scope: BWReportingScope
 
     private var total: UInt64 {
-        segments.reduce(0) { $0 + $1.amount }
+        UInt64.sumMoneyAmounts(segments.map(\.amount)) ?? UInt64.max
     }
 
     var body: some View {
@@ -345,6 +383,12 @@ struct BWReportingMetricView: View {
     let title: String
     let valueText: String
     var valueColor: Color = .primary
+
+    init(title: String, valueText: String, valueColor: Color = .primary) {
+        self.title = title
+        self.valueText = valueText
+        self.valueColor = valueColor
+    }
 
     init(title: String, value: UInt64, valueColor: Color = .primary, currency: BWCurrency) {
         self.title = title

@@ -13,6 +13,9 @@ import Foundation
 enum BWError: Error, Sendable {
     case encodingJson(underlying: Error? = nil) 
     case decodingJson(underlying: Error? = nil)
+    case readingFile(underlying: Error? = nil)
+    case invalidBudgetFile(message: String, underlying: Error? = nil)
+    case amountOverflow
     case savingFile(underlying: Error? = nil)
     case vaultNotSet(underlying: Error? = nil)
     case iCloudUnavailable(underlying: Error? = nil)
@@ -30,6 +33,12 @@ extension BWError: LocalizedError {
                 return "Could not prepare your data for saving."
             case .decodingJson:
                 return "Could not read the saved data."
+            case .readingFile:
+                return "Could not read the file."
+            case .invalidBudgetFile(let message, _):
+                return message
+            case .amountOverflow:
+                return "The budget contains an amount that is too large."
             case .savingFile:
                 return "Could not save the file."
             case .vaultNotSet:
@@ -55,6 +64,8 @@ extension BWError {
         switch self {
             case .encodingJson(let error),
                  .decodingJson(let error),
+                 .readingFile(let error),
+                 .invalidBudgetFile(_, let error),
                  .savingFile(let error),
                  .iCloudUnavailable(let error),
                  .creatingBudget(let error),
@@ -64,6 +75,8 @@ extension BWError {
                  .findPreviousBudget(let error),
                  .budgetRemove(let error):
                 return error
+            case .amountOverflow:
+                return nil
         }
     }
 }

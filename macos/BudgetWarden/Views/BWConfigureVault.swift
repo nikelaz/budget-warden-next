@@ -46,8 +46,12 @@ struct ConfigureVaultView: View {
 
                 Button("Choose Folder") {
                     Task {
-                        await store.selectVaultFolder()
+                        if let error = await store.selectVaultFolder() {
+                            windowStore.setError(error)
+                        }
+
                         vaultUrl = await store.vault.currentURL()
+                        selectedLocation = await store.vault.currentLocation()
                     }
                 }
             }

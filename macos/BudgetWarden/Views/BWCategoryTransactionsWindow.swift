@@ -17,6 +17,7 @@ struct BWCategoryTransactionsWindowValue: Codable, Hashable {
 
 struct BWCategoryTransactionsWindow: View {
     @EnvironmentObject var store: BWStore
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var windowStore = BWWindowStore()
 
     let value: BWCategoryTransactionsWindowValue
@@ -156,6 +157,24 @@ struct BWCategoryTransactionsWindow: View {
             }
         } message: {
             Text(windowStore.errorMessage)
+        }
+        .onDisappear {
+            Task {
+                if let error = await store.flushPendingSaves() {
+                    windowStore.setError(error)
+                }
+            }
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase != .active else {
+                return
+            }
+
+            Task {
+                if let error = await store.flushPendingSaves() {
+                    windowStore.setError(error)
+                }
+            }
         }
     }
 
@@ -343,7 +362,7 @@ private struct BWCreateCategoryTransactionView: View {
                             .textFieldStyle(.roundedBorder)
                             .foregroundStyle(parsedAmount == nil && !amount.isEmpty ? .red : .primary)
 
-                        Text("EUR")
+                        Text(store.selectedCurrency.rawValue)
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }
