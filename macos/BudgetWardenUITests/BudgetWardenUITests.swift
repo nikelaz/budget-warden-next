@@ -33,8 +33,9 @@ final class BudgetWardenUITests: XCTestCase {
         app.terminate()
     }
 
-    func testCreateNewBudgetFromWelcome() throws {
-        // @TODO(Niki): Generate a unique name for the test budget
+    func testCreateNewBudgetFromWelcome() {
+        let budgetName = "Test Budget \(UUID().uuidString)"
+
         let app = XCUIApplication()
         app.launch()
 
@@ -53,25 +54,78 @@ final class BudgetWardenUITests: XCTestCase {
         let templateInput = app.popUpButtons["Template"]
         XCTAssertTrue(templateInput.waitForExistence(timeout: 5))
          */
+
         titleInput.click()
         titleInput.typeKey("a", modifierFlags: [.command])
-        titleInput.typeText("Test Budget")
+        titleInput.typeText(budgetName)
 
         let saveButton = app.buttons["Save"]
         XCTAssertTrue(saveButton.waitForExistence(timeout: 5))
         saveButton.click()
-        
-        // @TOOD(Niki): Check if main window opened with the new user experience fields here
-        
+         
+        let salaryLabel = app.staticTexts["Salary"]
+        XCTAssertTrue(salaryLabel.waitForExistence(timeout: 5))
+
+        let funAndEntertainmentLabel = app.staticTexts["Fun & Entertainment"]
+        XCTAssertTrue(funAndEntertainmentLabel.waitForExistence(timeout: 5))
+
+        let healthAndFitnessLabel = app.staticTexts["Health & Fitness"]
+        XCTAssertTrue(healthAndFitnessLabel.waitForExistence(timeout: 5))
+
+        let givingLabel = app.staticTexts["Giving"]
+        XCTAssertTrue(givingLabel.waitForExistence(timeout: 5))
+
+        let utilitiesLabel = app.staticTexts["Utilities"]
+        XCTAssertTrue(utilitiesLabel.waitForExistence(timeout: 5))
+
+        let miscLabel = app.staticTexts["Miscellaneous"]
+        XCTAssertTrue(miscLabel.waitForExistence(timeout: 5))
+
+        let insuranceLabel = app.staticTexts["Insurance"]
+        XCTAssertTrue(insuranceLabel.waitForExistence(timeout: 5))
+
+        let housingLabel = app.staticTexts["Housing"]
+        XCTAssertTrue(housingLabel.waitForExistence(timeout: 5))
+
+        let foodLabel = app.staticTexts["Food"]
+        XCTAssertTrue(foodLabel.waitForExistence(timeout: 5))
+
+        let personalCareLabel = app.staticTexts["Personal Care"]
+        XCTAssertTrue(personalCareLabel.waitForExistence(timeout: 5))
+
+        let transportationLabel = app.staticTexts["Transportation"]
+        XCTAssertTrue(transportationLabel.waitForExistence(timeout: 5))
+
+        let emergencyFundLabel = app.staticTexts["Emergency Fund"]
+        XCTAssertTrue(emergencyFundLabel.waitForExistence(timeout: 5))
+
+        let retirementLabel = app.staticTexts["Retirement"]
+        XCTAssertTrue(retirementLabel.waitForExistence(timeout: 5))
+
         app.terminate()
         app.launch()
 
-        // @TODO(Niki): This title is probably not in staticTexts, that's why it's not found, has to be fixed
-        let testBudgetTitle = app.staticTexts["Test Budget"]
-        XCTAssertTrue(testBudgetTitle.waitForExistence(timeout: 5))
+        let testBudgetButton = app.buttons["Button_\(budgetName)"]
+        XCTAssertTrue(testBudgetButton.waitForExistence(timeout: 5))
         
-        // @TODO(Niki): The budget should be removed here
-        
+        testBudgetButton.rightClick()
+
+        let removeMenuItem = app.menuItems["Remove from Vault"]
+        XCTAssertTrue(removeMenuItem.waitForExistence(timeout: 2))
+
+        removeMenuItem.click()
+
+        let removeDialogHeading = app.staticTexts["Remove Budget?"]
+        XCTAssertTrue(removeDialogHeading.waitForExistence(timeout: 2))
+
+        let confirmDeleteButton = app.buttons["MoveToTrashRemoveBudgetConfirm"]
+        XCTAssertTrue(confirmDeleteButton.waitForExistence(timeout: 5))
+
+        confirmDeleteButton.click()
+
+        let testBudgetButtonAfterDelete = app.buttons["Button_\(budgetName)"]
+        XCTAssertFalse(testBudgetButtonAfterDelete.waitForExistence(timeout: 5))
+
         app.terminate()
     }
 }

@@ -82,6 +82,7 @@ struct BWWelcomeWindow: Scene {
                         budgetPendingRemoval = nil
                     }
                 }
+                .accessibilityLabel("MoveToTrashRemoveBudgetConfirm")
 
                 Button("Cancel", role: .cancel) {
                     budgetPendingRemoval = nil
@@ -202,6 +203,7 @@ struct BWWelcomeWindow: Scene {
                              Label("Remove from Vault", systemImage: "trash")
                          }
                      }
+                     .accessibilityLabel("Button_\(budget.title)")
                  }
              }
          }
