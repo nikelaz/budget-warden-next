@@ -48,6 +48,7 @@ struct CreateBudgetView: View {
             Form {
                 TextField("Title", text: $title)
                     .padding(.bottom, 10)
+                    .accessibilityIdentifier("titleTextField")
 
                 Picker(selection: $selectedTemplate, content: {
                     Text("Templates")

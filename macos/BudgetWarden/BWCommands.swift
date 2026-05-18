@@ -49,15 +49,6 @@ struct BWCommands: Commands {
                 }
             }
             .keyboardShortcut("o", modifiers: [.command])
-        }
-       
-        /*
-        CommandGroup(after: .newItem) {
-            Button("Configure Vault") {
-                windowStore?.showVaultSetup()
-            }
-            .disabled(windowStore == nil)
-        }
-        */
+        }       
     }
 }

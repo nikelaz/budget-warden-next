@@ -382,6 +382,12 @@ struct BudgetView: View {
                 
                 Menu {
                     Button {
+                        windowStore.openBudgetDialog()
+                    } label: {
+                        Label("Budget", systemImage: "rectangle.stack.badge.plus")
+                    }
+
+                    Button {
                         openCreateCategoryDialog()
                     } label: {
                         Label("Category", systemImage: "folder.badge.plus")

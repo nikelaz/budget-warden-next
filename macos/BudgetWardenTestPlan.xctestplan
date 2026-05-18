@@ -1,0 +1,24 @@
+{
+  "configurations" : [
+    {
+      "id" : "52CC1896-0A05-4E54-9FC6-599C6DD852A3",
+      "name" : "Configuration 1",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "testTimeoutsEnabled" : true
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:BudgetWarden.xcodeproj",
+        "identifier" : "5A87E6832FB2E0010029A3E7",
+        "name" : "BudgetWardenUITests"
+      }
+    }
+  ],
+  "version" : 1
+}
