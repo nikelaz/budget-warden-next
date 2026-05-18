@@ -19,7 +19,7 @@ struct BWMainWindow: Scene {
     @State private var selectedSection: SidebarSection = .budget
 
     var body: some Scene {
-        Window("Budget Warden", id: "window-main") {
+        Window("Main Window", id: "window-main") {
             NavigationSplitView {
                 SidebarView(
                     selectedSection: $selectedSection

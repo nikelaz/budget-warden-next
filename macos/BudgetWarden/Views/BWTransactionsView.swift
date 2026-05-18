@@ -131,6 +131,7 @@ struct BWTransactionsView: View {
                     } label: {
                         Image(systemName: "plus")
                     }
+                    .accessibilityLabel("Add Transaction")
                     .help("Add Transaction")
                     .disabled(!hasCategories)
                 }

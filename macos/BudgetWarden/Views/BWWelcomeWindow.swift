@@ -25,7 +25,7 @@ struct BWWelcomeWindow: Scene {
     @State private var budgetPendingRemoval: BWBudget? = nil
 
     var body: some Scene {
-        Window("Budget Warden", id: "window-welcome") {
+        Window("Welcome Window", id: "window-welcome") {
             HStack(spacing: 0) {
                 leftColumn
                 rightColumn

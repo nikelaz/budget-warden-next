@@ -161,6 +161,7 @@ private struct BWCategoryInspectorView: View {
         VStack {
             Form {
                 TextField("Title", text: $category.title)
+                    .accessibilityIdentifier("categoryInspectorTitleTextField")
                     .focused($focusedField, equals: .title)
                     .onSubmit {
                         saveNow()
@@ -200,6 +201,7 @@ private struct BWCategoryInspectorView: View {
 
                 if showsAccumulatedAmount {
                     TextField("Accumulated", text: $accumulatedAmountText, prompt: Text("0.00"))
+                        .accessibilityIdentifier("categoryInspectorAccumulatedTextField")
                         .foregroundStyle(parsedAccumulatedAmount == nil ? .red : .primary)
                         .focused($focusedField, equals: .accumulated)
                         .monospacedDigit()
@@ -214,6 +216,7 @@ private struct BWCategoryInspectorView: View {
                 }
 
                 TextField("Planned", text: $plannedAmountText, prompt: Text("0.00"))
+                    .accessibilityIdentifier("categoryInspectorPlannedTextField")
                     .foregroundStyle(parsedPlannedAmount == nil ? .red : .primary)
                     .focused($focusedField, equals: .planned)
                     .monospacedDigit()
@@ -228,6 +231,7 @@ private struct BWCategoryInspectorView: View {
 
                 LabeledContent("Actual") {
                     Text(category.amountActual.moneyInputText)
+                        .accessibilityIdentifier("categoryInspectorActualValue")
                         .monospacedDigit()
                 }
                 

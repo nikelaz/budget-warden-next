@@ -190,6 +190,7 @@ struct BudgetView: View {
                 switch tableRow.type {
                     case .regular:
                         Text(tableRow.category!.title)
+                            .accessibilityIdentifier("budgetCategoryTitle_\(tableRow.category!.title)")
                     case .footer:
                         Button {
                             switch tableRow.categoryType {
@@ -219,6 +220,8 @@ struct BudgetView: View {
                             Text(tableRow.category!.amountAccumulated.formattedMoneyAmount(
                                 currency: store.selectedCurrency
                             ))
+                            .accessibilityIdentifier("budgetCategoryAccumulated_\(tableRow.category!.title)")
+                            .accessibilityValue(tableRow.category!.amountAccumulated.moneyInputText)
                         }
                         else {
                             Text("")
@@ -241,6 +244,8 @@ struct BudgetView: View {
                 switch tableRow.type {
                     case .regular:
                         Text(tableRow.category!.amountPlanned.formattedMoneyAmount(currency: store.selectedCurrency))
+                            .accessibilityIdentifier("budgetCategoryPlanned_\(tableRow.category!.title)")
+                            .accessibilityValue(tableRow.category!.amountPlanned.moneyInputText)
                     case .footer:
                         Text(formattedSectionTotal(
                             categoryType: tableRow.categoryType,
@@ -254,6 +259,8 @@ struct BudgetView: View {
                 switch tableRow.type {
                     case .regular:
                         Text(tableRow.category!.amountActual.formattedMoneyAmount(currency: store.selectedCurrency))
+                            .accessibilityIdentifier("budgetCategoryActual_\(tableRow.category!.title)")
+                            .accessibilityValue(tableRow.category!.amountActual.moneyInputText)
                     case .footer:
                         Text(formattedSectionTotal(
                             categoryType: tableRow.categoryType,

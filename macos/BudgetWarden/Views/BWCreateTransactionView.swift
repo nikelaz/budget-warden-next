@@ -53,15 +53,18 @@ struct CreateTransactionView: View {
                         }
                     }
                     .labelsHidden()
+                    .accessibilityIdentifier("transactionCategoryPicker")
                 }
 
                 field("Title") {
                     TextField("Title", text: $title, prompt: Text("Groceries at supermarket"))
+                        .accessibilityIdentifier("transactionTitleTextField")
                 }
 
                 field("Amount") {
                     HStack(spacing: 8) {
                         TextField("Amount", text: $amount, prompt: Text("0.00"))
+                            .accessibilityIdentifier("transactionAmountTextField")
                             .textFieldStyle(.roundedBorder)
                             .foregroundStyle(parsedAmount == nil && !amount.isEmpty ? .red : .primary)
 
@@ -134,6 +137,7 @@ struct CreateTransactionView: View {
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(!isValid)
+                .accessibilityIdentifier("transactionSaveButton")
             }
         }
         .padding(20)

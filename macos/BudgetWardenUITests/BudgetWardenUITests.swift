@@ -15,6 +15,8 @@ final class BudgetWardenUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
 
+        openWelcomeWindow(app)
+
         let appTitle = app.staticTexts["Budget Warden"]
         XCTAssertTrue(appTitle.waitForExistence(timeout: 5))
         
@@ -38,6 +40,8 @@ final class BudgetWardenUITests: XCTestCase {
 
         let app = XCUIApplication()
         app.launch()
+
+        openWelcomeWindow(app)
 
         let createBudgetBtn = app.buttons["Create New Budget"]
         XCTAssertTrue(createBudgetBtn.waitForExistence(timeout: 5))
@@ -104,6 +108,7 @@ final class BudgetWardenUITests: XCTestCase {
 
         app.terminate()
         app.launch()
+        openWelcomeWindow(app)
 
         let testBudgetButton = app.buttons["Button_\(budgetName)"]
         XCTAssertTrue(testBudgetButton.waitForExistence(timeout: 5))
@@ -127,5 +132,209 @@ final class BudgetWardenUITests: XCTestCase {
         XCTAssertFalse(testBudgetButtonAfterDelete.waitForExistence(timeout: 5))
 
         app.terminate()
+    }
+
+    func testBudgetCategoryInspectorEditsPersist() {
+        let suffix = String(UUID().uuidString.prefix(8))
+        let budgetName = "Test Budget \(suffix)"
+        let updatedCategoryTitle = "Emergency Fund Updated \(suffix)"
+        let accumulatedAmount = "789.01"
+        let plannedAmount = "1234.56"
+        let actualAmount = "45.67"
+
+        let app = XCUIApplication()
+        app.launch()
+
+        openWelcomeWindow(app)
+
+        createBudgetFromWelcome(app: app, budgetName: budgetName)
+        createTransaction(
+            app: app,
+            categoryTitle: "Emergency Fund",
+            transactionTitle: "Emergency Fund Actual \(suffix)",
+            amount: actualAmount
+        )
+
+        openBudgetSidebar(app: app)
+        selectCategory(app: app, title: "Emergency Fund")
+
+        replaceText(in: app.textFields["categoryInspectorTitleTextField"], with: updatedCategoryTitle)
+        replaceText(in: app.textFields["categoryInspectorAccumulatedTextField"], with: accumulatedAmount)
+        replaceText(in: app.textFields["categoryInspectorPlannedTextField"], with: plannedAmount)
+        app.typeKey(.return, modifierFlags: [])
+
+        assertCategoryTableValues(
+            app: app,
+            title: updatedCategoryTitle,
+            accumulated: accumulatedAmount,
+            planned: plannedAmount,
+            actual: actualAmount
+        )
+
+        app.terminate()
+        app.launch()
+
+        openWelcomeWindow(app)
+
+        openBudgetFromWelcome(app: app, budgetName: budgetName)
+
+        assertCategoryTableValues(
+            app: app,
+            title: updatedCategoryTitle,
+            accumulated: accumulatedAmount,
+            planned: plannedAmount,
+            actual: actualAmount
+        )
+
+        app.terminate()
+        app.launch()
+
+        openWelcomeWindow(app)
+
+        removeBudgetFromWelcome(app: app, budgetName: budgetName)
+
+        app.terminate()
+    }
+
+    private func createBudgetFromWelcome(app: XCUIApplication, budgetName: String) {
+        let createBudgetBtn = app.buttons["Create New Budget"]
+        XCTAssertTrue(createBudgetBtn.waitForExistence(timeout: 5))
+        createBudgetBtn.click()
+
+        let titleInput = app.textFields["titleTextField"]
+        XCTAssertTrue(titleInput.waitForExistence(timeout: 5))
+        replaceText(in: titleInput, with: budgetName)
+
+        let saveButton = app.buttons["Save"]
+        XCTAssertTrue(saveButton.waitForExistence(timeout: 5))
+        saveButton.click()
+
+        XCTAssertTrue(app.staticTexts["Emergency Fund"].waitForExistence(timeout: 5))
+    }
+
+    private func createTransaction(
+        app: XCUIApplication,
+        categoryTitle: String,
+        transactionTitle: String,
+        amount: String
+    ) {
+        openTransactionsSidebar(app: app)
+
+        let addTransactionButton = app.buttons["Add Transaction"]
+        XCTAssertTrue(addTransactionButton.waitForExistence(timeout: 5))
+        addTransactionButton.click()
+
+        let categoryPicker = app.descendants(matching: .any)["transactionCategoryPicker"]
+        XCTAssertTrue(categoryPicker.waitForExistence(timeout: 5))
+        categoryPicker.click()
+
+        let categoryMenuItem = app.menuItems[categoryTitle]
+        XCTAssertTrue(categoryMenuItem.waitForExistence(timeout: 5))
+        categoryMenuItem.click()
+
+        let titleInput = app.textFields["transactionTitleTextField"]
+        XCTAssertTrue(titleInput.waitForExistence(timeout: 5))
+        replaceText(in: titleInput, with: transactionTitle)
+
+        let amountInput = app.textFields["transactionAmountTextField"]
+        XCTAssertTrue(amountInput.waitForExistence(timeout: 5))
+        replaceText(in: amountInput, with: amount)
+
+        let saveButton = app.buttons["transactionSaveButton"]
+        XCTAssertTrue(saveButton.waitForExistence(timeout: 5))
+        saveButton.click()
+
+        XCTAssertTrue(app.staticTexts[transactionTitle].waitForExistence(timeout: 5))
+    }
+
+    private func openBudgetFromWelcome(app: XCUIApplication, budgetName: String) {
+        let budgetButton = app.buttons["Button_\(budgetName)"]
+        XCTAssertTrue(budgetButton.waitForExistence(timeout: 5))
+        budgetButton.click()
+
+        XCTAssertTrue(app.staticTexts["Budget"].waitForExistence(timeout: 5))
+    }
+
+    private func removeBudgetFromWelcome(app: XCUIApplication, budgetName: String) {
+        let budgetButton = app.buttons["Button_\(budgetName)"]
+        XCTAssertTrue(budgetButton.waitForExistence(timeout: 5))
+        budgetButton.rightClick()
+
+        let removeMenuItem = app.menuItems["Remove from Vault"]
+        XCTAssertTrue(removeMenuItem.waitForExistence(timeout: 2))
+        removeMenuItem.click()
+
+        let confirmDeleteButton = app.buttons["MoveToTrashRemoveBudgetConfirm"]
+        XCTAssertTrue(confirmDeleteButton.waitForExistence(timeout: 5))
+        confirmDeleteButton.click()
+
+        XCTAssertFalse(budgetButton.waitForExistence(timeout: 5))
+    }
+
+    private func openBudgetSidebar(app: XCUIApplication) {
+        let budgetSidebarButton = app.descendants(matching: .any)["sidebarBudgetButton"]
+        XCTAssertTrue(budgetSidebarButton.waitForExistence(timeout: 5))
+        budgetSidebarButton.click()
+    }
+
+    private func openTransactionsSidebar(app: XCUIApplication) {
+        let transactionsSidebarButton = app.descendants(matching: .any)["sidebarTransactionsButton"]
+        XCTAssertTrue(transactionsSidebarButton.waitForExistence(timeout: 5))
+        transactionsSidebarButton.click()
+    }
+
+    private func selectCategory(app: XCUIApplication, title: String) {
+        let categoryTitle = app.staticTexts[title]
+        XCTAssertTrue(categoryTitle.waitForExistence(timeout: 5))
+        categoryTitle.click()
+    }
+
+    private func replaceText(in textField: XCUIElement, with text: String) {
+        XCTAssertTrue(textField.waitForExistence(timeout: 5))
+        textField.click()
+        textField.typeKey("a", modifierFlags: [.command])
+        textField.typeText(text)
+    }
+
+    private func assertCategoryTableValues(
+        app: XCUIApplication,
+        title: String,
+        accumulated: String,
+        planned: String,
+        actual: String
+    ) {
+        let titleCell = app.staticTexts["budgetCategoryTitle_\(title)"]
+        XCTAssertTrue(titleCell.waitForExistence(timeout: 5))
+
+        assertStaticTextValue(
+            app.staticTexts["budgetCategoryAccumulated_\(title)"],
+            equals: accumulated
+        )
+        assertStaticTextValue(
+            app.staticTexts["budgetCategoryPlanned_\(title)"],
+            equals: planned
+        )
+        assertStaticTextValue(
+            app.staticTexts["budgetCategoryActual_\(title)"],
+            equals: actual
+        )
+    }
+
+    private func assertStaticTextValue(_ element: XCUIElement, equals expectedValue: String) {
+        XCTAssertTrue(element.waitForExistence(timeout: 5))
+        XCTAssertEqual(element.value as? String, expectedValue)
+    }
+
+    private func openWelcomeWindow(_ app: XCUIApplication) {
+        let windowMenu = app.menuBars.menuBarItems["Window"]
+
+        if windowMenu.exists {
+            windowMenu.click()
+
+            let welcomeWindow = app.menuItems["Welcome Window"]
+            if welcomeWindow.exists {
+                welcomeWindow.click()
+            }
+        }
     }
 }
