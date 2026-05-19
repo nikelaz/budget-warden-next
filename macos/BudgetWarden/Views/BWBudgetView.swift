@@ -113,6 +113,7 @@ struct BudgetView: View {
         } label: {
             Label("Delete Category", systemImage: "trash")
         }
+        .accessibilityIdentifier("categoryContextMenuDeleteButton")
     }
     
     private func fromTypeToCreateLabel(categoryType: BWCategoryType) -> String {
@@ -210,6 +211,7 @@ struct BudgetView: View {
                             )
                             .foregroundColor(.accentColor)
                         }
+                        .accessibilityIdentifier("create\(tableRow.categoryType.title)CategoryFooterButton")
                 }
             }
 
@@ -386,6 +388,7 @@ struct BudgetView: View {
                 } label: {
                     Text(store.currentBudget?.title ?? "Budget")
                 }
+                .accessibilityIdentifier("budgetSwitcherMenu")
                 
                 Menu {
                     Button {
@@ -409,6 +412,8 @@ struct BudgetView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
+                .accessibilityLabel("Add")
+                .accessibilityIdentifier("addToolbarMenu")
                 .help("Add")
             }
           
@@ -508,6 +513,7 @@ struct BudgetView: View {
 
                 categoryPendingDeletion = nil
             }
+            .accessibilityIdentifier("categoryTableDeleteConfirmButton")
 
             Button("Cancel", role: .cancel) {
                 categoryPendingDeletion = nil

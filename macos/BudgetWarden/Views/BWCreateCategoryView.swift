@@ -28,7 +28,9 @@ struct CreateCategoryView: View {
 
             Form {
                 TextField("Title", text: $title, prompt: Text(hint))
+                    .accessibilityIdentifier("createCategoryTitleTextField")
                 TextField("Planned Amount", text: $plannedAmount, prompt: Text("0.00"))
+                    .accessibilityIdentifier("createCategoryPlannedAmountTextField")
             }
 
             HStack {
@@ -92,9 +94,12 @@ struct CreateGeneralCategoryView: View {
                             .tag(categoryType)
                     }
                 }
+                .accessibilityIdentifier("createCategoryTypePicker")
 
                 TextField("Title", text: $title, prompt: Text(hint))
+                    .accessibilityIdentifier("createCategoryTitleTextField")
                 TextField("Planned Amount", text: $plannedAmount, prompt: Text("0.00"))
+                    .accessibilityIdentifier("createCategoryPlannedAmountTextField")
             }
 
             HStack {

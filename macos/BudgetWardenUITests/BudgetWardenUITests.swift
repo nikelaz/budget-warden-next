@@ -134,6 +134,201 @@ final class BudgetWardenUITests: XCTestCase {
         app.terminate()
     }
 
+    func testCategoryCreateDelete() {
+        let suffix = String(UUID().uuidString.prefix(8))
+        let budgetName = "Test Budget \(suffix)"
+        let incomeTitle = "Income Footer \(suffix)"
+        let expenseTitle = "Expense Footer \(suffix)"
+        let savingsTitle = "Savings Footer \(suffix)"
+        let debtTitle = "Debt Footer \(suffix)"
+        let toolbarIncomeTitle = "Income Toolbar \(suffix)"
+        let toolbarExpenseTitle = "Expense Toolbar \(suffix)"
+        let toolbarSavingsTitle = "Savings Toolbar \(suffix)"
+        let toolbarDebtTitle = "Debt Toolbar \(suffix)"
+        let transactionTitle = "Income Transaction \(suffix)"
+
+        let app = XCUIApplication()
+        app.launch()
+
+        openWelcomeWindow(app)
+
+        createBudgetFromWelcome(app: app, budgetName: budgetName)
+        createTransaction(
+            app: app,
+            categoryTitle: "Salary",
+            transactionTitle: transactionTitle,
+            amount: "123.45"
+        )
+
+        openBudgetSidebar(app: app)
+
+        createCategoryFromFooter(
+            app: app,
+            typeTitle: "Income",
+            title: incomeTitle,
+            plannedAmount: "111.11"
+        )
+        assertCategoryPlannedAndActual(app: app, title: incomeTitle, planned: "111.11", actual: "0.00")
+
+        createCategoryFromFooter(
+            app: app,
+            typeTitle: "Expenses",
+            title: expenseTitle,
+            plannedAmount: "222.22"
+        )
+        assertCategoryPlannedAndActual(app: app, title: expenseTitle, planned: "222.22", actual: "0.00")
+
+        createCategoryFromFooter(
+            app: app,
+            typeTitle: "Savings",
+            title: savingsTitle,
+            plannedAmount: "333.33"
+        )
+        assertCategoryTableValues(
+            app: app,
+            title: savingsTitle,
+            accumulated: "0.00",
+            planned: "333.33",
+            actual: "0.00"
+        )
+
+        createCategoryFromFooter(
+            app: app,
+            typeTitle: "Debt",
+            title: debtTitle,
+            plannedAmount: "444.44"
+        )
+        assertCategoryTableValues(
+            app: app,
+            title: debtTitle,
+            accumulated: "0.00",
+            planned: "444.44",
+            actual: "0.00"
+        )
+
+        createCategoryFromToolbar(
+            app: app,
+            typeTitle: "Income",
+            title: toolbarIncomeTitle,
+            plannedAmount: "555.55"
+        )
+        assertCategoryPlannedAndActual(app: app, title: toolbarIncomeTitle, planned: "555.55", actual: "0.00")
+
+        createCategoryFromToolbar(
+            app: app,
+            typeTitle: "Expenses",
+            title: toolbarExpenseTitle,
+            plannedAmount: "666.66"
+        )
+        assertCategoryPlannedAndActual(app: app, title: toolbarExpenseTitle, planned: "666.66", actual: "0.00")
+
+        createCategoryFromToolbar(
+            app: app,
+            typeTitle: "Savings",
+            title: toolbarSavingsTitle,
+            plannedAmount: "777.77"
+        )
+        assertCategoryTableValues(
+            app: app,
+            title: toolbarSavingsTitle,
+            accumulated: "0.00",
+            planned: "777.77",
+            actual: "0.00"
+        )
+
+        createCategoryFromToolbar(
+            app: app,
+            typeTitle: "Debt",
+            title: toolbarDebtTitle,
+            plannedAmount: "888.88"
+        )
+        assertCategoryTableValues(
+            app: app,
+            title: toolbarDebtTitle,
+            accumulated: "0.00",
+            planned: "888.88",
+            actual: "0.00"
+        )
+
+        deleteCategoryFromInspector(app: app, title: toolbarExpenseTitle)
+        assertCategoryDoesNotExist(app: app, title: toolbarExpenseTitle)
+
+        deleteCategoryFromContextMenu(app: app, title: toolbarDebtTitle)
+        assertCategoryDoesNotExist(app: app, title: toolbarDebtTitle)
+
+        app.terminate()
+        app.launch()
+
+        openWelcomeWindow(app)
+
+        openBudgetFromWelcome(app: app, budgetName: budgetName)
+
+        app.terminate()
+        app.launch()
+
+        openWelcomeWindow(app)
+
+        removeBudgetFromWelcome(app: app, budgetName: budgetName)
+
+        app.terminate()
+    }
+
+    func testBudgetSwitch() {
+        let suffix = String(UUID().uuidString.prefix(8))
+        let firstBudgetName = "Test Budget One \(suffix)"
+        let secondBudgetName = "Test Budget Two \(suffix)"
+        let firstBudgetCategoryTitle = "First Budget Marker \(suffix)"
+        let secondBudgetCategoryTitle = "Second Budget Marker \(suffix)"
+
+        let app = XCUIApplication()
+        app.launch()
+
+        openWelcomeWindow(app)
+
+        createBudgetFromWelcome(app: app, budgetName: firstBudgetName)
+        openBudgetSidebar(app: app)
+        createCategoryFromFooter(
+            app: app,
+            typeTitle: "Expenses",
+            title: firstBudgetCategoryTitle,
+            plannedAmount: "101.01"
+        )
+        assertCategoryPlannedAndActual(app: app, title: firstBudgetCategoryTitle, planned: "101.01", actual: "0.00")
+
+        app.terminate()
+        app.launch()
+
+        openWelcomeWindow(app)
+
+        createBudgetFromWelcome(app: app, budgetName: secondBudgetName)
+        openBudgetSidebar(app: app)
+        createCategoryFromFooter(
+            app: app,
+            typeTitle: "Expenses",
+            title: secondBudgetCategoryTitle,
+            plannedAmount: "202.02"
+        )
+        assertCategoryPlannedAndActual(app: app, title: secondBudgetCategoryTitle, planned: "202.02", actual: "0.00")
+
+        openBudgetSwitcher(app: app)
+        XCTAssertTrue(app.menuItems[firstBudgetName].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.menuItems[secondBudgetName].waitForExistence(timeout: 5))
+        app.menuItems[firstBudgetName].click()
+
+        assertCategoryPlannedAndActual(app: app, title: firstBudgetCategoryTitle, planned: "101.01", actual: "0.00")
+        XCTAssertFalse(app.staticTexts["budgetCategoryTitle_\(secondBudgetCategoryTitle)"].waitForExistence(timeout: 2))
+
+        app.terminate()
+        app.launch()
+
+        openWelcomeWindow(app)
+
+        removeBudgetFromWelcome(app: app, budgetName: firstBudgetName)
+        removeBudgetFromWelcome(app: app, budgetName: secondBudgetName)
+
+        app.terminate()
+    }
+
     func testBudgetCategoryInspectorEditsPersist() {
         let suffix = String(UUID().uuidString.prefix(8))
         let budgetName = "Test Budget \(suffix)"
@@ -247,6 +442,108 @@ final class BudgetWardenUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts[transactionTitle].waitForExistence(timeout: 5))
     }
 
+    private func createCategoryFromFooter(
+        app: XCUIApplication,
+        typeTitle: String,
+        title: String,
+        plannedAmount: String
+    ) {
+        let createButton = app.descendants(matching: .any)["create\(typeTitle)CategoryFooterButton"]
+        XCTAssertTrue(createButton.waitForExistence(timeout: 5))
+        createButton.click()
+
+        createCategoryFromOpenSheet(app: app, title: title, plannedAmount: plannedAmount)
+    }
+
+    private func createCategoryFromToolbar(
+        app: XCUIApplication,
+        typeTitle: String,
+        title: String,
+        plannedAmount: String
+    ) {
+        let addMenu = app.descendants(matching: .any)["addToolbarMenu"]
+        XCTAssertTrue(addMenu.waitForExistence(timeout: 5))
+        addMenu.click()
+
+        let categoryMenuItem = app.menuItems["Category"]
+        if categoryMenuItem.waitForExistence(timeout: 2) {
+            categoryMenuItem.click()
+        }
+        else {
+            let categoryButton = app.buttons["Category"]
+            XCTAssertTrue(categoryButton.waitForExistence(timeout: 5))
+            categoryButton.click()
+        }
+
+        let typePicker = app.descendants(matching: .any)["createCategoryTypePicker"]
+        XCTAssertTrue(typePicker.waitForExistence(timeout: 5))
+        typePicker.click()
+
+        let typeMenuItem = app.menuItems[typeTitle]
+        XCTAssertTrue(typeMenuItem.waitForExistence(timeout: 5))
+        typeMenuItem.click()
+
+        createCategoryFromOpenSheet(app: app, title: title, plannedAmount: plannedAmount)
+    }
+
+    private func createCategoryFromOpenSheet(
+        app: XCUIApplication,
+        title: String,
+        plannedAmount: String
+    ) {
+        let titleInput = app.textFields["createCategoryTitleTextField"]
+        XCTAssertTrue(titleInput.waitForExistence(timeout: 5))
+        replaceText(in: titleInput, with: title)
+
+        let plannedAmountInput = app.textFields["createCategoryPlannedAmountTextField"]
+        XCTAssertTrue(plannedAmountInput.waitForExistence(timeout: 5))
+        replaceText(in: plannedAmountInput, with: plannedAmount)
+
+        let saveButton = app.buttons["Save"]
+        XCTAssertTrue(saveButton.waitForExistence(timeout: 5))
+        saveButton.click()
+
+        assertCategoryExists(app: app, title: title)
+    }
+
+    private func deleteCategoryFromInspector(app: XCUIApplication, title: String) {
+        selectCategory(app: app, title: title)
+
+        let deleteButton = app.buttons["categoryInspectorDeleteButton"]
+        XCTAssertTrue(deleteButton.waitForExistence(timeout: 5))
+        deleteButton.click()
+
+        let confirmButton = app.buttons["categoryInspectorDeleteConfirmButton"]
+        XCTAssertTrue(confirmButton.waitForExistence(timeout: 5))
+        confirmButton.click()
+    }
+
+    private func deleteCategoryFromContextMenu(app: XCUIApplication, title: String) {
+        let titleCell = app.staticTexts["budgetCategoryTitle_\(title)"]
+        XCTAssertTrue(titleCell.waitForExistence(timeout: 5))
+        titleCell.rightClick()
+
+        let deleteMenuItem = app.menuItems["categoryContextMenuDeleteButton"]
+        if deleteMenuItem.waitForExistence(timeout: 2) {
+            deleteMenuItem.click()
+        }
+        else {
+            let deleteMenuItemByLabel = app.menuItems["Delete Category"]
+            XCTAssertTrue(deleteMenuItemByLabel.waitForExistence(timeout: 5))
+            deleteMenuItemByLabel.click()
+        }
+
+        let confirmButton = app.buttons["categoryTableDeleteConfirmButton"]
+        XCTAssertTrue(confirmButton.waitForExistence(timeout: 5))
+        confirmButton.click()
+    }
+
+    private func openBudgetSwitcher(app: XCUIApplication) {
+        let budgetSwitcher = app.descendants(matching: .any)["budgetSwitcherMenu"]
+        XCTAssertTrue(budgetSwitcher.waitForExistence(timeout: 5))
+        budgetSwitcher.click()
+    }
+
     private func openBudgetFromWelcome(app: XCUIApplication, budgetName: String) {
         let budgetButton = app.buttons["Button_\(budgetName)"]
         XCTAssertTrue(budgetButton.waitForExistence(timeout: 5))
@@ -303,8 +600,7 @@ final class BudgetWardenUITests: XCTestCase {
         planned: String,
         actual: String
     ) {
-        let titleCell = app.staticTexts["budgetCategoryTitle_\(title)"]
-        XCTAssertTrue(titleCell.waitForExistence(timeout: 5))
+        assertCategoryExists(app: app, title: title)
 
         assertStaticTextValue(
             app.staticTexts["budgetCategoryAccumulated_\(title)"],
@@ -318,6 +614,33 @@ final class BudgetWardenUITests: XCTestCase {
             app.staticTexts["budgetCategoryActual_\(title)"],
             equals: actual
         )
+    }
+
+    private func assertCategoryPlannedAndActual(
+        app: XCUIApplication,
+        title: String,
+        planned: String,
+        actual: String
+    ) {
+        assertCategoryExists(app: app, title: title)
+        assertStaticTextValue(
+            app.staticTexts["budgetCategoryPlanned_\(title)"],
+            equals: planned
+        )
+        assertStaticTextValue(
+            app.staticTexts["budgetCategoryActual_\(title)"],
+            equals: actual
+        )
+    }
+
+    private func assertCategoryExists(app: XCUIApplication, title: String) {
+        let titleCell = app.staticTexts["budgetCategoryTitle_\(title)"]
+        XCTAssertTrue(titleCell.waitForExistence(timeout: 5))
+    }
+
+    private func assertCategoryDoesNotExist(app: XCUIApplication, title: String) {
+        let titleCell = app.staticTexts["budgetCategoryTitle_\(title)"]
+        XCTAssertFalse(titleCell.waitForExistence(timeout: 5))
     }
 
     private func assertStaticTextValue(_ element: XCUIElement, equals expectedValue: String) {

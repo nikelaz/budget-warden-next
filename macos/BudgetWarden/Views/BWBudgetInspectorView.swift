@@ -254,6 +254,7 @@ private struct BWCategoryInspectorView: View {
                 } label: {
                     Label("Delete Category", systemImage: "trash")
                 }
+                .accessibilityIdentifier("categoryInspectorDeleteButton")
             }
         }
         .onAppear {
@@ -279,6 +280,7 @@ private struct BWCategoryInspectorView: View {
                 saveNow()
                 deleteCategory()
             }
+            .accessibilityIdentifier("categoryInspectorDeleteConfirmButton")
 
             Button("Cancel", role: .cancel) {}
         } message: {
