@@ -2,7 +2,7 @@
 set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-APP_PATH="$APP_DIR/.build/Build/Products/Debug/BudgetWarden.app"
+APP_PATH="$APP_DIR/.build/Build/Products/Debug/Budget Warden.app"
 
 "$APP_DIR/build.sh"
 

@@ -114,7 +114,7 @@ struct BWMainWindow: Scene {
                 }
             }
         }
-        .defaultSize(width: 1040, height: 700)
+        .defaultSize(width: 1280, height: 720)
         .defaultLaunchBehavior(.suppressed)
         .restorationBehavior(.disabled)
         .commands {

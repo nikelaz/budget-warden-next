@@ -22,7 +22,7 @@
 
 /* Begin PBXFileReference section */
 		5A5CF7CC2FBB508E004D0D1D /* BudgetWardenTestPlan.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = BudgetWardenTestPlan.xctestplan; sourceTree = "<group>"; };
-		5A87E6702FB1961B0029A3E7 /* BudgetWarden.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BudgetWarden.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5A87E6702FB1961B0029A3E7 /* Budget Warden.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Budget Warden.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5A87E6802FB2E0010029A3E7 /* BudgetWardenUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BudgetWardenUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -70,7 +70,7 @@
 		5A87E6712FB1961B0029A3E7 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				5A87E6702FB1961B0029A3E7 /* BudgetWarden.app */,
+				5A87E6702FB1961B0029A3E7 /* Budget Warden.app */,
 				5A87E6802FB2E0010029A3E7 /* BudgetWardenUITests.xctest */,
 			);
 			name = Products;
@@ -98,7 +98,7 @@
 			packageProductDependencies = (
 			);
 			productName = BudgetWarden;
-			productReference = 5A87E6702FB1961B0029A3E7 /* BudgetWarden.app */;
+			productReference = 5A87E6702FB1961B0029A3E7 /* Budget Warden.app */;
 			productType = "com.apple.product-type.application";
 		};
 		5A87E6832FB2E0010029A3E7 /* BudgetWardenUITests */ = {
@@ -355,7 +355,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.lazarovco.budgetwarden;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Budget Warden";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -393,7 +393,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.lazarovco.budgetwarden;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Budget Warden";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
