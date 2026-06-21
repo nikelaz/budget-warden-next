@@ -20,7 +20,6 @@ struct BWRootView: View {
         NavigationStack(path: $navigationPath) {
             BWListView(
                 store: store,
-                openBudget: openBudget,
                 createBudget: showCreateBudget,
                 configureVault: showConfigureVault
             )
@@ -39,6 +38,13 @@ struct BWRootView: View {
             if navigationPath.last != selectedBudgetID {
                 navigationPath = [selectedBudgetID]
             }
+        }
+        .onChange(of: navigationPath) { _, path in
+            guard let budgetID = path.last, store.selectedBudgetID != budgetID else {
+                return
+            }
+
+            store.selectBudget(withID: budgetID)
         }
         .onOpenURL { url in
             store.openBudget(at: url)
@@ -78,11 +84,6 @@ struct BWRootView: View {
         }
 
         navigationPath = [selectedBudgetID]
-    }
-
-    private func openBudget(_ budget: BWBudget) {
-        store.selectBudget(withID: budget.id)
-        navigationPath = [budget.id]
     }
 
     private func showCreateBudget() {

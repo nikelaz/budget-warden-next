@@ -30,10 +30,7 @@ enum BWVaultLocation: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-struct BWVaultReadResult: Sendable {
-    var budgets: [BWBudget]
-    var skippedFiles: [String]
-}
+typealias BWVaultReadResult = BWBudgetDirectoryReadResult
 
 actor BWVault: Sendable {
     private static let vaultBookmarkKey = "BW_VAULT_BOOKMARK"
@@ -148,14 +145,7 @@ actor BWVault: Sendable {
             return false
         }
 
-        let directoryURL = url.standardizedFileURL
-        let fileURL = budgetURL.standardizedFileURL
-
-        guard fileURL.pathExtension.lowercased() == "budget" else {
-            return false
-        }
-
-        return fileURL.deletingLastPathComponent() == directoryURL
+        return BWBudgetFileStore.isBudgetFile(budgetURL, in: url)
     }
 
     func saveNewBudgetInVault(
@@ -176,7 +166,7 @@ actor BWVault: Sendable {
                 }
             }
 
-            let fileUrl = BWVault.makeUniqueVaultFileURL(
+            let fileUrl = BWBudgetFileStore.makeUniqueVaultFileURL(
                 directoryURL: url,
                 fileName: fileName,
                 fileExtension: fileExtension
@@ -210,19 +200,12 @@ actor BWVault: Sendable {
                 }
             }
 
-            let directoryURL = url.standardizedFileURL
-            let fileURL = budgetURL.standardizedFileURL
-
-            guard fileURL.pathExtension.lowercased() == "budget" else {
-                return .failure(.savingFile())
-            }
-
-            guard fileURL.deletingLastPathComponent() == directoryURL else {
+            guard BWBudgetFileStore.isBudgetFile(budgetURL, in: url) else {
                 return .failure(.savingFile())
             }
 
             return BWFiles.saveFile(
-                url: fileURL,
+                url: budgetURL.standardizedFileURL,
                 contents: contents
             )
         }.value
@@ -242,19 +225,12 @@ actor BWVault: Sendable {
                 }
             }
 
-            let directoryURL = url.standardizedFileURL
-            let fileURL = budgetURL.standardizedFileURL
-
-            guard fileURL.pathExtension.lowercased() == "budget" else {
-                return .failure(.budgetRemove())
-            }
-
-            guard fileURL.deletingLastPathComponent() == directoryURL else {
+            guard BWBudgetFileStore.isBudgetFile(budgetURL, in: url) else {
                 return .failure(.budgetRemove())
             }
 
             do {
-                try FileManager.default.trashItem(at: fileURL, resultingItemURL: nil)
+                try FileManager.default.trashItem(at: budgetURL.standardizedFileURL, resultingItemURL: nil)
                 return .success(())
             }
             catch {
@@ -264,55 +240,7 @@ actor BWVault: Sendable {
     }
 
     private static func readBudgetsFromDirectory(url: URL) -> Result<BWVaultReadResult, BWError> {
-        let didStartAccessing = url.startAccessingSecurityScopedResource()
-
-        defer {
-            if didStartAccessing {
-                url.stopAccessingSecurityScopedResource()
-            }
-        }
-
-        do {
-            try FileManager.default.createDirectory(
-                at: url,
-                withIntermediateDirectories: true
-            )
-
-            let files = try FileManager.default.contentsOfDirectory(
-                    at: url,
-                    includingPropertiesForKeys: nil
-                    )
-
-                let budgetFiles = files.filter {
-                    $0.pathExtension.lowercased() == "budget"
-                }
-
-            var budgets: [BWBudget] = []
-            var skippedFiles: [String] = []
-
-                for file in budgetFiles {
-                    guard let json = try? String(contentsOf: file, encoding: .utf8) else {
-                        skippedFiles.append(file.lastPathComponent)
-                        continue
-                    }
-
-                    switch BWCodec.decodeBudget(json: json, url: file) {
-                        case .success(let budget):
-                            budgets.append(budget)
-
-                        case .failure:
-                                skippedFiles.append(file.lastPathComponent)
-                                continue
-                    }
-                }
-
-            return .success(BWVaultReadResult(
-                budgets: budgets,
-                skippedFiles: skippedFiles
-            ))
-        } catch {
-                return .failure(.vaultNotSet(underlying: error))
-        }
+        return BWBudgetFileStore.readBudgetsFromDirectory(url: url, sortedByTitle: true)
     }
 
     private static func resolveVaultURL(location: BWVaultLocation) -> Result<URL, BWError> {
@@ -416,27 +344,5 @@ actor BWVault: Sendable {
 
         return cloudDocsURL
             .appendingPathComponent(defaultVaultFolderName)
-    }
-
-    private static func makeUniqueVaultFileURL(
-        directoryURL: URL,
-        fileName: String,
-        fileExtension: String
-    ) -> URL {
-        var candidateURL = directoryURL
-            .appendingPathComponent(fileName)
-            .appendingPathExtension(fileExtension)
-
-        var index = 2
-
-        while FileManager.default.fileExists(atPath: candidateURL.path) {
-            candidateURL = directoryURL
-                .appendingPathComponent("\(fileName) \(index)")
-                .appendingPathExtension(fileExtension)
-
-            index += 1
-        }
-
-        return candidateURL
     }
 }

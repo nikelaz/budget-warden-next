@@ -170,16 +170,7 @@ struct BudgetView: View {
             return []
         }
 
-        return budget.categories.enumerated()
-            .filter { $0.element.categoryType == categoryType }
-            .sorted { lhs, rhs in
-                if lhs.element.ordinal == rhs.element.ordinal {
-                    return lhs.offset < rhs.offset
-                }
-
-                return lhs.element.ordinal < rhs.element.ordinal
-            }
-            .map(\.element)
+        return BWBudgetMutation.orderedCategories(in: budget, for: categoryType)
     }
 
     private var hasCategories: Bool {

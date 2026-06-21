@@ -161,26 +161,27 @@ class BWStore: ObservableObject {
         categoryType: BWCategoryType,
         windowStore: BWWindowStore
     ) async -> Bool {
-        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !trimmedTitle.isEmpty, var budget = currentBudget else {
+        guard let budget = currentBudget else {
             return false
         }
 
-        let category = BWCategory(
-            ordinal: nextOrdinal(in: budget, for: categoryType),
-            title: trimmedTitle,
-            amountPlanned: plannedAmount,
+        let mutationResult = BWBudgetMutation.createCategory(
+            in: budget,
+            title: title,
+            plannedAmount: plannedAmount,
             categoryType: categoryType
         )
 
-        budget.categories.append(category)
-        currentBudget = budget
-        upsertBudgetInVaultList(budget)
-        cancelPendingBudgetSave(for: budget.id)
+        guard case .success(let updatedBudget) = mutationResult else {
+            return false
+        }
+
+        currentBudget = updatedBudget
+        upsertBudgetInVaultList(updatedBudget)
+        cancelPendingBudgetSave(for: updatedBudget.id)
 
         let saveBudgetRes = await BWBudgetService.saveBudget(
-            budget,
+            updatedBudget,
             vault: vault
         )
 
@@ -194,95 +195,44 @@ class BWStore: ObservableObject {
     }
 
     func updateCategory(_ updatedCategory: BWCategory, windowStore: BWWindowStore) {
-        guard var budget = currentBudget else {
+        guard let budget = currentBudget else {
             return
         }
 
-        guard let index = budget.categories.firstIndex(where: { $0.id == updatedCategory.id }) else {
-            return
-        }
-
-        let oldCategoryType = budget.categories[index].categoryType
-        var category = updatedCategory
-
-        if category.categoryType != oldCategoryType {
-            category.ordinal = nextOrdinal(
-                in: budget,
-                for: category.categoryType,
-                except: category.id
-            )
-        }
-
-        budget.categories[index] = category
-        normalizeCategoryOrdinals(in: &budget, for: oldCategoryType)
-        normalizeCategoryOrdinals(in: &budget, for: category.categoryType)
-
-        updateBudget(budget, windowStore: windowStore)
+        updateBudget(
+            BWBudgetMutation.updateCategory(in: budget, category: updatedCategory),
+            windowStore: windowStore
+        )
     }
 
     func canMoveCategory(_ category: BWCategory, by offset: Int) -> Bool {
-        guard abs(offset) == 1, let budget = currentBudget else {
+        guard let budget = currentBudget else {
             return false
         }
 
-        let categories = orderedCategoryIndexes(
-            in: budget,
-            for: category.categoryType
-        )
-
-        guard let index = categories.firstIndex(where: { $0.category.id == category.id }) else {
-            return false
-        }
-
-        let targetIndex = index + offset
-
-        return targetIndex >= 0 && targetIndex < categories.count
+        return BWBudgetMutation.canMoveCategory(category, in: budget, by: offset)
     }
 
     func moveCategory(_ category: BWCategory, by offset: Int, windowStore: BWWindowStore) {
-        guard abs(offset) == 1, var budget = currentBudget else {
+        guard let budget = currentBudget else {
             return
         }
 
-        var categories = orderedCategoryIndexes(
-            in: budget,
-            for: category.categoryType
+        updateBudget(
+            BWBudgetMutation.moveCategory(category, in: budget, by: offset),
+            windowStore: windowStore
         )
-
-        guard let index = categories.firstIndex(where: { $0.category.id == category.id }) else {
-            return
-        }
-
-        let targetIndex = index + offset
-
-        guard targetIndex >= 0 && targetIndex < categories.count else {
-            return
-        }
-
-        categories.swapAt(index, targetIndex)
-
-        for (ordinal, categoryIndex) in categories.map(\.index).enumerated() {
-            budget.categories[categoryIndex].ordinal = ordinal
-        }
-
-        updateBudget(budget, windowStore: windowStore)
     }
 
     func deleteCategory(_ category: BWCategory, windowStore: BWWindowStore) {
-        guard var budget = currentBudget else {
+        guard let budget = currentBudget else {
             return
         }
 
-        guard let index = budget.categories.firstIndex(where: { $0.id == category.id }) else {
-            return
-        }
-
-        let categoryType = budget.categories[index].categoryType
-
-        budget.categories.remove(at: index)
-        normalizeCategoryOrdinals(in: &budget, for: categoryType)
-
-        updateBudget(budget, windowStore: windowStore)
+        updateBudget(
+            BWBudgetMutation.deleteCategory(in: budget, categoryID: category.id),
+            windowStore: windowStore
+        )
     }
 
     func createTransaction(
@@ -293,32 +243,21 @@ class BWStore: ObservableObject {
         amount: UInt64,
         windowStore: BWWindowStore
     ) -> Bool {
-        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !trimmedTitle.isEmpty, amount > 0, var budget = currentBudget else {
+        guard let budget = currentBudget else {
             return false
         }
 
-        guard let categoryIndex = budget.categories.firstIndex(where: { $0.id == categoryID }) else {
-            return false
-        }
-
-        let transaction = BWTransaction(
-            title: trimmedTitle,
-            description: trimmedDescription,
-            date: date,
-            amount: amount
+        return updateBudget(
+            BWBudgetMutation.createTransaction(
+                in: budget,
+                categoryID: categoryID,
+                title: title,
+                description: description,
+                date: date,
+                amount: amount
+            ),
+            windowStore: windowStore
         )
-
-        budget.categories[categoryIndex].transactions.append(transaction)
-
-        guard normalizeActualAmounts(in: &budget, windowStore: windowStore) else {
-            return false
-        }
-
-        updateBudget(budget, windowStore: windowStore)
-        return true
     }
 
     func updateTransaction(
@@ -326,36 +265,19 @@ class BWStore: ObservableObject {
         transaction: BWTransaction,
         windowStore: BWWindowStore
     ) -> Bool {
-        let trimmedTitle = transaction.title.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !trimmedTitle.isEmpty, transaction.amount > 0, var budget = currentBudget else {
+        guard let budget = currentBudget else {
             return false
         }
 
-        guard let categoryIndex = budget.categories.firstIndex(where: { $0.id == categoryID }) else {
-            return false
-        }
-
-        guard let transactionIndex = budget.categories[categoryIndex].transactions.firstIndex(where: { $0.id == transaction.id }) else {
-            return false
-        }
-
-        let oldTransaction = budget.categories[categoryIndex].transactions[transactionIndex]
-
-        budget.categories[categoryIndex].transactions[transactionIndex] = BWTransaction(
-            id: oldTransaction.id,
-            title: trimmedTitle,
-            description: transaction.description.trimmingCharacters(in: .whitespacesAndNewlines),
-            date: transaction.date,
-            amount: transaction.amount
+        return updateBudget(
+            BWBudgetMutation.updateTransaction(
+                in: budget,
+                transaction: transaction,
+                from: categoryID,
+                to: categoryID
+            ),
+            windowStore: windowStore
         )
-
-        guard normalizeActualAmounts(in: &budget, windowStore: windowStore) else {
-            return false
-        }
-
-        updateBudget(budget, windowStore: windowStore)
-        return true
     }
 
     func deleteTransaction(
@@ -363,25 +285,18 @@ class BWStore: ObservableObject {
         transactionID: UUID,
         windowStore: BWWindowStore
     ) {
-        guard var budget = currentBudget else {
+        guard let budget = currentBudget else {
             return
         }
 
-        guard let categoryIndex = budget.categories.firstIndex(where: { $0.id == categoryID }) else {
-            return
-        }
-
-        guard let transactionIndex = budget.categories[categoryIndex].transactions.firstIndex(where: { $0.id == transactionID }) else {
-            return
-        }
-
-        budget.categories[categoryIndex].transactions.remove(at: transactionIndex)
-
-        guard normalizeActualAmounts(in: &budget, windowStore: windowStore) else {
-            return
-        }
-
-        updateBudget(budget, windowStore: windowStore)
+        updateBudget(
+            BWBudgetMutation.deleteTransaction(
+                in: budget,
+                transactionID: transactionID,
+                from: categoryID
+            ),
+            windowStore: windowStore
+        )
     }
 
     func moveTransaction(
@@ -394,88 +309,41 @@ class BWStore: ObservableObject {
             return true
         }
 
-        guard var budget = currentBudget else {
+        guard let budget = currentBudget,
+              let sourceCategory = budget.categories.first(where: { $0.id == sourceCategoryID }),
+              let transaction = sourceCategory.transactions.first(where: { $0.id == transactionID })
+        else {
             return false
         }
 
-        guard let sourceCategoryIndex = budget.categories.firstIndex(where: { $0.id == sourceCategoryID }) else {
-            return false
+        return updateBudget(
+            BWBudgetMutation.updateTransaction(
+                in: budget,
+                transaction: transaction,
+                from: sourceCategoryID,
+                to: destinationCategoryID
+            ),
+            windowStore: windowStore
+        )
+    }
+
+    private func updateBudget(_ result: Result<BWBudget, BWError>, windowStore: BWWindowStore) -> Bool {
+        switch result {
+            case .failure(.validation):
+                return false
+            case .failure(let error):
+                windowStore.setError(error)
+                return false
+            case .success(let budget):
+                updateBudget(budget, windowStore: windowStore)
+                return true
         }
-
-        guard let destinationCategoryIndex = budget.categories.firstIndex(where: { $0.id == destinationCategoryID }) else {
-            return false
-        }
-
-        guard let transactionIndex = budget.categories[sourceCategoryIndex].transactions.firstIndex(where: { $0.id == transactionID }) else {
-            return false
-        }
-
-        let transaction = budget.categories[sourceCategoryIndex].transactions[transactionIndex]
-
-        budget.categories[sourceCategoryIndex].transactions.remove(at: transactionIndex)
-        budget.categories[destinationCategoryIndex].transactions.append(transaction)
-
-        guard normalizeActualAmounts(in: &budget, windowStore: windowStore) else {
-            return false
-        }
-
-        updateBudget(budget, windowStore: windowStore)
-        return true
     }
 
     private func updateBudget(_ budget: BWBudget, windowStore: BWWindowStore) {
         currentBudget = budget
         upsertBudgetInVaultList(budget)
         scheduleBudgetSave(budget, windowStore: windowStore)
-    }
-
-    private func normalizeActualAmounts(in budget: inout BWBudget, windowStore: BWWindowStore) -> Bool {
-        guard BWCodec.normalizeActualAmounts(in: &budget) else {
-            windowStore.setError(.amountOverflow)
-            return false
-        }
-
-        return true
-    }
-
-    private func nextOrdinal(in budget: BWBudget, for categoryType: BWCategoryType, except categoryID: UUID) -> Int {
-        let maxOrdinal = budget.categories
-            .filter { $0.categoryType == categoryType && $0.id != categoryID }
-            .map(\.ordinal)
-            .max()
-
-        return (maxOrdinal ?? -1) + 1
-    }
-
-    private func nextOrdinal(in budget: BWBudget, for categoryType: BWCategoryType) -> Int {
-        nextOrdinal(in: budget, for: categoryType, except: UUID())
-    }
-
-    private func normalizeCategoryOrdinals(in budget: inout BWBudget, for categoryType: BWCategoryType) {
-        let categories = orderedCategoryIndexes(
-            in: budget,
-            for: categoryType
-        )
-
-        for (ordinal, categoryIndex) in categories.map(\.index).enumerated() {
-            budget.categories[categoryIndex].ordinal = ordinal
-        }
-    }
-
-    private func orderedCategoryIndexes(
-        in budget: BWBudget,
-        for categoryType: BWCategoryType
-    ) -> [(index: Int, category: BWCategory)] {
-        budget.categories.enumerated()
-            .filter { $0.element.categoryType == categoryType }
-            .sorted { lhs, rhs in
-                if lhs.element.ordinal == rhs.element.ordinal {
-                    return lhs.offset < rhs.offset
-                }
-
-                return lhs.element.ordinal < rhs.element.ordinal
-            }
-            .map { (index: $0.offset, category: $0.element) }
     }
 
     func saveCurrentBudgetNow(budgetID: UUID? = nil, windowStore: BWWindowStore) async {

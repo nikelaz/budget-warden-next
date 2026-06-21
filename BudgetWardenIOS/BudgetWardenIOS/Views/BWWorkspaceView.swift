@@ -20,7 +20,7 @@ struct BWWorkspaceView: View {
     @State private var selectedTab: BWWorkspaceTab = .budget
     @State private var categoryEditor: BWCategoryEditor?
     @State private var transactionEditor: BWTransactionEditor?
-    @State private var transactionSearchText = ""
+    @State private var transactionSearchText: String = ""
 
     private var budget: BWBudget? {
         store.budget(withID: budgetID)
@@ -56,10 +56,10 @@ struct BWWorkspaceView: View {
                     editor: $transactionEditor,
                     searchText: $transactionSearchText
                 )
-                    .tabItem {
-                        Label("Transactions", systemImage: "list.bullet.clipboard")
-                    }
-                    .tag(BWWorkspaceTab.transactions)
+                .tabItem {
+                    Label("Transactions", systemImage: "list.bullet.clipboard")
+                }
+                .tag(BWWorkspaceTab.transactions)
 
                 BWSettingsView(
                     store: store,
@@ -73,10 +73,6 @@ struct BWWorkspaceView: View {
             .navigationTitle(budget.title)
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarBackButtonHidden(true)
-            .modifier(BWTransactionSearchModifier(
-                isEnabled: selectedTab == .transactions,
-                searchText: $transactionSearchText
-            ))
             .toolbar {
                 ToolbarTitleMenu {
                     Button {
@@ -153,19 +149,7 @@ struct BWWorkspaceView: View {
     }
 
     private func orderedCategories(in budget: BWBudget) -> [BWCategory] {
-        budget.categories.enumerated()
-            .sorted { lhs, rhs in
-                if lhs.element.categoryType != rhs.element.categoryType {
-                    return lhs.element.categoryType.rawValue < rhs.element.categoryType.rawValue
-                }
-
-                if lhs.element.ordinal == rhs.element.ordinal {
-                    return lhs.offset < rhs.offset
-                }
-
-                return lhs.element.ordinal < rhs.element.ordinal
-            }
-            .map(\.element)
+        BWBudgetMutation.orderedCategories(in: budget)
     }
 }
 
@@ -174,24 +158,4 @@ private enum BWWorkspaceTab: Hashable {
     case reporting
     case transactions
     case settings
-}
-
-private struct BWTransactionSearchModifier: ViewModifier {
-    let isEnabled: Bool
-    @Binding var searchText: String
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if isEnabled {
-            content
-                .searchable(
-                    text: $searchText,
-                    placement: .navigationBarDrawer(displayMode: .always),
-                    prompt: "Search transactions"
-                )
-        }
-        else {
-            content
-        }
-    }
 }

@@ -8,11 +8,10 @@
  *
  */
 
-import AppleCore
 import Foundation
 
-enum BWFiles {
-    nonisolated static func saveFile(url: URL, contents: String) -> Result<Void, BWError> {
-        BWBudgetFileStore.saveFile(url: url, contents: contents)
-    }
+public enum BWBudgetTemplateSelection: Hashable, Sendable {
+    case basic
+    case blank
+    case previous(URL)
 }

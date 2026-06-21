@@ -15,13 +15,7 @@ struct BWSummaryRow: View {
     let budget: BWBudget
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(budget.title)
-                .font(.headline)
-
-            Text("\(budget.categories.count) categories")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
+        Text(budget.title)
+            .font(.headline)
     }
 }

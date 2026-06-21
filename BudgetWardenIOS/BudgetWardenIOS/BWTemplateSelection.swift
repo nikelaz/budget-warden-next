@@ -8,10 +8,6 @@
  *
  */
 
-import Foundation
+import AppleCore
 
-enum BWTemplateSelection: Hashable {
-    case basic
-    case blank
-    case previous(URL)
-}
+typealias BWTemplateSelection = BWBudgetTemplateSelection

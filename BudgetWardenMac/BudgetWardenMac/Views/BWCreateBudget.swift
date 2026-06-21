@@ -9,15 +9,10 @@
  *
  */
 
-import Foundation
 import SwiftUI
 import AppleCore
 
-enum BudgetTemplateSelection: Hashable {
-    case basic
-    case blank
-    case previous(URL)
-}
+typealias BudgetTemplateSelection = BWBudgetTemplateSelection
 
 struct CreateBudgetView: View {
     @EnvironmentObject var store: BWStore

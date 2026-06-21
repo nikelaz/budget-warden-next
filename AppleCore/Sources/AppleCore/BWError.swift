@@ -24,6 +24,7 @@ public enum BWError: Error, Sendable {
     case saveCancelled(underlying: Error? = nil)
     case findPreviousBudget(underlying: Error? = nil)
     case budgetRemove(underlying: Error? = nil)
+    case validation(underlying: Error? = nil)
 }
 
 extension BWError: LocalizedError {
@@ -44,7 +45,7 @@ extension BWError: LocalizedError {
             case .vaultNotSet:
                 return "No vault has been selected."
             case .iCloudUnavailable:
-                return "iCloud Drive is not available. Make sure iCloud Drive is enabled for this Mac."
+                return "iCloud Drive is not available. Make sure iCloud Drive is enabled."
             case .creatingBudget:
                 return "Could not create the budget."
             case .saveFailed:
@@ -55,6 +56,8 @@ extension BWError: LocalizedError {
                 return "Could not find previous budget."
             case .budgetRemove:
                 return "Could not remove budget."
+            case .validation:
+                return "The entered budget data is invalid."
         }
     }
 }
@@ -73,7 +76,8 @@ extension BWError {
                  .vaultNotSet(let error),
                  .saveCancelled(let error),
                  .findPreviousBudget(let error),
-                 .budgetRemove(let error):
+                 .budgetRemove(let error),
+                 .validation(let error):
                 return error
             case .amountOverflow:
                 return nil

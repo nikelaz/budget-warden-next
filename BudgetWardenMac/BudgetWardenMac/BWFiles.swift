@@ -42,20 +42,6 @@ class BWFiles {
     }
 
     nonisolated static func saveFile(url: URL, contents: String) -> Result<Void, BWError> {
-        let didStartAccessing = url.startAccessingSecurityScopedResource()
-
-        defer {
-            if didStartAccessing {
-                url.stopAccessingSecurityScopedResource()
-            }
-        }
-
-        do {
-            try contents.write(to: url, atomically: true, encoding: .utf8)
-            return .success(())
-        }
-        catch {
-            return .failure(.savingFile(underlying: error))
-        }
+        BWBudgetFileStore.saveFile(url: url, contents: contents)
     }
 }

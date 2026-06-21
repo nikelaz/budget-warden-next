@@ -20,7 +20,7 @@ struct BWReportingView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 30) {
                 Picker("Reporting Amount", selection: $amountMode) {
                     ForEach(BWReportingAmountMode.allCases) { mode in
                         Text(mode.title)
@@ -55,81 +55,49 @@ struct BWReportingView: View {
                     )
                 }
             }
-            .padding()
+            .padding(.horizontal)
+            .padding(.bottom)
         }
+        .background(Color(.systemGroupedBackground))
         .navigationTitle("Reporting")
     }
 
     private var allocationSegments: [BWReportingSegment] {
-        [
+        BWReportingSummary.allocationSegments(in: budget, amountMode: amountMode).map { segment in
             BWReportingSegment(
-                title: "Expenses",
-                amount: total(for: [.expenses], amount: amountMode.amountKeyPath),
-                tint: .orange
-            ),
-            BWReportingSegment(
-                title: "Savings",
-                amount: total(for: [.savings], amount: amountMode.amountKeyPath),
-                tint: .green
-            ),
-            BWReportingSegment(
-                title: "Debt",
-                amount: total(for: [.debt], amount: amountMode.amountKeyPath),
-                tint: .blue
+                title: segment.title,
+                amount: segment.amount,
+                tint: tint(for: segment.title)
             )
-        ]
-        .filter { $0.amount > 0 }
-    }
-
-    private func categorySegments(for categoryType: BWCategoryType) -> [BWReportingSegment] {
-        budget.categories
-            .filter { $0.categoryType == categoryType && $0[keyPath: amountMode.amountKeyPath] > 0 }
-            .sorted { $0.ordinal < $1.ordinal }
-            .enumerated()
-            .map { index, category in
-                BWReportingSegment(
-                    title: category.title,
-                    amount: category[keyPath: amountMode.amountKeyPath],
-                    tint: BWReportingSegment.palette[index % BWReportingSegment.palette.count]
-                )
-            }
-    }
-
-    private func total(
-        for types: Set<BWCategoryType>,
-        amount: KeyPath<BWCategory, UInt64>
-    ) -> UInt64 {
-        UInt64.sumMoneyAmounts(
-            budget.categories
-                .filter { types.contains($0.categoryType) }
-                .map { $0[keyPath: amount] }
-        ) ?? UInt64.max
-    }
-}
-
-private enum BWReportingAmountMode: String, CaseIterable, Identifiable {
-    case planned
-    case actual
-
-    var id: Self {
-        self
-    }
-
-    var title: String {
-        switch self {
-            case .planned:
-                return "Planned"
-            case .actual:
-                return "Actual"
         }
     }
 
-    var amountKeyPath: KeyPath<BWCategory, UInt64> {
-        switch self {
-            case .planned:
-                return \.amountPlanned
-            case .actual:
-                return \.amountActual
+    private func categorySegments(for categoryType: BWCategoryType) -> [BWReportingSegment] {
+        BWReportingSummary.categorySegments(
+            in: budget,
+            categoryType: categoryType,
+            amountMode: amountMode
+        )
+        .enumerated()
+        .map { index, segment in
+                BWReportingSegment(
+                    title: segment.title,
+                    amount: segment.amount,
+                    tint: BWReportingSegment.palette[index % BWReportingSegment.palette.count]
+                )
+        }
+    }
+
+    private func tint(for title: String) -> Color {
+        switch title {
+            case "Expenses":
+                return .orange
+            case "Savings":
+                return .green
+            case "Debt":
+                return .blue
+            default:
+                return .primary
         }
     }
 }
@@ -171,43 +139,23 @@ private struct BWReportingMetricGrid: View {
     let currency: BWCurrency
 
     private var incomeTotal: UInt64 {
-        total(for: [.income], amount: \.amountPlanned)
+        BWReportingSummary.incomeTotal(in: budget)
     }
 
     private var plannedSpendingTotal: UInt64 {
-        total(for: [.expenses, .debt], amount: \.amountPlanned)
+        BWReportingSummary.plannedSpendingTotal(in: budget)
     }
 
     private var actualSpendingTotal: UInt64 {
-        total(for: [.expenses, .debt], amount: \.amountActual)
+        BWReportingSummary.actualSpendingTotal(in: budget)
     }
 
     private var plannedSavingsTotal: UInt64 {
-        total(for: [.savings], amount: \.amountPlanned)
+        BWReportingSummary.plannedSavingsTotal(in: budget)
     }
 
     private var leftToBudgetTotal: Int64? {
-        guard
-            let income = Int64(exactly: incomeTotal),
-            let plannedSpending = Int64(exactly: plannedSpendingTotal),
-            let plannedSavings = Int64(exactly: plannedSavingsTotal)
-        else {
-            return nil
-        }
-
-        let afterSpending = income.subtractingReportingOverflow(plannedSpending)
-
-        guard !afterSpending.overflow else {
-            return nil
-        }
-
-        let afterSavings = afterSpending.partialValue.subtractingReportingOverflow(plannedSavings)
-
-        guard !afterSavings.overflow else {
-            return nil
-        }
-
-        return afterSavings.partialValue
+        BWReportingSummary.leftToBudgetTotal(in: budget)
     }
 
     var body: some View {
@@ -248,16 +196,6 @@ private struct BWReportingMetricGrid: View {
         }
     }
 
-    private func total(
-        for types: Set<BWCategoryType>,
-        amount: KeyPath<BWCategory, UInt64>
-    ) -> UInt64 {
-        UInt64.sumMoneyAmounts(
-            budget.categories
-                .filter { types.contains($0.categoryType) }
-                .map { $0[keyPath: amount] }
-        ) ?? UInt64.max
-    }
 }
 
 private struct BWIncomeVsAllocationChart: View {
@@ -265,51 +203,19 @@ private struct BWIncomeVsAllocationChart: View {
     let currency: BWCurrency
 
     private var segments: [BWReportingComparisonSegment] {
-        [
+        BWReportingSummary.incomeVsAllocationSegments(
+            in: budget,
+            plannedRowTitle: "Planned",
+            actualRowTitle: "Actual"
+        )
+        .map { segment in
             BWReportingComparisonSegment(
-                rowTitle: "Income",
-                componentTitle: "Income",
-                amount: total(for: [.income], amount: \.amountPlanned),
-                tint: .green
-            ),
-            BWReportingComparisonSegment(
-                rowTitle: "Planned",
-                componentTitle: "Expenses",
-                amount: total(for: [.expenses], amount: \.amountPlanned),
-                tint: .orange
-            ),
-            BWReportingComparisonSegment(
-                rowTitle: "Planned",
-                componentTitle: "Savings",
-                amount: total(for: [.savings], amount: \.amountPlanned),
-                tint: .green
-            ),
-            BWReportingComparisonSegment(
-                rowTitle: "Planned",
-                componentTitle: "Debt",
-                amount: total(for: [.debt], amount: \.amountPlanned),
-                tint: .blue
-            ),
-            BWReportingComparisonSegment(
-                rowTitle: "Actual",
-                componentTitle: "Expenses",
-                amount: total(for: [.expenses], amount: \.amountActual),
-                tint: .orange
-            ),
-            BWReportingComparisonSegment(
-                rowTitle: "Actual",
-                componentTitle: "Savings",
-                amount: total(for: [.savings], amount: \.amountActual),
-                tint: .green
-            ),
-            BWReportingComparisonSegment(
-                rowTitle: "Actual",
-                componentTitle: "Debt",
-                amount: total(for: [.debt], amount: \.amountActual),
-                tint: .blue
+                rowTitle: segment.rowTitle,
+                componentTitle: segment.componentTitle,
+                amount: segment.amount,
+                tint: tint(for: segment.componentTitle)
             )
-        ]
-        .filter { $0.amount > 0 }
+        }
     }
 
     var body: some View {
@@ -347,17 +253,6 @@ private struct BWIncomeVsAllocationChart: View {
         }
     }
 
-    private func total(
-        for types: Set<BWCategoryType>,
-        amount: KeyPath<BWCategory, UInt64>
-    ) -> UInt64 {
-        UInt64.sumMoneyAmounts(
-            budget.categories
-                .filter { types.contains($0.categoryType) }
-                .map { $0[keyPath: amount] }
-        ) ?? UInt64.max
-    }
-
     private func formattedChartAmount(_ amount: Double) -> String {
         let formatter = NumberFormatter()
         formatter.locale = .current
@@ -368,6 +263,19 @@ private struct BWIncomeVsAllocationChart: View {
         formatter.maximumFractionDigits = 2
 
         return formatter.string(from: NSNumber(value: amount)) ?? amount.formatted(.number.precision(.fractionLength(0...2)))
+    }
+
+    private func tint(for title: String) -> Color {
+        switch title {
+            case "Income", "Savings":
+                return .green
+            case "Expenses":
+                return .orange
+            case "Debt":
+                return .blue
+            default:
+                return .primary
+        }
     }
 }
 
@@ -450,7 +358,7 @@ private struct BWReportingMetricView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.quaternary, in: .rect(cornerRadius: 8, style: .continuous))
+        .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 8, style: .continuous))
     }
 }
 
@@ -468,7 +376,7 @@ private struct BWReportingSection<Content: View>: View {
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .topLeading)
-            .background(.quaternary, in: .rect(cornerRadius: 8, style: .continuous))
+            .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 8, style: .continuous))
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }

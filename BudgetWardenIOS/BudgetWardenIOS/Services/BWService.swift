@@ -20,17 +20,15 @@ enum BWService {
     ) async -> Result<BWBudget, BWError> {
         let budget: BWBudget
 
-        switch template {
-            case .basic:
-                budget = BWTemplate.basicBudget(title: title)
-            case .blank:
-                budget = BWBudget(title: title)
-            case .previous(let url):
-                guard let previousBudget = budgetsInVault.first(where: { $0.url == url }) else {
-                    return .failure(.findPreviousBudget())
-                }
-
-                budget = previousBudget.cloneAsTemplate(newTitle: title)
+        switch BWBudgetMutation.makeBudget(
+            title: title,
+            template: template,
+            budgetsInVault: budgetsInVault
+        ) {
+            case .failure(let error):
+                return .failure(error)
+            case .success(let result):
+                budget = result
         }
 
         let json: String
@@ -43,8 +41,8 @@ enum BWService {
         }
 
         let saveFileResult = await vault.saveNewBudgetInVault(
-            fileName: normalizedFileName(from: title),
-            fileExtension: "budget",
+            fileName: BWBudgetFileStore.normalizedFileName(from: title),
+            fileExtension: BWBudgetFileStore.budgetFileExtension,
             contents: json
         )
 
@@ -72,30 +70,14 @@ enum BWService {
                 json = resultJSON
         }
 
+        guard BWBudgetFileStore.isBudgetFile(budgetURL) else {
+            return .failure(.saveFailed())
+        }
+
         if await vault.containsBudgetFile(url: budgetURL) {
             return await vault.saveBudgetFile(url: budgetURL, contents: json)
         }
 
         return BWFiles.saveFile(url: budgetURL, contents: json)
-    }
-
-    static func normalizedFileName(from title: String) -> String {
-        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        let invalidCharacters = CharacterSet(charactersIn: "/\\?%*|\"<>:")
-            .union(.newlines)
-            .union(.controlCharacters)
-
-        let cleaned = trimmed
-            .components(separatedBy: invalidCharacters)
-            .joined(separator: "-")
-            .replacingOccurrences(
-                of: #"\s+"#,
-                with: " ",
-                options: .regularExpression
-            )
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        return cleaned.isEmpty ? "Untitled Budget" : cleaned
     }
 }

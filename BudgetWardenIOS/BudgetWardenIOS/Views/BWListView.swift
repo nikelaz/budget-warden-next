@@ -13,7 +13,6 @@ import SwiftUI
 
 struct BWListView: View {
     let store: BWAppStore
-    let openBudget: (BWBudget) -> Void
     let createBudget: () -> Void
     let configureVault: () -> Void
 
@@ -24,12 +23,9 @@ struct BWListView: View {
             }
 
             ForEach(store.budgets) { budget in
-                Button {
-                    openBudget(budget)
-                } label: {
+                NavigationLink(value: budget.id) {
                     BWSummaryRow(budget: budget)
                 }
-                .buttonStyle(.plain)
                 .contextMenu {
                     Button("Delete", systemImage: "trash", role: .destructive) {
                         Task {
@@ -54,6 +50,7 @@ struct BWListView: View {
             }
         }
         .navigationTitle("Budgets")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button("Add Budget", systemImage: "plus", action: createBudget)

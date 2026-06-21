@@ -50,6 +50,10 @@ struct BWTransactionsView: View {
 
     var body: some View {
         List {
+            Section {
+                searchField
+            }
+
             if transactions.isEmpty {
                 ContentUnavailableView("No Transactions", systemImage: "tray")
             }
@@ -65,35 +69,36 @@ struct BWTransactionsView: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                        .swipeActions(edge: .trailing) {
-                            Button("Delete", systemImage: "trash", role: .destructive) {
-                                Task {
-                                    await deleteTransaction(item)
-                                }
-                            }
-
-                            Button("Edit", systemImage: "pencil") {
-                                editor = .edit(item)
-                            }
-                            .tint(.blue)
-                        }
-                        .contextMenu {
-                            Button("Edit", systemImage: "pencil") {
-                                editor = .edit(item)
-                            }
-
-                            Button("Delete", systemImage: "trash", role: .destructive) {
-                                Task {
-                                    await deleteTransaction(item)
-                                }
+                    .swipeActions(edge: .trailing) {
+                        Button("Delete", systemImage: "trash", role: .destructive) {
+                            Task {
+                                await deleteTransaction(item)
                             }
                         }
+
+                        Button("Edit", systemImage: "pencil") {
+                            editor = .edit(item)
+                        }
+                        .tint(.blue)
+                    }
+                    .contextMenu {
+                        Button("Edit", systemImage: "pencil") {
+                            editor = .edit(item)
+                        }
+
+                        Button("Delete", systemImage: "trash", role: .destructive) {
+                            Task {
+                                await deleteTransaction(item)
+                            }
+                        }
+                    }
                 }
                 .onDelete { offsets in
                     deleteTransactions(at: offsets)
                 }
             }
         }
+        .contentMargins(.top, 5, for: .scrollContent)
         .sheet(item: $editor) { editor in
             BWTransactionEditorView(
                 editor: editor,
@@ -101,6 +106,29 @@ struct BWTransactionsView: View {
                 currency: currency,
                 saveTransaction: saveTransaction
             )
+        }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+
+            TextField("Search transactions", text: $searchText)
+                .submitLabel(.search)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Clear search")
+            }
         }
     }
 
@@ -133,19 +161,7 @@ struct BWTransactionsView: View {
     }
 
     private func orderedCategories() -> [BWCategory] {
-        budget.categories.enumerated()
-            .sorted { lhs, rhs in
-                if lhs.element.categoryType != rhs.element.categoryType {
-                    return lhs.element.categoryType.rawValue < rhs.element.categoryType.rawValue
-                }
-
-                if lhs.element.ordinal == rhs.element.ordinal {
-                    return lhs.offset < rhs.offset
-                }
-
-                return lhs.element.ordinal < rhs.element.ordinal
-            }
-            .map(\.element)
+        BWBudgetMutation.orderedCategories(in: budget)
     }
 
     private func deleteTransactions(at offsets: IndexSet) {

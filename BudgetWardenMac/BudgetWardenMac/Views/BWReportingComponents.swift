@@ -12,33 +12,6 @@ import Charts
 import SwiftUI
 import AppleCore
 
-enum BWReportingAmountMode: String, CaseIterable, Identifiable {
-    case planned
-    case actual
-
-    var id: Self {
-        self
-    }
-
-    var title: String {
-        switch self {
-            case .planned:
-                return "Planned"
-            case .actual:
-                return "Actual"
-        }
-    }
-
-    var amountKeyPath: KeyPath<BWCategory, UInt64> {
-        switch self {
-            case .planned:
-                return \.amountPlanned
-            case .actual:
-                return \.amountActual
-        }
-    }
-}
-
 enum BWReportingScope {
     case inspector
     case fullPage
@@ -94,58 +67,29 @@ struct BWReportingComparisonSegment: Identifiable {
     }
 }
 
-struct BWReportingComparisonTotal: Identifiable {
-    let title: String
-    let amount: UInt64
-
-    var id: String {
-        title
-    }
-}
-
 struct BWReportingMetricGrid: View {
     let budget: BWBudget
     let currency: BWCurrency
     let scope: BWReportingScope
 
     private var incomeTotal: UInt64 {
-        total(for: [.income], amount: \.amountPlanned)
+        BWReportingSummary.incomeTotal(in: budget)
     }
 
     private var plannedSpendingTotal: UInt64 {
-        total(for: [.expenses, .debt], amount: \.amountPlanned)
+        BWReportingSummary.plannedSpendingTotal(in: budget)
     }
 
     private var actualSpendingTotal: UInt64 {
-        total(for: [.expenses, .debt], amount: \.amountActual)
+        BWReportingSummary.actualSpendingTotal(in: budget)
     }
 
     private var plannedSavingsTotal: UInt64 {
-        total(for: [.savings], amount: \.amountPlanned)
+        BWReportingSummary.plannedSavingsTotal(in: budget)
     }
 
     private var leftToBudgetTotal: Int64? {
-        guard
-            let income = Int64(exactly: incomeTotal),
-            let plannedSpending = Int64(exactly: plannedSpendingTotal),
-            let plannedSavings = Int64(exactly: plannedSavingsTotal)
-        else {
-            return nil
-        }
-
-        let afterSpending = income.subtractingReportingOverflow(plannedSpending)
-
-        guard !afterSpending.overflow else {
-            return nil
-        }
-
-        let afterSavings = afterSpending.partialValue.subtractingReportingOverflow(plannedSavings)
-
-        guard !afterSavings.overflow else {
-            return nil
-        }
-
-        return afterSavings.partialValue
+        BWReportingSummary.leftToBudgetTotal(in: budget)
     }
 
     var body: some View {
@@ -191,16 +135,6 @@ struct BWReportingMetricGrid: View {
         }
     }
 
-    private func total(
-        for types: Set<BWCategoryType>,
-        amount: KeyPath<BWCategory, UInt64>
-    ) -> UInt64 {
-        UInt64.sumMoneyAmounts(
-            budget.categories
-                .filter { types.contains($0.categoryType) }
-                .map { $0[keyPath: amount] }
-        ) ?? UInt64.max
-    }
 }
 
 struct BWIncomeVsAllocationChart: View {
@@ -209,60 +143,23 @@ struct BWIncomeVsAllocationChart: View {
     let scope: BWReportingScope
 
     private var segments: [BWReportingComparisonSegment] {
-        [
+        BWReportingSummary.incomeVsAllocationSegments(
+            in: budget,
+            plannedRowTitle: "Planned Allocation",
+            actualRowTitle: "Actual Allocation"
+        )
+        .map { segment in
             BWReportingComparisonSegment(
-                rowTitle: "Income",
-                componentTitle: "Income",
-                amount: total(for: [.income], amount: \.amountPlanned),
-                tint: Color(nsColor: .systemGreen)
-            ),
-            BWReportingComparisonSegment(
-                rowTitle: "Planned Allocation",
-                componentTitle: "Expenses",
-                amount: total(for: [.expenses], amount: \.amountPlanned),
-                tint: Color(nsColor: .systemOrange)
-            ),
-            BWReportingComparisonSegment(
-                rowTitle: "Planned Allocation",
-                componentTitle: "Savings",
-                amount: total(for: [.savings], amount: \.amountPlanned),
-                tint: Color(nsColor: .systemGreen)
-            ),
-            BWReportingComparisonSegment(
-                rowTitle: "Planned Allocation",
-                componentTitle: "Debt",
-                amount: total(for: [.debt], amount: \.amountPlanned),
-                tint: Color(nsColor: .systemBlue)
-            ),
-            BWReportingComparisonSegment(
-                rowTitle: "Actual Allocation",
-                componentTitle: "Expenses",
-                amount: total(for: [.expenses], amount: \.amountActual),
-                tint: Color(nsColor: .systemOrange)
-            ),
-            BWReportingComparisonSegment(
-                rowTitle: "Actual Allocation",
-                componentTitle: "Savings",
-                amount: total(for: [.savings], amount: \.amountActual),
-                tint: Color(nsColor: .systemGreen)
-            ),
-            BWReportingComparisonSegment(
-                rowTitle: "Actual Allocation",
-                componentTitle: "Debt",
-                amount: total(for: [.debt], amount: \.amountActual),
-                tint: Color(nsColor: .systemBlue)
+                rowTitle: segment.rowTitle,
+                componentTitle: segment.componentTitle,
+                amount: segment.amount,
+                tint: tint(for: segment.componentTitle)
             )
-        ].filter { $0.amount > 0 }
+        }
     }
 
     private var totals: [BWReportingComparisonTotal] {
-        let outflowTypes: Set<BWCategoryType> = [.expenses, .savings, .debt]
-
-        return [
-            BWReportingComparisonTotal(title: "Income", amount: total(for: [.income], amount: \.amountPlanned)),
-            BWReportingComparisonTotal(title: "Planned", amount: total(for: outflowTypes, amount: \.amountPlanned)),
-            BWReportingComparisonTotal(title: "Actual", amount: total(for: outflowTypes, amount: \.amountActual))
-        ]
+        BWReportingSummary.incomeVsAllocationTotals(in: budget)
     }
 
     var body: some View {
@@ -314,17 +211,6 @@ struct BWIncomeVsAllocationChart: View {
         scope == .inspector ? 130 : 150
     }
 
-    private func total(
-        for types: Set<BWCategoryType>,
-        amount: KeyPath<BWCategory, UInt64>
-    ) -> UInt64 {
-        UInt64.sumMoneyAmounts(
-            budget.categories
-                .filter { types.contains($0.categoryType) }
-                .map { $0[keyPath: amount] }
-        ) ?? UInt64.max
-    }
-
     private func formattedChartAmount(_ amount: Double) -> String {
         let formatter = NumberFormatter()
         formatter.locale = .current
@@ -335,6 +221,19 @@ struct BWIncomeVsAllocationChart: View {
         formatter.maximumFractionDigits = 2
 
         return formatter.string(from: NSNumber(value: amount)) ?? amount.formatted(.number.precision(.fractionLength(0...2)))
+    }
+
+    private func tint(for title: String) -> Color {
+        switch title {
+            case "Income", "Savings":
+                return Color(nsColor: .systemGreen)
+            case "Expenses":
+                return Color(nsColor: .systemOrange)
+            case "Debt":
+                return Color(nsColor: .systemBlue)
+            default:
+                return .primary
+        }
     }
 }
 

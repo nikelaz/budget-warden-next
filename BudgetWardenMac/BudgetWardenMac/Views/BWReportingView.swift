@@ -259,46 +259,41 @@ struct BWBudgetReportingContent: View {
     }
 
     private var allocationBreakdownSegments: [BWReportingSegment] {
-        [
+        BWReportingSummary.allocationSegments(in: budget, amountMode: amountMode).map { segment in
             BWReportingSegment(
-                title: "Expenses",
-                amount: total(for: [.expenses], amount: amountMode.amountKeyPath),
-                tint: Color(nsColor: .systemOrange)
-            ),
-            BWReportingSegment(
-                title: "Savings",
-                amount: total(for: [.savings], amount: amountMode.amountKeyPath),
-                tint: Color(nsColor: .systemGreen)
-            ),
-            BWReportingSegment(
-                title: "Debt",
-                amount: total(for: [.debt], amount: amountMode.amountKeyPath),
-                tint: Color(nsColor: .systemBlue)
+                title: segment.title,
+                amount: segment.amount,
+                tint: tint(for: segment.title)
             )
-        ].filter { $0.amount > 0 }
+        }
     }
 
     private func categoryBreakdownSegments(for type: BWCategoryType) -> [BWReportingSegment] {
-        budget.categories
-            .filter { $0.categoryType == type && $0[keyPath: amountMode.amountKeyPath] > 0 }
-            .enumerated()
-            .map { index, category in
+        BWReportingSummary.categorySegments(
+            in: budget,
+            categoryType: type,
+            amountMode: amountMode
+        )
+        .enumerated()
+        .map { index, segment in
                 BWReportingSegment(
-                    title: category.title,
-                    amount: category[keyPath: amountMode.amountKeyPath],
+                    title: segment.title,
+                    amount: segment.amount,
                     tint: BWReportingSegment.palette[index % BWReportingSegment.palette.count]
                 )
-            }
+        }
     }
 
-    private func total(
-        for types: Set<BWCategoryType>,
-        amount: KeyPath<BWCategory, UInt64>
-    ) -> UInt64 {
-        UInt64.sumMoneyAmounts(
-            budget.categories
-                .filter { types.contains($0.categoryType) }
-                .map { $0[keyPath: amount] }
-        ) ?? UInt64.max
+    private func tint(for title: String) -> Color {
+        switch title {
+            case "Expenses":
+                return Color(nsColor: .systemOrange)
+            case "Savings":
+                return Color(nsColor: .systemGreen)
+            case "Debt":
+                return Color(nsColor: .systemBlue)
+            default:
+                return .primary
+        }
     }
 }

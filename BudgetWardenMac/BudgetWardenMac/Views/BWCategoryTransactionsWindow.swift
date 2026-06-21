@@ -620,16 +620,10 @@ struct BWTransactionInspectorView: View {
     }
 
     private func orderedCategories(for type: BWCategoryType) -> [BWCategory] {
-        categories.enumerated()
-            .filter { $0.element.categoryType == type }
-            .sorted { lhs, rhs in
-                if lhs.element.ordinal == rhs.element.ordinal {
-                    return lhs.offset < rhs.offset
-                }
-
-                return lhs.element.ordinal < rhs.element.ordinal
-            }
-            .map(\.element)
+        BWBudgetMutation.orderedCategories(
+            in: BWBudget(title: "", categories: categories),
+            for: type
+        )
     }
 
     private func resetFields() {

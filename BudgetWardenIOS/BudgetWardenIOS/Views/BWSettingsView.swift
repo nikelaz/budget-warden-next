@@ -57,6 +57,8 @@ struct BWSettingsView: View {
                 }
                 .buttonStyle(.plain)
             }
+
+            BWVaultSettingsSections(store: store)
         }
         .sheet(isPresented: $isCurrencyPickerPresented) {
             CurrencySelectionView(selectedCurrency: $store.selectedCurrency)

@@ -59,80 +59,49 @@ final class BWAppStore {
         plannedAmount: UInt64,
         categoryType: BWCategoryType
     ) async -> Bool {
-        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !trimmedTitle.isEmpty,
-              var budget = budget(withID: budgetID)
-        else {
+        guard let budget = budget(withID: budgetID) else {
             return false
         }
 
-        let category = BWCategory(
-            ordinal: nextOrdinal(in: budget, for: categoryType),
-            title: trimmedTitle,
-            amountPlanned: plannedAmount,
+        return await mutateAndSaveBudget(BWBudgetMutation.createCategory(
+            in: budget,
+            title: title,
+            plannedAmount: plannedAmount,
             categoryType: categoryType
-        )
-
-        budget.categories.append(category)
-        return await updateAndSaveBudget(budget)
+        ))
     }
 
     func updateBudgetTitle(_ title: String, for budgetID: UUID) async -> Bool {
-        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !trimmedTitle.isEmpty,
-              var budget = budget(withID: budgetID)
-        else {
+        guard let budget = budget(withID: budgetID) else {
             return false
         }
 
-        budget.title = trimmedTitle
-        return await updateAndSaveBudget(budget)
+        return await mutateAndSaveBudget(BWBudgetMutation.updateBudgetTitle(
+            in: budget,
+            title: title
+        ))
     }
 
     func updateCategory(_ updatedCategory: BWCategory, in budgetID: UUID) async -> Bool {
-        let trimmedTitle = updatedCategory.title.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !trimmedTitle.isEmpty,
-              var budget = budget(withID: budgetID),
-              let index = budget.categories.firstIndex(where: { $0.id == updatedCategory.id })
-        else {
+        guard let budget = budget(withID: budgetID) else {
             return false
         }
 
-        let oldCategoryType = budget.categories[index].categoryType
-        var category = updatedCategory
-        category.title = trimmedTitle
-
-        if category.categoryType != oldCategoryType {
-            category.ordinal = nextOrdinal(
-                in: budget,
-                for: category.categoryType,
-                except: category.id
-            )
-        }
-
-        budget.categories[index] = category
-        normalizeCategoryOrdinals(in: &budget, for: oldCategoryType)
-        normalizeCategoryOrdinals(in: &budget, for: category.categoryType)
-
-        return await updateAndSaveBudget(budget)
+        return await mutateAndSaveBudget(BWBudgetMutation.updateCategory(
+            in: budget,
+            category: updatedCategory
+        ))
     }
 
     func deleteCategory(_ category: BWCategory, in budgetID: UUID) async {
-        guard var budget = budget(withID: budgetID),
-              let index = budget.categories.firstIndex(where: { $0.id == category.id })
-        else {
+        guard let budget = budget(withID: budgetID) else {
             return
         }
 
-        let categoryType = budget.categories[index].categoryType
-
-        budget.categories.remove(at: index)
-        normalizeCategoryOrdinals(in: &budget, for: categoryType)
-
-        _ = await updateAndSaveBudget(budget)
+        _ = await mutateAndSaveBudget(BWBudgetMutation.deleteCategory(
+            in: budget,
+            categoryID: category.id
+        ))
     }
 
     func createTransaction(
@@ -143,26 +112,18 @@ final class BWAppStore {
         date: Date,
         amount: UInt64
     ) async -> Bool {
-        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !trimmedTitle.isEmpty,
-              amount > 0,
-              var budget = budget(withID: budgetID),
-              let categoryIndex = budget.categories.firstIndex(where: { $0.id == categoryID })
-        else {
+        guard let budget = budget(withID: budgetID) else {
             return false
         }
 
-        let transaction = BWTransaction(
-            title: trimmedTitle,
-            description: trimmedDescription,
+        return await mutateAndSaveBudget(BWBudgetMutation.createTransaction(
+            in: budget,
+            categoryID: categoryID,
+            title: title,
+            description: description,
             date: date,
             amount: amount
-        )
-
-        budget.categories[categoryIndex].transactions.append(transaction)
-        return await updateAndSaveBudget(budget)
+        ))
     }
 
     func updateTransaction(
@@ -171,35 +132,16 @@ final class BWAppStore {
         from sourceCategoryID: UUID,
         to destinationCategoryID: UUID
     ) async -> Bool {
-        let trimmedTitle = transaction.title.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !trimmedTitle.isEmpty,
-              transaction.amount > 0,
-              var budget = budget(withID: budgetID),
-              let sourceCategoryIndex = budget.categories.firstIndex(where: { $0.id == sourceCategoryID }),
-              let destinationCategoryIndex = budget.categories.firstIndex(where: { $0.id == destinationCategoryID }),
-              let transactionIndex = budget.categories[sourceCategoryIndex].transactions.firstIndex(where: { $0.id == transaction.id })
-        else {
+        guard let budget = budget(withID: budgetID) else {
             return false
         }
 
-        let updatedTransaction = BWTransaction(
-            id: transaction.id,
-            title: trimmedTitle,
-            description: transaction.description.trimmingCharacters(in: .whitespacesAndNewlines),
-            date: transaction.date,
-            amount: transaction.amount
-        )
-
-        if sourceCategoryID == destinationCategoryID {
-            budget.categories[sourceCategoryIndex].transactions[transactionIndex] = updatedTransaction
-        }
-        else {
-            budget.categories[sourceCategoryIndex].transactions.remove(at: transactionIndex)
-            budget.categories[destinationCategoryIndex].transactions.append(updatedTransaction)
-        }
-
-        return await updateAndSaveBudget(budget)
+        return await mutateAndSaveBudget(BWBudgetMutation.updateTransaction(
+            in: budget,
+            transaction: transaction,
+            from: sourceCategoryID,
+            to: destinationCategoryID
+        ))
     }
 
     func deleteTransaction(
@@ -207,15 +149,15 @@ final class BWAppStore {
         in budgetID: UUID,
         from categoryID: UUID
     ) async {
-        guard var budget = budget(withID: budgetID),
-              let categoryIndex = budget.categories.firstIndex(where: { $0.id == categoryID }),
-              let transactionIndex = budget.categories[categoryIndex].transactions.firstIndex(where: { $0.id == transaction.id })
-        else {
+        guard let budget = budget(withID: budgetID) else {
             return
         }
 
-        budget.categories[categoryIndex].transactions.remove(at: transactionIndex)
-        _ = await updateAndSaveBudget(budget)
+        _ = await mutateAndSaveBudget(BWBudgetMutation.deleteTransaction(
+            in: budget,
+            transactionID: transaction.id,
+            from: categoryID
+        ))
     }
 
     func refreshVaultState() async {
@@ -391,6 +333,18 @@ final class BWAppStore {
         }
     }
 
+    private func mutateAndSaveBudget(_ result: Result<BWBudget, BWError>) async -> Bool {
+        switch result {
+            case .failure(.validation):
+                return false
+            case .failure(let error):
+                errorMessage = error.localizedDescription
+                return false
+            case .success(let budget):
+                return await updateAndSaveBudget(budget)
+        }
+    }
+
     private func upsertBudget(_ budget: BWBudget) {
         if let index = budgets.firstIndex(where: { $0.id == budget.id }) {
             budgets[index] = budget
@@ -398,43 +352,6 @@ final class BWAppStore {
         else {
             budgets.append(budget)
         }
-    }
-
-    private func nextOrdinal(in budget: BWBudget, for categoryType: BWCategoryType, except categoryID: UUID) -> Int {
-        let maxOrdinal = budget.categories
-            .filter { $0.categoryType == categoryType && $0.id != categoryID }
-            .map(\.ordinal)
-            .max()
-
-        return (maxOrdinal ?? -1) + 1
-    }
-
-    private func nextOrdinal(in budget: BWBudget, for categoryType: BWCategoryType) -> Int {
-        nextOrdinal(in: budget, for: categoryType, except: UUID())
-    }
-
-    private func normalizeCategoryOrdinals(in budget: inout BWBudget, for categoryType: BWCategoryType) {
-        let categories = orderedCategoryIndexes(in: budget, for: categoryType)
-
-        for (ordinal, categoryIndex) in categories.map(\.index).enumerated() {
-            budget.categories[categoryIndex].ordinal = ordinal
-        }
-    }
-
-    private func orderedCategoryIndexes(
-        in budget: BWBudget,
-        for categoryType: BWCategoryType
-    ) -> [(index: Int, category: BWCategory)] {
-        budget.categories.enumerated()
-            .filter { $0.element.categoryType == categoryType }
-            .sorted { lhs, rhs in
-                if lhs.element.ordinal == rhs.element.ordinal {
-                    return lhs.offset < rhs.offset
-                }
-
-                return lhs.element.ordinal < rhs.element.ordinal
-            }
-            .map { (index: $0.offset, category: $0.element) }
     }
 
     private func clearSelectionIfNeeded(deletedBudgetID: UUID) {

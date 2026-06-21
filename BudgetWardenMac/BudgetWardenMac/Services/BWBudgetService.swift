@@ -11,21 +11,15 @@ class BWBudgetService {
     ) async -> Result<BWBudget, BWError> {
         var budget: BWBudget
 
-        switch template {
-            case .basic:
-                budget = BWTemplate.basicBudget(title: title)
-                break
-            case .blank:
-                budget = BWBudget(title: title)
-                break
-            case .previous(let url):
-                if let prevBudget = budgetsInVault.first(where: { $0.url == url }) {
-                    budget = prevBudget.cloneAsTemplate(newTitle: title)
-                }
-                else {
-                    return .failure(.findPreviousBudget())
-                }
-                break
+        switch BWBudgetMutation.makeBudget(
+            title: title,
+            template: template,
+            budgetsInVault: budgetsInVault
+        ) {
+            case .failure(let error):
+                return .failure(error)
+            case .success(let result):
+                budget = result
         }
 
         let jsonRes = BWCodec.encodeBudget(budget: budget)
@@ -39,10 +33,10 @@ class BWBudgetService {
                 json = resJson
         }
 
-        let fileName = normalizedFileName(from: title)
+        let fileName = BWBudgetFileStore.normalizedFileName(from: title)
         let saveFileRes = await vault.saveNewBudgetInVault(
             fileName: fileName,
-            fileExtension: "budget",
+            fileExtension: BWBudgetFileStore.budgetFileExtension,
             contents: json
         )
 
@@ -74,7 +68,7 @@ class BWBudgetService {
                 json = resJson
         }
 
-        guard budgetURL.pathExtension.lowercased() == "budget" else {
+        guard BWBudgetFileStore.isBudgetFile(budgetURL) else {
             return .failure(.saveFailed())
         }
 
@@ -101,23 +95,4 @@ class BWBudgetService {
         }
     }
 
-    static func normalizedFileName(from title: String) -> String {
-        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        let invalidCharacters = CharacterSet(charactersIn: "/\\?%*|\"<>:")
-            .union(.newlines)
-            .union(.controlCharacters)
-
-        let cleaned = trimmed
-            .components(separatedBy: invalidCharacters)
-            .joined(separator: "-")
-            .replacingOccurrences(
-                of: #"\s+"#,
-                with: " ",
-                options: .regularExpression
-            )
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        return cleaned.isEmpty ? "Untitled Budget" : cleaned
-    }
 }

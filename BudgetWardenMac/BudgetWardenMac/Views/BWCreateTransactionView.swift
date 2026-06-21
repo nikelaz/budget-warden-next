@@ -165,22 +165,7 @@ struct CreateTransactionView: View {
             return []
         }
 
-        return budget.categories.enumerated()
-            .filter { _, category in
-                type.map { category.categoryType == $0 } ?? true
-            }
-            .sorted { lhs, rhs in
-                if lhs.element.categoryType != rhs.element.categoryType {
-                    return lhs.element.categoryType.rawValue < rhs.element.categoryType.rawValue
-                }
-
-                if lhs.element.ordinal == rhs.element.ordinal {
-                    return lhs.offset < rhs.offset
-                }
-
-                return lhs.element.ordinal < rhs.element.ordinal
-            }
-            .map(\.element)
+        return BWBudgetMutation.orderedCategories(in: budget, for: type)
     }
 
     private var isValid: Bool {

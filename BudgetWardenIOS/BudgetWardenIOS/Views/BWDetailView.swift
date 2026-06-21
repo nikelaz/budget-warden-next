@@ -27,7 +27,10 @@ struct BWDetailView: View {
                 }
             }
             .pickerStyle(.segmented)
-            .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
+            .environment(\.defaultMinListRowHeight, 0)
+            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color(.systemGroupedBackground))
 
             ForEach(BWCategoryType.allCases, id: \.self) { categoryType in
                 Section(categoryType.title) {
@@ -79,6 +82,7 @@ struct BWDetailView: View {
                 }
             }
         }
+        .contentMargins(.top, 0, for: .scrollContent)
         .sheet(item: $editor) { editor in
             BWCategoryEditorView(
                 editor: editor,
@@ -88,15 +92,7 @@ struct BWDetailView: View {
     }
 
     private func categories(for categoryType: BWCategoryType) -> [BWCategory] {
-        budget.categories
-            .filter { $0.categoryType == categoryType }
-            .sorted { lhs, rhs in
-                if lhs.ordinal == rhs.ordinal {
-                    return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
-                }
-
-                return lhs.ordinal < rhs.ordinal
-            }
+        BWBudgetMutation.orderedCategories(in: budget, for: categoryType)
     }
 
     private func createLabel(for categoryType: BWCategoryType) -> String {
