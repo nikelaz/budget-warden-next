@@ -17,7 +17,6 @@ struct BWListView: View {
     let configureVault: () -> Void
 
     @State private var budgetsPendingDeletion: [BWBudget] = []
-    @State private var isDeleteConfirmationPresented = false
 
     var body: some View {
         List {
@@ -37,24 +36,33 @@ struct BWListView: View {
                 }
             }
             .onDelete { offsets in
-                confirmDeletion(at: offsets)
+                deleteBudgets(at: offsets)
             }
         }
-        .confirmationDialog(
+        .alert(
             deleteConfirmationTitle,
-            isPresented: $isDeleteConfirmationPresented,
-            titleVisibility: .visible
-        ) {
-            Button(deleteConfirmationButtonTitle, role: .destructive) {
-                deletePendingBudgets()
+            isPresented: Binding(
+                get: { !budgetsPendingDeletion.isEmpty },
+                set: { isPresented in
+                    if !isPresented {
+                        budgetsPendingDeletion = []
+                    }
+                }
+            ),
+            actions: {
+                Button(deleteConfirmationButtonTitle, role: .destructive) {
+                    deletePendingBudgets()
+                }
+                .accessibilityIdentifier("budgetDeleteConfirmButton")
+
+                Button("Cancel", role: .cancel) {
+                    budgetsPendingDeletion = []
+                }
+            },
+            message: {
+                Text(deleteConfirmationMessage)
             }
-            .accessibilityIdentifier("budgetDeleteConfirmButton")
-            Button("Cancel", role: .cancel) {
-                budgetsPendingDeletion = []
-            }
-        } message: {
-            Text(deleteConfirmationMessage)
-        }
+        )
         .overlay {
             if !store.isLoadingBudgets && store.budgets.isEmpty {
                 ContentUnavailableView(
@@ -95,21 +103,20 @@ struct BWListView: View {
         return "\(budgetsPendingDeletion.count) budgets will be removed from your vault."
     }
 
-    private func confirmDeletion(at offsets: IndexSet) {
+    private func deleteBudgets(at offsets: IndexSet) {
         let budgets = offsets.compactMap { index in
             store.budgets.indices.contains(index) ? store.budgets[index] : nil
         }
 
-        confirmDeletion(of: budgets)
+        Task {
+            for budget in budgets {
+                await store.deleteBudget(budget)
+            }
+        }
     }
 
     private func confirmDeletion(of budgets: [BWBudget]) {
-        guard !budgets.isEmpty else {
-            return
-        }
-
         budgetsPendingDeletion = budgets
-        isDeleteConfirmationPresented = true
     }
 
     private func deletePendingBudgets() {

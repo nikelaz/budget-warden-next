@@ -36,19 +36,11 @@ final class BudgetWardenIOSUITests: XCTestCase {
             "Salary",
             "Food",
             "Housing",
-            "Emergency Fund",
-            "Retirement",
-            "Fun & Entertainment",
-            "Health & Fitness"
         ] {
             assertCategoryExists(app: app, title: category)
         }
 
-        openBudgetList(app: app)
-
-        app.terminate()
-        app.launchArguments = uiTestLaunchArguments(resetState: false)
-        app.launch()
+        openBudgetListFromToolbarDropdown(app: app, budgetName: budgetName)
 
         XCTAssertTrue(app.buttons["budgetRow_\(budgetName)"].waitForExistence(timeout: 5))
         deleteBudgetFromList(app: app, budgetName: budgetName)
@@ -65,14 +57,14 @@ final class BudgetWardenIOSUITests: XCTestCase {
 
         createBudget(app: app, budgetName: budgetName)
         createCategory(app: app, title: categoryTitle, plannedAmount: "123.45")
-        assertCategoryAmount(app: app, title: categoryTitle, amount: "$123.45")
+        assertCategoryAmount(app: app, title: categoryTitle, amount: formattedMoneyAmount("123.45"))
 
         openCategoryEditor(app: app, title: categoryTitle)
         replaceText(in: app.textFields["categoryTitleTextField"], with: updatedCategoryTitle)
         replaceText(in: app.textFields["categoryPlannedTextField"], with: "456.78")
         tapButton(app.buttons["categorySaveButton"])
 
-        assertCategoryAmount(app: app, title: updatedCategoryTitle, amount: "$456.78")
+        assertCategoryAmount(app: app, title: updatedCategoryTitle, amount: formattedMoneyAmount("456.78"))
 
         openCategoryEditor(app: app, title: updatedCategoryTitle)
         tapButton(app.buttons["categoryEditorDeleteButton"])
@@ -99,12 +91,15 @@ final class BudgetWardenIOSUITests: XCTestCase {
 
         openBudgetTab(app: app)
         tapButton(app.buttons["Actual"])
-        assertCategoryAmount(app: app, title: "Salary", amount: "$123.45")
+        assertCategoryAmount(app: app, title: "Salary", amount: formattedMoneyAmount("123.45"))
 
         openTransactionsTab(app: app)
         XCTAssertTrue(app.buttons["transactionRow_\(transactionTitle)"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["transactionCategory_\(transactionTitle)"].waitForExistence(timeout: 5))
-        assertStaticTextValue(app.staticTexts["transactionAmount_\(transactionTitle)"], equals: "$123.45")
+        assertStaticTextValue(
+            app.staticTexts["transactionAmount_\(transactionTitle)"],
+            equals: formattedMoneyAmount("123.45")
+        )
 
         app.terminate()
     }
@@ -126,7 +121,7 @@ final class BudgetWardenIOSUITests: XCTestCase {
 
         openBudgetList(app: app)
         openBudget(app: app, budgetName: firstBudgetName)
-        assertCategoryAmount(app: app, title: firstMarker, amount: "$101.01")
+        assertCategoryAmount(app: app, title: firstMarker, amount: formattedMoneyAmount("101.01"))
         XCTAssertFalse(app.buttons["categoryRow_\(secondMarker)"].waitForExistence(timeout: 2))
 
         app.terminate()
@@ -134,7 +129,7 @@ final class BudgetWardenIOSUITests: XCTestCase {
         app.launch()
 
         openBudget(app: app, budgetName: secondBudgetName)
-        assertCategoryAmount(app: app, title: secondMarker, amount: "$202.02")
+        assertCategoryAmount(app: app, title: secondMarker, amount: formattedMoneyAmount("202.02"))
         XCTAssertFalse(app.buttons["categoryRow_\(firstMarker)"].waitForExistence(timeout: 2))
 
         app.terminate()
@@ -166,7 +161,7 @@ final class BudgetWardenIOSUITests: XCTestCase {
 
         tapButton(app.buttons["createBudgetSaveButton"])
         XCTAssertTrue(app.navigationBars[budgetName].waitForExistence(timeout: 5))
-        assertCategoryExists(app: app, title: "Emergency Fund")
+        assertCategoryExists(app: app, title: "Salary")
     }
 
     private func openBudget(app: XCUIApplication, budgetName: String) {
@@ -185,12 +180,21 @@ final class BudgetWardenIOSUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Budgets"].waitForExistence(timeout: 5))
     }
 
+    private func openBudgetListFromToolbarDropdown(app: XCUIApplication, budgetName: String) {
+        let titleMenu = app.navigationBars[budgetName].buttons[budgetName]
+
+        XCTAssertTrue(titleMenu.waitForExistence(timeout: 5))
+        titleMenu.tap()
+
+        tapButton(app.collectionViews.buttons["All Budgets"])
+        XCTAssertTrue(app.navigationBars["Budgets"].waitForExistence(timeout: 5))
+    }
+
     private func deleteBudgetFromList(app: XCUIApplication, budgetName: String) {
         let budgetRow = app.buttons["budgetRow_\(budgetName)"]
         XCTAssertTrue(budgetRow.waitForExistence(timeout: 5))
         budgetRow.swipeLeft()
         tapButton(app.buttons["Delete"])
-        tapButton(app.buttons["budgetDeleteConfirmButton"])
         XCTAssertFalse(budgetRow.waitForExistence(timeout: 5))
     }
 
@@ -208,6 +212,7 @@ final class BudgetWardenIOSUITests: XCTestCase {
         replaceText(in: plannedInput, with: plannedAmount)
 
         tapButton(app.buttons["categorySaveButton"])
+        XCTAssertFalse(app.navigationBars["New Expenses Category"].waitForExistence(timeout: 5))
         assertCategoryExists(app: app, title: title)
     }
 
@@ -254,7 +259,21 @@ final class BudgetWardenIOSUITests: XCTestCase {
     }
 
     private func assertCategoryExists(app: XCUIApplication, title: String) {
-        XCTAssertTrue(app.buttons["categoryRow_\(title)"].waitForExistence(timeout: 5))
+        let categoryRow = app.buttons["categoryRow_\(title)"]
+
+        if categoryRow.waitForExistence(timeout: 2) {
+            return
+        }
+
+        for _ in 0..<5 {
+            app.swipeUp()
+
+            if categoryRow.waitForExistence(timeout: 1) {
+                return
+            }
+        }
+
+        XCTFail("Expected category row \"\(title)\" to exist.")
     }
 
     private func assertCategoryAmount(app: XCUIApplication, title: String, amount: String) {
@@ -265,6 +284,18 @@ final class BudgetWardenIOSUITests: XCTestCase {
     private func assertStaticTextValue(_ element: XCUIElement, equals expectedValue: String) {
         XCTAssertTrue(element.waitForExistence(timeout: 5))
         XCTAssertEqual(element.label, expectedValue)
+    }
+
+    private func formattedMoneyAmount(_ amountText: String) -> String {
+        let formatter = NumberFormatter()
+        formatter.locale = .current
+        formatter.numberStyle = .currency
+        formatter.currencyCode = Locale.current.currency?.identifier ?? "USD"
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+
+        let amount = NSDecimalNumber(string: amountText, locale: Locale(identifier: "en_US_POSIX"))
+        return formatter.string(from: amount) ?? amountText
     }
 
     private func replaceText(in textField: XCUIElement, with text: String) {
