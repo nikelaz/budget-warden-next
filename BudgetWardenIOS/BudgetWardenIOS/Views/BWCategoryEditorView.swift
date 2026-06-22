@@ -13,20 +13,33 @@ import SwiftUI
 
 struct BWCategoryEditorView: View {
     let editor: BWCategoryEditor
+    let currency: BWCurrency
     let saveCategory: (BWCategoryDraft) async -> Bool
+    let deleteCategory: (() async -> Void)?
+    let embedsInNavigationStack: Bool
+    let showsCancelButton: Bool
 
     @Environment(\.dismiss) private var dismiss
 
     @State private var title: String
     @State private var plannedAmount: String
     @State private var categoryType: BWCategoryType
+    @State private var deleteConfirmationIsPresented = false
 
     init(
         editor: BWCategoryEditor,
-        saveCategory: @escaping (BWCategoryDraft) async -> Bool
+        currency: BWCurrency,
+        saveCategory: @escaping (BWCategoryDraft) async -> Bool,
+        deleteCategory: (() async -> Void)? = nil,
+        embedsInNavigationStack: Bool = true,
+        showsCancelButton: Bool = true
     ) {
         self.editor = editor
+        self.currency = currency
         self.saveCategory = saveCategory
+        self.deleteCategory = deleteCategory
+        self.embedsInNavigationStack = embedsInNavigationStack
+        self.showsCancelButton = showsCancelButton
         _title = State(initialValue: editor.initialTitle)
         _plannedAmount = State(initialValue: editor.initialPlannedAmount.moneyInputText)
         _categoryType = State(initialValue: editor.initialCategoryType)
@@ -45,53 +58,117 @@ struct BWCategoryEditorView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Category") {
-                    TextField("Title", text: $title)
+        if embedsInNavigationStack {
+            NavigationStack {
+                content
+            }
+        }
+        else {
+            content
+        }
+    }
 
-                    Picker("Type", selection: $categoryType) {
-                        ForEach(BWCategoryType.allCases, id: \.self) { categoryType in
-                            Text(categoryType.title)
-                                .tag(categoryType)
-                        }
+    private var content: some View {
+        Form {
+            Section("Category") {
+                TextField("Title", text: $title)
+                    .accessibilityIdentifier("categoryTitleTextField")
+
+                Picker("Type", selection: $categoryType) {
+                    ForEach(BWCategoryType.allCases, id: \.self) { categoryType in
+                        Text(categoryType.title)
+                            .tag(categoryType)
                     }
+                }
+                .accessibilityIdentifier("categoryTypePicker")
+            }
 
-                    TextField("Planned Amount", text: $plannedAmount)
-                        .keyboardType(.decimalPad)
+            Section("Amounts") {
+                TextField("Planned", text: $plannedAmount)
+                    .keyboardType(.decimalPad)
+                    .accessibilityIdentifier("categoryPlannedTextField")
+
+                if let actualAmount {
+                    LabeledContent("Actual") {
+                        Text(actualAmount.formattedMoneyAmount(currency: currency))
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("categoryActualValue")
+                    }
                 }
             }
-            .navigationTitle(editor.title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
+
+            if deleteCategory != nil {
+                Section {
+                    Button("Delete Category", systemImage: "trash", role: .destructive) {
+                        deleteConfirmationIsPresented = true
+                    }
+                    .accessibilityIdentifier("categoryEditorDeleteButton")
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                }
+            }
+        }
+        .navigationTitle(editor.title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if showsCancelButton {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", role: .cancel) {
                         dismiss()
                     }
-                }
-
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        Task {
-                            guard let parsedPlannedAmount else {
-                                return
-                            }
-
-                            let draft = BWCategoryDraft(
-                                mode: draftMode,
-                                title: trimmedTitle,
-                                plannedAmount: parsedPlannedAmount,
-                                categoryType: categoryType
-                            )
-
-                            if await saveCategory(draft) {
-                                dismiss()
-                            }
-                        }
-                    }
-                    .disabled(!canSave)
+                    .accessibilityIdentifier("categoryCancelButton")
                 }
             }
+
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") {
+                    Task {
+                        guard let parsedPlannedAmount else {
+                            return
+                        }
+
+                        let draft = BWCategoryDraft(
+                            mode: draftMode,
+                            title: trimmedTitle,
+                            plannedAmount: parsedPlannedAmount,
+                            categoryType: categoryType
+                        )
+
+                        if await saveCategory(draft) {
+                            dismiss()
+                        }
+                    }
+                }
+                .accessibilityIdentifier("categorySaveButton")
+                .disabled(!canSave)
+            }
+        }
+        .alert(
+            "Delete Category?",
+            isPresented: $deleteConfirmationIsPresented,
+            actions: {
+                Button("Delete Category", role: .destructive) {
+                    Task {
+                        await deleteCategory?()
+                        dismiss()
+                    }
+                }
+                .accessibilityIdentifier("categoryEditorDeleteConfirmButton")
+
+                Button("Cancel", role: .cancel) {}
+            },
+            message: {
+                Text("This will also delete the category's transactions.")
+            }
+        )
+    }
+
+    private var actualAmount: UInt64? {
+        switch editor {
+            case .create:
+                return nil
+            case .edit(let category):
+                return category.amountActual
         }
     }
 

@@ -29,6 +29,7 @@ struct BWListView: View {
                 NavigationLink(value: budget.id) {
                     BWSummaryRow(budget: budget)
                 }
+                .accessibilityIdentifier("budgetRow_\(budget.title)")
                 .contextMenu {
                     Button("Delete", systemImage: "trash", role: .destructive) {
                         confirmDeletion(of: [budget])
@@ -47,6 +48,7 @@ struct BWListView: View {
             Button(deleteConfirmationButtonTitle, role: .destructive) {
                 deletePendingBudgets()
             }
+            .accessibilityIdentifier("budgetDeleteConfirmButton")
             Button("Cancel", role: .cancel) {
                 budgetsPendingDeletion = []
             }
@@ -67,10 +69,12 @@ struct BWListView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button("Add Budget", systemImage: "plus", action: createBudget)
+                    .accessibilityIdentifier("addBudgetButton")
             }
 
             ToolbarItem(placement: .topBarLeading) {
                 Button("Vault", systemImage: "folder.badge.gearshape", action: configureVault)
+                    .accessibilityIdentifier("vaultButton")
             }
         }
     }

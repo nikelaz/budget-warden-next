@@ -35,6 +35,7 @@ actor BWVault: Sendable {
     private static let vaultLocationKey = "BWI_VAULT_LOCATION"
     private static let localVaultBookmarkKey = "BWI_LOCAL_VAULT_BOOKMARK"
     private static let defaultVaultFolderName = "Budget Warden Vaults"
+    private static let uiTestVaultFolderName = "Budget Warden UI Test Vault"
 
     private var url: URL?
     private var location: BWVaultLocation
@@ -286,7 +287,7 @@ actor BWVault: Sendable {
             create: true
         )
 
-        return documentsURL.appendingPathComponent(defaultVaultFolderName)
+        return documentsURL.appendingPathComponent(localVaultFolderName)
     }
 
     private static func defaultICloudVaultURL() throws -> URL {
@@ -297,5 +298,31 @@ actor BWVault: Sendable {
         return containerURL
             .appendingPathComponent("Documents")
             .appendingPathComponent(defaultVaultFolderName)
+    }
+
+    private static var localVaultFolderName: String {
+        BWUITestSupport.isEnabled ? uiTestVaultFolderName : defaultVaultFolderName
+    }
+
+    static func resetUITestState() {
+        UserDefaults.standard.removeObject(forKey: vaultLocationKey)
+        UserDefaults.standard.removeObject(forKey: localVaultBookmarkKey)
+
+        do {
+            let documentsURL = try FileManager.default.url(
+                for: .documentDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+            let testVaultURL = documentsURL.appendingPathComponent(uiTestVaultFolderName)
+
+            if FileManager.default.fileExists(atPath: testVaultURL.path) {
+                try FileManager.default.removeItem(at: testVaultURL)
+            }
+        }
+        catch {
+            // UI tests will surface vault setup failures during app launch.
+        }
     }
 }

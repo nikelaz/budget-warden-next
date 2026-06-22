@@ -73,6 +73,14 @@ struct BWWorkspaceView: View {
             .navigationTitle(budget.title)
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarBackButtonHidden(true)
+            .sheet(item: $transactionEditor) { editor in
+                BWTransactionEditorView(
+                    editor: editor,
+                    categories: orderedCategories(in: budget),
+                    currency: store.selectedCurrency,
+                    saveTransaction: saveTransaction
+                )
+            }
             .toolbar {
                 ToolbarTitleMenu {
                     Button {
@@ -95,6 +103,7 @@ struct BWWorkspaceView: View {
                             }
                         }
                     }
+                    .accessibilityIdentifier("budgetSwitcher_\(budget.title)")
 
                     Divider()
 
@@ -103,6 +112,7 @@ struct BWWorkspaceView: View {
                     } label: {
                         Label("New Budget", systemImage: "plus")
                     }
+                    .accessibilityIdentifier("titleMenuNewBudgetButton")
                 }
 
                 if selectedTab == .budget {
@@ -113,24 +123,37 @@ struct BWWorkspaceView: View {
                             } label: {
                                 Label("Budget", systemImage: "rectangle.stack.badge.plus")
                             }
+                            .accessibilityIdentifier("workspaceAddBudgetButton")
 
                             Button {
                                 categoryEditor = .create(.expenses)
                             } label: {
                                 Label("Category", systemImage: "folder.badge.plus")
                             }
+                            .accessibilityIdentifier("workspaceAddCategoryButton")
 
                             Button {
                                 transactionEditor = .create(initialCategoryID: orderedCategories(in: budget).first?.id)
                             } label: {
                                 Label("Transaction", systemImage: "receipt")
                             }
+                            .accessibilityIdentifier("workspaceAddTransactionButton")
                             .disabled(budget.categories.isEmpty)
                         } label: {
                             Image(systemName: "plus")
                         }
                         .accessibilityLabel("Add")
+                        .accessibilityIdentifier("workspaceAddMenu")
                     }
+                }
+
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showBudgetList()
+                    } label: {
+                        Label("All Budgets", systemImage: "list.bullet")
+                    }
+                    .accessibilityIdentifier("allBudgetsButton")
                 }
 
                 if selectedTab == .transactions {
@@ -138,6 +161,7 @@ struct BWWorkspaceView: View {
                         Button("New Transaction", systemImage: "plus") {
                             transactionEditor = .create(initialCategoryID: orderedCategories(in: budget).first?.id)
                         }
+                        .accessibilityIdentifier("newTransactionButton")
                         .disabled(budget.categories.isEmpty)
                     }
                 }
@@ -150,6 +174,35 @@ struct BWWorkspaceView: View {
 
     private func orderedCategories(in budget: BWBudget) -> [BWCategory] {
         BWBudgetMutation.orderedCategories(in: budget)
+    }
+
+    private func saveTransaction(_ draft: BWTransactionDraft) async -> Bool {
+        switch draft.mode {
+            case .create:
+                return await store.createTransaction(
+                    in: budgetID,
+                    categoryID: draft.categoryID,
+                    title: draft.title,
+                    description: draft.description,
+                    date: draft.date,
+                    amount: draft.amount
+                )
+            case .edit(let item):
+                let transaction = BWTransaction(
+                    id: item.transaction.id,
+                    title: draft.title,
+                    description: draft.description,
+                    date: draft.date,
+                    amount: draft.amount
+                )
+
+                return await store.updateTransaction(
+                    transaction,
+                    in: budgetID,
+                    from: item.category.id,
+                    to: draft.categoryID
+                )
+        }
     }
 }
 

@@ -16,6 +16,7 @@ struct BWTransactionEditorView: View {
     let categories: [BWCategory]
     let currency: BWCurrency
     let saveTransaction: (BWTransactionDraft) async -> Bool
+    let deleteTransaction: (() async -> Void)?
     let embedsInNavigationStack: Bool
     let showsCancelButton: Bool
 
@@ -26,12 +27,14 @@ struct BWTransactionEditorView: View {
     @State private var amount: String
     @State private var date: Date
     @State private var description: String
+    @State private var deleteConfirmationIsPresented = false
 
     init(
         editor: BWTransactionEditor,
         categories: [BWCategory],
         currency: BWCurrency,
         saveTransaction: @escaping (BWTransactionDraft) async -> Bool,
+        deleteTransaction: (() async -> Void)? = nil,
         embedsInNavigationStack: Bool = true,
         showsCancelButton: Bool = true
     ) {
@@ -39,6 +42,7 @@ struct BWTransactionEditorView: View {
         self.categories = categories
         self.currency = currency
         self.saveTransaction = saveTransaction
+        self.deleteTransaction = deleteTransaction
         self.embedsInNavigationStack = embedsInNavigationStack
         self.showsCancelButton = showsCancelButton
 
@@ -94,7 +98,7 @@ struct BWTransactionEditorView: View {
 
     private var content: some View {
         Form {
-            Section("Transaction") {
+            Section {
                 Picker("Category", selection: $selectedCategoryID) {
                     ForEach(BWCategoryType.allCases, id: \.self) { type in
                         let typeCategories = categories.filter { $0.categoryType == type }
@@ -110,20 +114,36 @@ struct BWTransactionEditorView: View {
                         }
                     }
                 }
+                .accessibilityIdentifier("transactionCategoryPicker")
 
                 TextField("Title", text: $title)
+                    .accessibilityIdentifier("transactionTitleTextField")
 
                 TextField("Amount", text: $amount)
                     .keyboardType(.decimalPad)
+                    .accessibilityIdentifier("transactionAmountTextField")
 
                 DatePicker(
                     "Date",
                     selection: $date,
                     displayedComponents: .date
                 )
+                .accessibilityIdentifier("transactionDatePicker")
 
                 TextField("Description", text: $description, axis: .vertical)
                     .lineLimit(2...5)
+                    .accessibilityIdentifier("transactionDescriptionTextField")
+            }
+
+            if deleteTransaction != nil {
+                Section {
+                    Button("Delete Transaction", systemImage: "trash", role: .destructive) {
+                        deleteConfirmationIsPresented = true
+                    }
+                    .accessibilityIdentifier("transactionEditorDeleteButton")
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                }
             }
         }
         .navigationTitle(editor.title)
@@ -134,6 +154,7 @@ struct BWTransactionEditorView: View {
                     Button("Cancel", role: .cancel) {
                         dismiss()
                     }
+                    .accessibilityIdentifier("transactionCancelButton")
                 }
             }
 
@@ -161,9 +182,28 @@ struct BWTransactionEditorView: View {
                         }
                     }
                 }
+                .accessibilityIdentifier("transactionSaveButton")
                 .disabled(!canSave)
             }
         }
+        .alert(
+            "Delete Transaction?",
+            isPresented: $deleteConfirmationIsPresented,
+            actions: {
+                Button("Delete Transaction", role: .destructive) {
+                    Task {
+                        await deleteTransaction?()
+                        dismiss()
+                    }
+                }
+                .accessibilityIdentifier("transactionEditorDeleteConfirmButton")
+
+                Button("Cancel", role: .cancel) {}
+            },
+            message: {
+                Text("This action cannot be undone.")
+            }
+        )
     }
 
     private var draftMode: BWTransactionDraftMode {

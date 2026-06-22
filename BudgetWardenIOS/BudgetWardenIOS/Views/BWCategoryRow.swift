@@ -20,12 +20,14 @@ struct BWCategoryRow: View {
         HStack(alignment: .firstTextBaseline) {
             Text(category.title)
                 .font(.body)
+                .accessibilityIdentifier("categoryTitle_\(category.title)")
 
             Spacer()
 
             Text(selectedAmount.amount(for: category).formattedMoneyAmount(currency: currency))
                 .font(.body.monospacedDigit())
                 .foregroundStyle(.secondary)
+                .accessibilityIdentifier("categoryAmount_\(category.title)")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

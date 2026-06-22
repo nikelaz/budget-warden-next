@@ -19,6 +19,7 @@ struct BWTransactionsView: View {
     @Binding var searchText: String
 
     @State private var transactionPendingEdit: BWTransactionListItem?
+    @State private var transactionsPendingDeletion: [BWTransactionListItem] = []
 
     private var transactions: [BWTransactionListItem] {
         budget.categories.flatMap { category in
@@ -87,9 +88,7 @@ struct BWTransactionsView: View {
                         }
 
                         Button("Delete", systemImage: "trash", role: .destructive) {
-                            Task {
-                                await deleteTransaction(item)
-                            }
+                            confirmDeletion(of: [item])
                         }
                     }
                 }
@@ -99,6 +98,30 @@ struct BWTransactionsView: View {
             }
         }
         .contentMargins(.top, 5, for: .scrollContent)
+        .alert(
+            deleteConfirmationTitle,
+            isPresented: Binding(
+                get: { !transactionsPendingDeletion.isEmpty },
+                set: { isPresented in
+                    if !isPresented {
+                        transactionsPendingDeletion = []
+                    }
+                }
+            ),
+            actions: {
+                Button(deleteConfirmationActionTitle, role: .destructive) {
+                    deletePendingTransactions()
+                }
+                .accessibilityIdentifier("transactionDeleteConfirmButton")
+
+                Button("Cancel", role: .cancel) {
+                    transactionsPendingDeletion = []
+                }
+            },
+            message: {
+                Text("This action cannot be undone.")
+            }
+        )
         .navigationDestination(
             isPresented: Binding(
                 get: { transactionPendingEdit != nil },
@@ -113,14 +136,6 @@ struct BWTransactionsView: View {
                 transactionEditor(for: transactionPendingEdit)
             }
         }
-        .sheet(item: $editor) { editor in
-            BWTransactionEditorView(
-                editor: editor,
-                categories: orderedCategories(),
-                currency: currency,
-                saveTransaction: saveTransaction
-            )
-        }
     }
 
     private var searchField: some View {
@@ -132,6 +147,7 @@ struct BWTransactionsView: View {
                 .submitLabel(.search)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
+                .accessibilityIdentifier("transactionSearchTextField")
 
             if !searchText.isEmpty {
                 Button {
@@ -142,36 +158,33 @@ struct BWTransactionsView: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
                 .accessibilityLabel("Clear search")
+                .accessibilityIdentifier("clearTransactionSearchButton")
             }
         }
     }
 
     private func transactionRow(_ item: BWTransactionListItem) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline) {
+        HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(item.transaction.title)
                     .font(.body)
-
-                Spacer()
-
-                Text(item.transaction.amount.formattedMoneyAmount(currency: currency))
-                    .font(.body.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-
-            HStack(spacing: 6) {
+                    .accessibilityIdentifier("transactionTitle_\(item.transaction.title)")
                 Text(item.category.title)
-
-                if !item.transaction.description.isEmpty {
-                    Text("•")
-                    Text(item.transaction.description)
-                        .lineLimit(1)
-                }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("transactionCategory_\(item.transaction.title)")
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Text(item.transaction.amount.formattedMoneyAmount(currency: currency))
+                .font(.body.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("transactionAmount_\(item.transaction.title)")
+
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityIdentifier("transactionRow_\(item.transaction.title)")
     }
 
     private func transactionEditor(for item: BWTransactionListItem) -> some View {
@@ -180,6 +193,9 @@ struct BWTransactionsView: View {
             categories: orderedCategories(),
             currency: currency,
             saveTransaction: saveTransaction,
+            deleteTransaction: {
+                await deleteTransaction(item)
+            },
             embedsInNavigationStack: false,
             showsCancelButton: false
         )
@@ -193,6 +209,17 @@ struct BWTransactionsView: View {
         let itemsToDelete = offsets.compactMap { index in
             filteredTransactions.indices.contains(index) ? filteredTransactions[index] : nil
         }
+
+        confirmDeletion(of: itemsToDelete)
+    }
+
+    private func confirmDeletion(of items: [BWTransactionListItem]) {
+        transactionsPendingDeletion = items
+    }
+
+    private func deletePendingTransactions() {
+        let itemsToDelete = transactionsPendingDeletion
+        transactionsPendingDeletion = []
 
         Task {
             for item in itemsToDelete {
@@ -250,6 +277,14 @@ struct BWTransactionsView: View {
         ]
             .filter { !$0.isEmpty }
             .joined(separator: " ")
+    }
+
+    private var deleteConfirmationTitle: String {
+        transactionsPendingDeletion.count == 1 ? "Delete Transaction?" : "Delete Transactions?"
+    }
+
+    private var deleteConfirmationActionTitle: String {
+        transactionsPendingDeletion.count == 1 ? "Delete Transaction" : "Delete Transactions"
     }
 }
 

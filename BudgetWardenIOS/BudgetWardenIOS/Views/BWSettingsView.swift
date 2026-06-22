@@ -29,7 +29,7 @@ struct BWSettingsView: View {
         @Bindable var store = store
 
         List {
-            Section("Budget") {
+            Section("Budget Title") {
                 TextField("Name", text: $title)
                     .focused($focusedField, equals: .name)
                     .submitLabel(.done)

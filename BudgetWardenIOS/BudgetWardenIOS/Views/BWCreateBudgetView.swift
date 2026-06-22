@@ -33,6 +33,7 @@ struct BWCreateBudgetView: View {
             Form {
                 Section("Budget") {
                     TextField("Title", text: $title)
+                        .accessibilityIdentifier("createBudgetTitleTextField")
                 }
 
                 Section("Start From") {
@@ -54,6 +55,7 @@ struct BWCreateBudgetView: View {
                             }
                         }
                     }
+                    .accessibilityIdentifier("createBudgetTemplatePicker")
                 }
             }
             .navigationTitle("New Budget")
@@ -73,6 +75,7 @@ struct BWCreateBudgetView: View {
                             }
                         }
                     }
+                    .accessibilityIdentifier("createBudgetSaveButton")
                     .disabled(!isValid)
                 }
             }

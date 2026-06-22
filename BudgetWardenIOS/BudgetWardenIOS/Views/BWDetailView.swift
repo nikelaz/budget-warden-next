@@ -18,6 +18,8 @@ struct BWDetailView: View {
     @Binding var editor: BWCategoryEditor?
 
     @State private var selectedAmount: BWCategoryAmount = .planned
+    @State private var categoryPendingEdit: BWCategory?
+    @State private var categoriesPendingDeletion: [BWCategory] = []
 
     var body: some View {
         List {
@@ -26,6 +28,7 @@ struct BWDetailView: View {
                     Text(amount.title).tag(amount)
                 }
             }
+            .accessibilityIdentifier("categoryAmountPicker")
             .pickerStyle(.segmented)
             .environment(\.defaultMinListRowHeight, 0)
             .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
@@ -35,17 +38,16 @@ struct BWDetailView: View {
             ForEach(BWCategoryType.allCases, id: \.self) { categoryType in
                 Section(categoryType.title) {
                     ForEach(categories(for: categoryType)) { category in
-                        Button {
-                            editor = .edit(category)
+                        NavigationLink {
+                            categoryEditor(for: category)
                         } label: {
                             BWCategoryRow(
                                 category: category,
                                 selectedAmount: selectedAmount,
                                 currency: currency
                             )
-                            .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("categoryRow_\(category.title)")
                         .swipeActions(edge: .trailing) {
                             Button("Delete", systemImage: "trash", role: .destructive) {
                                 Task {
@@ -54,19 +56,17 @@ struct BWDetailView: View {
                             }
 
                             Button("Edit", systemImage: "pencil") {
-                                editor = .edit(category)
+                                categoryPendingEdit = category
                             }
                             .tint(.blue)
                         }
                         .contextMenu {
                             Button("Edit", systemImage: "pencil") {
-                                editor = .edit(category)
+                                categoryPendingEdit = category
                             }
 
                             Button("Delete", systemImage: "trash", role: .destructive) {
-                                Task {
-                                    await store.deleteCategory(category, in: budget.id)
-                                }
+                                confirmDeletion(of: [category])
                             }
                         }
                     }
@@ -79,13 +79,53 @@ struct BWDetailView: View {
                     } label: {
                         Label(createLabel(for: categoryType), systemImage: "plus")
                     }
+                    .accessibilityIdentifier("create\(categoryType.title)CategoryButton")
                 }
             }
         }
         .contentMargins(.top, 0, for: .scrollContent)
+        .alert(
+            deleteConfirmationTitle,
+            isPresented: Binding(
+                get: { !categoriesPendingDeletion.isEmpty },
+                set: { isPresented in
+                    if !isPresented {
+                        categoriesPendingDeletion = []
+                    }
+                }
+            ),
+            actions: {
+                Button(deleteConfirmationActionTitle, role: .destructive) {
+                    deletePendingCategories()
+                }
+                .accessibilityIdentifier("categoryDeleteConfirmButton")
+
+                Button("Cancel", role: .cancel) {
+                    categoriesPendingDeletion = []
+                }
+            },
+            message: {
+                Text("This will also delete the category's transactions.")
+            }
+        )
+        .navigationDestination(
+            isPresented: Binding(
+                get: { categoryPendingEdit != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        categoryPendingEdit = nil
+                    }
+                }
+            )
+        ) {
+            if let categoryPendingEdit {
+                categoryEditor(for: categoryPendingEdit)
+            }
+        }
         .sheet(item: $editor) { editor in
             BWCategoryEditorView(
                 editor: editor,
+                currency: currency,
                 saveCategory: saveCategory
             )
         }
@@ -114,11 +154,43 @@ struct BWDetailView: View {
             sectionCategories.indices.contains(index) ? sectionCategories[index] : nil
         }
 
+        confirmDeletion(of: categoriesToDelete)
+    }
+
+    private func confirmDeletion(of categories: [BWCategory]) {
+        categoriesPendingDeletion = categories
+    }
+
+    private func deletePendingCategories() {
+        let categoriesToDelete = categoriesPendingDeletion
+        categoriesPendingDeletion = []
+
         Task {
             for category in categoriesToDelete {
                 await store.deleteCategory(category, in: budget.id)
             }
         }
+    }
+
+    private func categoryEditor(for category: BWCategory) -> some View {
+        BWCategoryEditorView(
+            editor: .edit(category),
+            currency: currency,
+            saveCategory: saveCategory,
+            deleteCategory: {
+                await store.deleteCategory(category, in: budget.id)
+            },
+            embedsInNavigationStack: false,
+            showsCancelButton: false
+        )
+    }
+
+    private var deleteConfirmationTitle: String {
+        categoriesPendingDeletion.count == 1 ? "Delete Category?" : "Delete Categories?"
+    }
+
+    private var deleteConfirmationActionTitle: String {
+        categoriesPendingDeletion.count == 1 ? "Delete Category" : "Delete Categories"
     }
 
     private func saveCategory(_ draft: BWCategoryDraft) async -> Bool {
