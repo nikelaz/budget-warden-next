@@ -16,6 +16,8 @@ struct BWTransactionEditorView: View {
     let categories: [BWCategory]
     let currency: BWCurrency
     let saveTransaction: (BWTransactionDraft) async -> Bool
+    let embedsInNavigationStack: Bool
+    let showsCancelButton: Bool
 
     @Environment(\.dismiss) private var dismiss
 
@@ -29,12 +31,16 @@ struct BWTransactionEditorView: View {
         editor: BWTransactionEditor,
         categories: [BWCategory],
         currency: BWCurrency,
-        saveTransaction: @escaping (BWTransactionDraft) async -> Bool
+        saveTransaction: @escaping (BWTransactionDraft) async -> Bool,
+        embedsInNavigationStack: Bool = true,
+        showsCancelButton: Bool = true
     ) {
         self.editor = editor
         self.categories = categories
         self.currency = currency
         self.saveTransaction = saveTransaction
+        self.embedsInNavigationStack = embedsInNavigationStack
+        self.showsCancelButton = showsCancelButton
 
         switch editor {
             case .create(let initialCategoryID):
@@ -76,75 +82,86 @@ struct BWTransactionEditorView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Transaction") {
-                    Picker("Category", selection: $selectedCategoryID) {
-                        ForEach(BWCategoryType.allCases, id: \.self) { type in
-                            let typeCategories = categories.filter { $0.categoryType == type }
+        if embedsInNavigationStack {
+            NavigationStack {
+                content
+            }
+        }
+        else {
+            content
+        }
+    }
 
-                            if !typeCategories.isEmpty {
-                                Text(type.title)
-                                    .selectionDisabled(true)
+    private var content: some View {
+        Form {
+            Section("Transaction") {
+                Picker("Category", selection: $selectedCategoryID) {
+                    ForEach(BWCategoryType.allCases, id: \.self) { type in
+                        let typeCategories = categories.filter { $0.categoryType == type }
 
-                                ForEach(typeCategories) { category in
-                                    Text(category.title)
-                                        .tag(Optional(category.id))
-                                }
+                        if !typeCategories.isEmpty {
+                            Text(type.title)
+                                .selectionDisabled(true)
+
+                            ForEach(typeCategories) { category in
+                                Text(category.title)
+                                    .tag(Optional(category.id))
                             }
                         }
                     }
-
-                    TextField("Title", text: $title)
-
-                    TextField("Amount", text: $amount)
-                        .keyboardType(.decimalPad)
-
-                    DatePicker(
-                        "Date",
-                        selection: $date,
-                        displayedComponents: .date
-                    )
-
-                    TextField("Description", text: $description, axis: .vertical)
-                        .lineLimit(2...5)
                 }
+
+                TextField("Title", text: $title)
+
+                TextField("Amount", text: $amount)
+                    .keyboardType(.decimalPad)
+
+                DatePicker(
+                    "Date",
+                    selection: $date,
+                    displayedComponents: .date
+                )
+
+                TextField("Description", text: $description, axis: .vertical)
+                    .lineLimit(2...5)
             }
-            .navigationTitle(editor.title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
+        }
+        .navigationTitle(editor.title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if showsCancelButton {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", role: .cancel) {
                         dismiss()
                     }
                 }
+            }
 
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        Task {
-                            guard
-                                let selectedCategoryID,
-                                let parsedAmount
-                            else {
-                                return
-                            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") {
+                    Task {
+                        guard
+                            let selectedCategoryID,
+                            let parsedAmount
+                        else {
+                            return
+                        }
 
-                            let draft = BWTransactionDraft(
-                                mode: draftMode,
-                                categoryID: selectedCategoryID,
-                                title: trimmedTitle,
-                                description: trimmedDescription,
-                                date: date,
-                                amount: parsedAmount
-                            )
+                        let draft = BWTransactionDraft(
+                            mode: draftMode,
+                            categoryID: selectedCategoryID,
+                            title: trimmedTitle,
+                            description: trimmedDescription,
+                            date: date,
+                            amount: parsedAmount
+                        )
 
-                            if await saveTransaction(draft) {
-                                dismiss()
-                            }
+                        if await saveTransaction(draft) {
+                            dismiss()
                         }
                     }
-                    .disabled(!canSave)
                 }
+                .disabled(!canSave)
             }
         }
     }

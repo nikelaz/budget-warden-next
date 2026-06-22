@@ -16,6 +16,9 @@ struct BWListView: View {
     let createBudget: () -> Void
     let configureVault: () -> Void
 
+    @State private var budgetsPendingDeletion: [BWBudget] = []
+    @State private var isDeleteConfirmationPresented = false
+
     var body: some View {
         List {
             if store.isLoadingBudgets {
@@ -28,17 +31,27 @@ struct BWListView: View {
                 }
                 .contextMenu {
                     Button("Delete", systemImage: "trash", role: .destructive) {
-                        Task {
-                            await store.deleteBudget(budget)
-                        }
+                        confirmDeletion(of: [budget])
                     }
                 }
             }
             .onDelete { offsets in
-                Task {
-                    await store.deleteBudgets(at: offsets)
-                }
+                confirmDeletion(at: offsets)
             }
+        }
+        .confirmationDialog(
+            deleteConfirmationTitle,
+            isPresented: $isDeleteConfirmationPresented,
+            titleVisibility: .visible
+        ) {
+            Button(deleteConfirmationButtonTitle, role: .destructive) {
+                deletePendingBudgets()
+            }
+            Button("Cancel", role: .cancel) {
+                budgetsPendingDeletion = []
+            }
+        } message: {
+            Text(deleteConfirmationMessage)
         }
         .overlay {
             if !store.isLoadingBudgets && store.budgets.isEmpty {
@@ -58,6 +71,50 @@ struct BWListView: View {
 
             ToolbarItem(placement: .topBarLeading) {
                 Button("Vault", systemImage: "folder.badge.gearshape", action: configureVault)
+            }
+        }
+    }
+
+    private var deleteConfirmationTitle: String {
+        budgetsPendingDeletion.count == 1 ? "Delete Budget?" : "Delete Budgets?"
+    }
+
+    private var deleteConfirmationButtonTitle: String {
+        budgetsPendingDeletion.count == 1 ? "Delete Budget" : "Delete Budgets"
+    }
+
+    private var deleteConfirmationMessage: String {
+        if let budget = budgetsPendingDeletion.first, budgetsPendingDeletion.count == 1 {
+            return "\"\(budget.title)\" will be removed from your vault."
+        }
+
+        return "\(budgetsPendingDeletion.count) budgets will be removed from your vault."
+    }
+
+    private func confirmDeletion(at offsets: IndexSet) {
+        let budgets = offsets.compactMap { index in
+            store.budgets.indices.contains(index) ? store.budgets[index] : nil
+        }
+
+        confirmDeletion(of: budgets)
+    }
+
+    private func confirmDeletion(of budgets: [BWBudget]) {
+        guard !budgets.isEmpty else {
+            return
+        }
+
+        budgetsPendingDeletion = budgets
+        isDeleteConfirmationPresented = true
+    }
+
+    private func deletePendingBudgets() {
+        let budgets = budgetsPendingDeletion
+        budgetsPendingDeletion = []
+
+        Task {
+            for budget in budgets {
+                await store.deleteBudget(budget)
             }
         }
     }

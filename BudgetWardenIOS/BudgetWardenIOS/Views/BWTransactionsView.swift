@@ -18,6 +18,8 @@ struct BWTransactionsView: View {
     @Binding var editor: BWTransactionEditor?
     @Binding var searchText: String
 
+    @State private var transactionPendingEdit: BWTransactionListItem?
+
     private var transactions: [BWTransactionListItem] {
         budget.categories.flatMap { category in
             category.transactions.map { transaction in
@@ -62,13 +64,11 @@ struct BWTransactionsView: View {
             }
             else {
                 ForEach(filteredTransactions) { item in
-                    Button {
-                        editor = .edit(item)
+                    NavigationLink {
+                        transactionEditor(for: item)
                     } label: {
                         transactionRow(item)
-                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
                     .swipeActions(edge: .trailing) {
                         Button("Delete", systemImage: "trash", role: .destructive) {
                             Task {
@@ -77,13 +77,13 @@ struct BWTransactionsView: View {
                         }
 
                         Button("Edit", systemImage: "pencil") {
-                            editor = .edit(item)
+                            transactionPendingEdit = item
                         }
                         .tint(.blue)
                     }
                     .contextMenu {
                         Button("Edit", systemImage: "pencil") {
-                            editor = .edit(item)
+                            transactionPendingEdit = item
                         }
 
                         Button("Delete", systemImage: "trash", role: .destructive) {
@@ -99,6 +99,20 @@ struct BWTransactionsView: View {
             }
         }
         .contentMargins(.top, 5, for: .scrollContent)
+        .navigationDestination(
+            isPresented: Binding(
+                get: { transactionPendingEdit != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        transactionPendingEdit = nil
+                    }
+                }
+            )
+        ) {
+            if let transactionPendingEdit {
+                transactionEditor(for: transactionPendingEdit)
+            }
+        }
         .sheet(item: $editor) { editor in
             BWTransactionEditorView(
                 editor: editor,
@@ -158,6 +172,17 @@ struct BWTransactionsView: View {
             .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func transactionEditor(for item: BWTransactionListItem) -> some View {
+        BWTransactionEditorView(
+            editor: .edit(item),
+            categories: orderedCategories(),
+            currency: currency,
+            saveTransaction: saveTransaction,
+            embedsInNavigationStack: false,
+            showsCancelButton: false
+        )
     }
 
     private func orderedCategories() -> [BWCategory] {
