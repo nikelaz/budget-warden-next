@@ -36,26 +36,27 @@ struct ConfigureVaultView: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Location")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            if selectedLocation == .local {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Location")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
 
-                Text(vaultUrl != nil ? vaultUrl!.path : "Loading Vault URL...")
-                    .foregroundStyle(vaultUrl != nil ? .primary : .secondary)
-                    .textSelection(.enabled)
+                    Text(vaultUrl != nil ? vaultUrl!.path : "Loading Vault URL...")
+                        .foregroundStyle(vaultUrl != nil ? .primary : .secondary)
+                        .textSelection(.enabled)
 
-                Button("Choose Local Folder") {
-                    Task {
-                        if let error = await store.selectVaultFolder() {
-                            windowStore.setError(error)
+                    Button("Choose Local Folder") {
+                        Task {
+                            if let error = await store.selectVaultFolder() {
+                                windowStore.setError(error)
+                            }
+
+                            vaultUrl = await store.vault.currentURL()
+                            selectedLocation = await store.vault.currentLocation()
                         }
-
-                        vaultUrl = await store.vault.currentURL()
-                        selectedLocation = await store.vault.currentLocation()
                     }
                 }
-                .disabled(selectedLocation != .local)
             }
 
             HStack {

@@ -19,6 +19,7 @@ class BWWindowStore: ObservableObject {
     @Published var isPreferencesDialogOpen = false
     @Published var isErrorState: Bool = false
     @Published var errorMessage: String = ""
+    @Published var saveConflict: BWBudgetSaveConflict? = nil
 
     func openPreferencesDialog() {
         isPreferencesDialogOpen = true
@@ -44,6 +45,14 @@ class BWWindowStore: ObservableObject {
 
     func clearError() {
         isErrorState = false
+    }
+
+    func setSaveConflict(_ conflict: BWBudgetSaveConflict) {
+        saveConflict = conflict
+    }
+
+    func clearSaveConflict() {
+        saveConflict = nil
     }
 
     func openVaultConfigDialog() {

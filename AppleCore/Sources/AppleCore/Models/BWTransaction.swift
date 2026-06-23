@@ -10,7 +10,7 @@
 
 import Foundation
 
-nonisolated public struct BWTransaction: Codable, Sendable, Identifiable {
+nonisolated public struct BWTransaction: Codable, Sendable, Identifiable, Equatable {
     public var id: UUID
     public var title: String
     public var description: String

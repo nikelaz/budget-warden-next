@@ -14,7 +14,6 @@ import AppleCore
 @main
 struct BWApp: App {
     @StateObject private var store = BWStore()
-    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         BWWelcomeWindow()
@@ -39,16 +38,5 @@ struct BWApp: App {
         }
         .defaultSize(width: 900, height: 560)
         .restorationBehavior(.disabled)
-        .onChange(of: scenePhase) { _, newPhase in
-            guard newPhase != .active else {
-                return
-            }
-
-            Task {
-                if let error = await store.flushPendingSaves() {
-                    bwLog(error)
-                }
-            }
-        }
     }
 }

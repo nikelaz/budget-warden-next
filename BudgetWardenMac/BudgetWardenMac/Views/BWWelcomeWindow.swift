@@ -43,6 +43,14 @@ struct BWWelcomeWindow: Scene {
             .task {
                 await store.loadBudgetsFromVault()
             }
+            .onOpenURL { url in
+                Task {
+                    if await store.openBudget(at: url, windowStore: windowStore) {
+                        openWindow(id: "window-main")
+                        dismissWindow(id: "window-welcome")
+                    }
+                }
+            }
             .alert("Error", isPresented: $windowStore.isErrorState) {
                 Button("OK") {
                     windowStore.clearError()

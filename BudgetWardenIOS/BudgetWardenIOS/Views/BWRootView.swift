@@ -59,6 +59,13 @@ struct BWRootView: View {
                     BWConfigureVaultView(store: store)
             }
         }
+        .sheet(item: saveConflictBinding) { conflict in
+            BWBudgetConflictResolutionView(conflict: conflict) { choice in
+                Task {
+                    await store.resolveSaveConflict(conflict, choice: choice)
+                }
+            }
+        }
         .alert("Could Not Open Budget", isPresented: errorIsPresented) {
         } message: {
             Text(store.errorMessage ?? "")
@@ -109,6 +116,13 @@ struct BWRootView: View {
                     store.errorMessage = nil
                 }
             }
+        )
+    }
+
+    private var saveConflictBinding: Binding<BWBudgetSaveConflict?> {
+        Binding(
+            get: { store.saveConflict },
+            set: { store.saveConflict = $0 }
         )
     }
 }

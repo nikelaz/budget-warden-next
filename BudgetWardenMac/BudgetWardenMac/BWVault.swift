@@ -208,6 +208,71 @@ actor BWVault: Sendable {
         }.value
     }
 
+    func saveBudgetFile(
+        _ budget: BWBudget,
+        baseBudget: BWBudget?,
+        deviceID: String
+    ) async -> Result<BWBudgetSaveOutcome, BWError> {
+        guard let url else {
+            return .failure(.vaultNotSet())
+        }
+
+        guard let budgetURL = budget.url else {
+            return .failure(.saveFailed())
+        }
+
+        return await Task.detached(priority: .userInitiated) {
+            let didStartAccessing = url.startAccessingSecurityScopedResource()
+
+            defer {
+                if didStartAccessing {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+
+            guard BWBudgetFileStore.isBudgetFile(budgetURL, in: url) else {
+                return .failure(.savingFile())
+            }
+
+            return BWBudgetFileStore.saveBudget(
+                budget,
+                baseBudget: baseBudget,
+                to: budgetURL.standardizedFileURL,
+                modifiedByDeviceID: deviceID
+            )
+        }.value
+    }
+
+    func resolveBudgetFileConflict(
+        _ conflict: BWBudgetSaveConflict,
+        choice: BWBudgetConflictChoice,
+        deviceID: String
+    ) async -> Result<BWBudgetSaveOutcome, BWError> {
+        guard let url else {
+            return .failure(.vaultNotSet())
+        }
+
+        return await Task.detached(priority: .userInitiated) {
+            let didStartAccessing = url.startAccessingSecurityScopedResource()
+
+            defer {
+                if didStartAccessing {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+
+            guard BWBudgetFileStore.isBudgetFile(conflict.fileURL, in: url) else {
+                return .failure(.savingFile())
+            }
+
+            return BWBudgetFileStore.resolveSaveConflict(
+                conflict,
+                choice: choice,
+                modifiedByDeviceID: deviceID
+            )
+        }.value
+    }
+
     func removeBudgetFromVault(url budgetURL: URL) async -> Result<Void, BWError> {
         guard let url else {
             return .failure(.vaultNotSet())

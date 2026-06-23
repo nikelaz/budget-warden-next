@@ -10,7 +10,7 @@
 
 import Foundation
 
-nonisolated public struct BWCategory: Codable, Sendable, Identifiable {
+nonisolated public struct BWCategory: Codable, Sendable, Identifiable, Equatable {
     public var id: UUID
     public var ordinal: Int
     public var title: String

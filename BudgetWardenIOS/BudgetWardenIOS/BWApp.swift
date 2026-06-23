@@ -40,6 +40,7 @@ enum BWUITestSupport {
 
         UserDefaults.standard.removeObject(forKey: "BWI_LAST_OPENED_BUDGET_ID")
         UserDefaults.standard.removeObject(forKey: "BWI_CURRENCY")
+        UserDefaults.standard.removeObject(forKey: "BWI_DEVICE_ID")
         BWVault.resetUITestState()
     }
 }

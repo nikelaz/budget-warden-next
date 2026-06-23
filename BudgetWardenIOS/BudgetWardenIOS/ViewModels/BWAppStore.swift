@@ -17,6 +17,7 @@ import Observation
 final class BWAppStore {
     private let lastOpenedBudgetIDKey = "BWI_LAST_OPENED_BUDGET_ID"
     private let currencyKey = "BWI_CURRENCY"
+    private let deviceIDKey = "BWI_DEVICE_ID"
 
     let vault = BWVault()
 
@@ -24,6 +25,7 @@ final class BWAppStore {
     private(set) var vaultLocation: BWVaultLocation = .iCloud
     private(set) var vaultURL: URL?
     private(set) var skippedFiles: [String] = []
+    var saveConflict: BWBudgetSaveConflict?
 
     var selectedBudgetID: UUID?
     var errorMessage: String?
@@ -33,12 +35,23 @@ final class BWAppStore {
             UserDefaults.standard.set(selectedCurrency.rawValue, forKey: currencyKey)
         }
     }
+    private let deviceID: String
+    private var baseBudgetSnapshots: [UUID: BWBudget] = [:]
 
     init() {
         let savedCurrency = UserDefaults.standard.string(forKey: currencyKey)
             .flatMap(BWCurrency.init(rawValue:))
 
         selectedCurrency = savedCurrency ?? .defaultCurrency
+
+        if let savedDeviceID = UserDefaults.standard.string(forKey: deviceIDKey) {
+            deviceID = savedDeviceID
+        }
+        else {
+            let newDeviceID = UUID().uuidString
+            UserDefaults.standard.set(newDeviceID, forKey: deviceIDKey)
+            deviceID = newDeviceID
+        }
     }
 
     var selectedBudget: BWBudget? {
@@ -198,16 +211,18 @@ final class BWAppStore {
                 errorMessage = error.localizedDescription
             case .success(let result):
                 budgets = result.budgets
+                rememberBaseSnapshots(for: result.budgets)
                 skippedFiles = result.skippedFiles
                 restoreSelection()
         }
     }
 
     func selectBudget(withID budgetID: UUID) {
-        guard budget(withID: budgetID) != nil else {
+        guard let budget = budget(withID: budgetID) else {
             return
         }
 
+        rememberBaseSnapshot(for: budget)
         selectedBudgetID = budgetID
         UserDefaults.standard.set(budgetID.uuidString, forKey: lastOpenedBudgetIDKey)
     }
@@ -235,10 +250,11 @@ final class BWAppStore {
             let json = try String(contentsOf: url, encoding: .utf8)
 
             switch BWCodec.decodeBudget(json: json, url: url) {
-                case .success(let budget):
-                    open(budget)
-                case .failure(let error):
-                    errorMessage = error.localizedDescription
+            case .success(let budget):
+                rememberBaseSnapshot(for: budget)
+                open(budget)
+            case .failure(let error):
+                errorMessage = error.localizedDescription
             }
         }
         catch {
@@ -251,12 +267,14 @@ final class BWAppStore {
             title: title,
             template: template,
             vault: vault,
-            budgetsInVault: budgets
+            budgetsInVault: budgets,
+            deviceID: deviceID
         ) {
             case .failure(let error):
                 errorMessage = error.localizedDescription
                 return false
             case .success(let budget):
+                rememberBaseSnapshot(for: budget)
                 open(budget)
                 await loadBudgets()
                 selectBudget(withID: budget.id)
@@ -342,12 +360,17 @@ final class BWAppStore {
 
         upsertBudget(normalizedBudget)
 
-        switch await BWService.saveBudget(normalizedBudget, vault: vault) {
+        switch await BWService.saveBudget(
+            normalizedBudget,
+            baseBudget: baseBudgetSnapshots[normalizedBudget.id],
+            vault: vault,
+            deviceID: deviceID
+        ) {
             case .failure(let error):
                 errorMessage = error.localizedDescription
                 return false
-            case .success:
-                return true
+            case .success(let outcome):
+                return handleSaveOutcome(outcome)
         }
     }
 
@@ -370,6 +393,59 @@ final class BWAppStore {
         else {
             budgets.append(budget)
         }
+    }
+
+    func resolveSaveConflict(
+        _ conflict: BWBudgetSaveConflict,
+        choice: BWBudgetConflictChoice
+    ) async {
+        let resolveResult: Result<BWBudgetSaveOutcome, BWError>
+
+        if await vault.containsBudgetFile(url: conflict.fileURL) {
+            resolveResult = await vault.resolveBudgetFileConflict(
+                conflict,
+                choice: choice,
+                deviceID: deviceID
+            )
+        }
+        else {
+            resolveResult = BWBudgetFileStore.resolveSaveConflict(
+                conflict,
+                choice: choice,
+                modifiedByDeviceID: deviceID
+            )
+        }
+
+        switch resolveResult {
+            case .failure(let error):
+                errorMessage = error.localizedDescription
+            case .success(let outcome):
+                if handleSaveOutcome(outcome) {
+                    saveConflict = nil
+                }
+        }
+    }
+
+    private func handleSaveOutcome(_ outcome: BWBudgetSaveOutcome) -> Bool {
+        switch outcome {
+            case .saved(let savedBudget):
+                upsertBudget(savedBudget)
+                rememberBaseSnapshot(for: savedBudget)
+                return true
+            case .conflict(let conflict):
+                saveConflict = conflict
+                return false
+        }
+    }
+
+    private func rememberBaseSnapshots(for budgets: [BWBudget]) {
+        for budget in budgets where selectedBudgetID != budget.id {
+            rememberBaseSnapshot(for: budget)
+        }
+    }
+
+    private func rememberBaseSnapshot(for budget: BWBudget) {
+        baseBudgetSnapshots[budget.id] = budget
     }
 
     private func clearSelectionIfNeeded(deletedBudgetID: UUID) {

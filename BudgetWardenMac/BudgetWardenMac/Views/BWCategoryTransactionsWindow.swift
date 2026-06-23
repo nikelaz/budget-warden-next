@@ -159,9 +159,20 @@ struct BWCategoryTransactionsWindow: View {
         } message: {
             Text(windowStore.errorMessage)
         }
+        .sheet(item: $windowStore.saveConflict) { conflict in
+            BWBudgetConflictResolutionView(conflict: conflict) { choice in
+                Task {
+                    await store.resolveSaveConflict(
+                        conflict,
+                        choice: choice,
+                        windowStore: windowStore
+                    )
+                }
+            }
+        }
         .onDisappear {
             Task {
-                if let error = await store.flushPendingSaves() {
+                if let error = await store.flushPendingSaves(windowStore: windowStore) {
                     windowStore.setError(error)
                 }
             }
@@ -172,7 +183,7 @@ struct BWCategoryTransactionsWindow: View {
             }
 
             Task {
-                if let error = await store.flushPendingSaves() {
+                if let error = await store.flushPendingSaves(windowStore: windowStore) {
                     windowStore.setError(error)
                 }
             }

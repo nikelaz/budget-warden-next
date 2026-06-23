@@ -7,7 +7,8 @@ class BWBudgetService {
         title: String,
         template: BudgetTemplateSelection,
         vault: BWVault,
-        budgetsInVault: [BWBudget]
+        budgetsInVault: [BWBudget],
+        deviceID: String
     ) async -> Result<BWBudget, BWError> {
         var budget: BWBudget
 
@@ -21,6 +22,8 @@ class BWBudgetService {
             case .success(let result):
                 budget = result
         }
+
+        budget = budget.withNewRevision(modifiedByDeviceID: deviceID)
 
         let jsonRes = BWCodec.encodeBudget(budget: budget)
 
@@ -51,48 +54,32 @@ class BWBudgetService {
 
     static func saveBudget(
         _ budget: BWBudget,
-        vault: BWVault
-    ) async -> Result<Void, BWError> {
+        baseBudget: BWBudget?,
+        vault: BWVault,
+        deviceID: String
+    ) async -> Result<BWBudgetSaveOutcome, BWError> {
         guard let budgetURL = budget.url else {
             return .failure(.saveFailed())
-        }
-
-        let jsonRes = BWCodec.encodeBudget(budget: budget)
-
-        let json: String
-
-        switch jsonRes {
-            case .failure(let error):
-                return .failure(.saveFailed(underlying: error))
-            case .success(let resJson):
-                json = resJson
         }
 
         guard BWBudgetFileStore.isBudgetFile(budgetURL) else {
             return .failure(.saveFailed())
         }
 
-        let saveFileRes: Result<Void, BWError>
-
         if await vault.containsBudgetFile(url: budgetURL) {
-            saveFileRes = await vault.saveBudgetFile(
-                url: budgetURL,
-                contents: json
-            )
-        }
-        else {
-            saveFileRes = BWFiles.saveFile(
-                url: budgetURL,
-                contents: json
+            return await vault.saveBudgetFile(
+                budget,
+                baseBudget: baseBudget,
+                deviceID: deviceID
             )
         }
 
-        switch saveFileRes {
-            case .failure(let error):
-                return .failure(.saveFailed(underlying: error))
-            case .success:
-                return .success(())
-        }
+        return BWBudgetFileStore.saveBudget(
+            budget,
+            baseBudget: baseBudget,
+            to: budgetURL,
+            modifiedByDeviceID: deviceID
+        )
     }
 
 }

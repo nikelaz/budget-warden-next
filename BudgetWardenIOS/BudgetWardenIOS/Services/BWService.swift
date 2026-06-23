@@ -16,9 +16,10 @@ enum BWService {
         title: String,
         template: BWTemplateSelection,
         vault: BWVault,
-        budgetsInVault: [BWBudget]
+        budgetsInVault: [BWBudget],
+        deviceID: String
     ) async -> Result<BWBudget, BWError> {
-        let budget: BWBudget
+        var budget: BWBudget
 
         switch BWBudgetMutation.makeBudget(
             title: title,
@@ -30,6 +31,8 @@ enum BWService {
             case .success(let result):
                 budget = result
         }
+
+        budget = budget.withNewRevision(modifiedByDeviceID: deviceID)
 
         let json: String
 
@@ -56,18 +59,14 @@ enum BWService {
         }
     }
 
-    static func saveBudget(_ budget: BWBudget, vault: BWVault) async -> Result<Void, BWError> {
+    static func saveBudget(
+        _ budget: BWBudget,
+        baseBudget: BWBudget?,
+        vault: BWVault,
+        deviceID: String
+    ) async -> Result<BWBudgetSaveOutcome, BWError> {
         guard let budgetURL = budget.url else {
             return .failure(.saveFailed())
-        }
-
-        let json: String
-
-        switch BWCodec.encodeBudget(budget: budget) {
-            case .failure(let error):
-                return .failure(.saveFailed(underlying: error))
-            case .success(let resultJSON):
-                json = resultJSON
         }
 
         guard BWBudgetFileStore.isBudgetFile(budgetURL) else {
@@ -75,9 +74,18 @@ enum BWService {
         }
 
         if await vault.containsBudgetFile(url: budgetURL) {
-            return await vault.saveBudgetFile(url: budgetURL, contents: json)
+            return await vault.saveBudgetFile(
+                budget,
+                baseBudget: baseBudget,
+                deviceID: deviceID
+            )
         }
 
-        return BWFiles.saveFile(url: budgetURL, contents: json)
+        return BWBudgetFileStore.saveBudget(
+            budget,
+            baseBudget: baseBudget,
+            to: budgetURL,
+            modifiedByDeviceID: deviceID
+        )
     }
 }
