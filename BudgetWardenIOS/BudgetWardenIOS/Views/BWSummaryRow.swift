@@ -13,9 +13,11 @@ import SwiftUI
 
 struct BWSummaryRow: View {
     let budget: BWBudget
+    let navigationTransitionNamespace: Namespace.ID
 
     var body: some View {
         Text(budget.title)
             .font(.headline)
+            .matchedTransitionSource(id: budget.id, in: navigationTransitionNamespace)
     }
 }

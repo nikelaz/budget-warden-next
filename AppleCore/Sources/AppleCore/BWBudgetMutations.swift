@@ -259,6 +259,46 @@ public enum BWBudgetMutation {
         return normalizeActualAmounts(in: budget)
     }
 
+    public static func moveCategories(
+        in budget: BWBudget,
+        for categoryType: BWCategoryType,
+        fromOffsets sourceOffsets: IndexSet,
+        toOffset destination: Int
+    ) -> Result<BWBudget, BWError> {
+        guard !sourceOffsets.isEmpty else {
+            return .success(budget)
+        }
+
+        var budget = budget
+        let categories = orderedCategoryIndexes(in: budget, for: categoryType)
+
+        guard sourceOffsets.allSatisfy({ categories.indices.contains($0) }),
+              (0...categories.count).contains(destination)
+        else {
+            return .failure(.validation())
+        }
+
+        let sortedSourceOffsets = sourceOffsets.sorted()
+        let movedCategories = sortedSourceOffsets.map { categories[$0] }
+        var remainingCategories = categories.enumerated()
+            .filter { !sourceOffsets.contains($0.offset) }
+            .map(\.element)
+
+        let adjustedDestination = destination - sortedSourceOffsets.filter { $0 < destination }.count
+
+        guard (0...remainingCategories.count).contains(adjustedDestination) else {
+            return .failure(.validation())
+        }
+
+        remainingCategories.insert(contentsOf: movedCategories, at: adjustedDestination)
+
+        for (ordinal, categoryIndex) in remainingCategories.map(\.index).enumerated() {
+            budget.categories[categoryIndex].ordinal = ordinal
+        }
+
+        return normalizeActualAmounts(in: budget)
+    }
+
     public static func orderedCategories(
         in budget: BWBudget,
         for categoryType: BWCategoryType? = nil

@@ -13,8 +13,8 @@ import AppKit
 import AppleCore
 
 enum BWVaultLocation: String, CaseIterable, Identifiable, Sendable {
-    case local
     case iCloud
+    case local
 
     var id: String {
         rawValue
@@ -49,14 +49,9 @@ actor BWVault: Sendable {
     init() {
         let savedLocation = UserDefaults.standard.string(forKey: Self.vaultLocationKey)
             .flatMap(BWVaultLocation.init(rawValue:))
-        self.location = savedLocation ?? .local
+        let initialLocation = savedLocation ?? Self.defaultLocation
 
-        switch Self.resolveVaultURL(location: location) {
-            case .success(let url):
-                self.url = url
-            case .failure:
-                self.url = nil
-        }
+        (self.location, self.url) = Self.resolveInitialVault(location: initialLocation)
     }
 
     // Runs on the UI thread because it opens a file dialog
@@ -80,9 +75,10 @@ actor BWVault: Sendable {
                 options: .withSecurityScope,
             )
 
-            UserDefaults.standard.set(bookmark, forKey: Self.bookmarkKey(location: await currentLocation()))
+            UserDefaults.standard.set(bookmark, forKey: Self.bookmarkKey(location: .local))
+            UserDefaults.standard.set(BWVaultLocation.local.rawValue, forKey: Self.vaultLocationKey)
 
-            await setUrl(url)
+            await setLocalVaultFolderURL(url)
             
             return .success(())
         }
@@ -92,8 +88,9 @@ actor BWVault: Sendable {
     }
 
     // This setter is necessary as otherwise the UI thread selectVaultFolder()
-    // cannot access this class to set the URL property
-    private func setUrl(_ url: URL) {
+    // cannot access this actor to set stored properties.
+    private func setLocalVaultFolderURL(_ url: URL) {
+        self.location = .local
         self.url = url
     }
 
@@ -275,6 +272,24 @@ actor BWVault: Sendable {
         }
     }
 
+    private static func resolveInitialVault(location: BWVaultLocation) -> (BWVaultLocation, URL?) {
+        switch resolveVaultURL(location: location) {
+            case .success(let url):
+                return (location, url)
+            case .failure:
+                guard location == .iCloud else {
+                    return (location, nil)
+                }
+
+                switch resolveVaultURL(location: .local) {
+                    case .success(let url):
+                        return (.local, url)
+                    case .failure:
+                        return (location, nil)
+                }
+        }
+    }
+
     private static func resolveBookmarkedVaultURL(location: BWVaultLocation) -> URL? {
         // Legacy key keeps existing users on their previously selected local vault.
         let key = bookmarkKey(location: location)
@@ -313,6 +328,10 @@ actor BWVault: Sendable {
             case .iCloud:
                 return iCloudVaultBookmarkKey
         }
+    }
+
+    private static var defaultLocation: BWVaultLocation {
+        UserDefaults.standard.data(forKey: vaultBookmarkKey) == nil ? .iCloud : .local
     }
 
     private static func defaultLocalVaultURL() throws -> URL {

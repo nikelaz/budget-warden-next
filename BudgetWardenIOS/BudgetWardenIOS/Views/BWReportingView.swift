@@ -19,47 +19,55 @@ struct BWReportingView: View {
     @State private var amountMode: BWReportingAmountMode = .planned
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 30) {
-                Picker("Reporting Amount", selection: $amountMode) {
-                    ForEach(BWReportingAmountMode.allCases) { mode in
-                        Text(mode.title)
-                            .tag(mode)
+        GeometryReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 30) {
+                    Picker("Reporting Amount", selection: $amountMode) {
+                        ForEach(BWReportingAmountMode.allCases) { mode in
+                            Text(mode.title)
+                                .tag(mode)
+                        }
                     }
-                }
-                .pickerStyle(.segmented)
+                    .pickerStyle(.segmented)
 
-                BWReportingMetricGrid(
-                    budget: budget,
-                    currency: currency
-                )
-
-                BWIncomeVsAllocationChart(
-                    budget: budget,
-                    currency: currency
-                )
-
-                BWAllocationBreakdownChart(
-                    title: "\(amountMode.title) Allocation",
-                    emptyTitle: "No \(amountMode.title.lowercased()) allocation amounts yet",
-                    segments: allocationSegments,
-                    currency: currency
-                )
-
-                ForEach(BWCategoryType.allCases, id: \.self) { categoryType in
-                    BWAllocationBreakdownChart(
-                        title: "\(categoryType.title) Breakdown",
-                        emptyTitle: "No \(amountMode.title.lowercased()) \(categoryType.title.lowercased()) amounts yet",
-                        segments: categorySegments(for: categoryType),
+                    BWReportingMetricGrid(
+                        budget: budget,
                         currency: currency
                     )
+
+                    BWReportingChartGrid(columnCount: chartColumnCount(for: proxy.size.width)) {
+                        BWIncomeVsAllocationChart(
+                            budget: budget,
+                            currency: currency
+                        )
+
+                        BWAllocationBreakdownChart(
+                            title: "\(amountMode.title) Allocation",
+                            emptyTitle: "No \(amountMode.title.lowercased()) allocation amounts yet",
+                            segments: allocationSegments,
+                            currency: currency
+                        )
+
+                        ForEach(BWCategoryType.allCases, id: \.self) { categoryType in
+                            BWAllocationBreakdownChart(
+                                title: "\(categoryType.title) Breakdown",
+                                emptyTitle: "No \(amountMode.title.lowercased()) \(categoryType.title.lowercased()) amounts yet",
+                                segments: categorySegments(for: categoryType),
+                                currency: currency
+                            )
+                        }
+                    }
                 }
+                .padding(.horizontal)
+                .padding(.bottom)
             }
-            .padding(.horizontal)
-            .padding(.bottom)
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Reporting")
+    }
+
+    private func chartColumnCount(for width: CGFloat) -> Int {
+        width >= 700 ? 2 : 1
     }
 
     private var allocationSegments: [BWReportingSegment] {
@@ -99,6 +107,77 @@ struct BWReportingView: View {
             default:
                 return .primary
         }
+    }
+}
+
+private struct BWReportingChartGrid: Layout {
+    let columnCount: Int
+    private let horizontalSpacing: CGFloat = 16
+    private let verticalSpacing: CGFloat = 30
+
+    func sizeThatFits(
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) -> CGSize {
+        let width = proposal.width ?? 0
+        let rowHeights = rowHeights(for: subviews, width: width)
+        let totalSpacing = CGFloat(max(0, rowHeights.count - 1)) * verticalSpacing
+        let height = rowHeights.reduce(0, +) + totalSpacing
+
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(
+        in bounds: CGRect,
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) {
+        let resolvedColumnCount = max(1, columnCount)
+        let columnWidth = columnWidth(for: bounds.width)
+        var y = bounds.minY
+
+        for rowStart in stride(from: 0, to: subviews.count, by: resolvedColumnCount) {
+            let rowEnd = min(rowStart + resolvedColumnCount, subviews.count)
+            let rowSubviews = subviews[rowStart..<rowEnd]
+            let rowHeight = rowSubviews.map { subview in
+                subview.sizeThatFits(ProposedViewSize(width: columnWidth, height: nil)).height
+            }
+            .max() ?? 0
+
+            for (offset, subview) in rowSubviews.enumerated() {
+                let x = bounds.minX + CGFloat(offset) * (columnWidth + horizontalSpacing)
+                subview.place(
+                    at: CGPoint(x: x, y: y),
+                    anchor: .topLeading,
+                    proposal: ProposedViewSize(width: columnWidth, height: rowHeight)
+                )
+            }
+
+            y += rowHeight + verticalSpacing
+        }
+    }
+
+    private func rowHeights(for subviews: Subviews, width: CGFloat) -> [CGFloat] {
+        let resolvedColumnCount = max(1, columnCount)
+        let columnWidth = columnWidth(for: width)
+
+        return stride(from: 0, to: subviews.count, by: resolvedColumnCount).map { rowStart in
+            let rowEnd = min(rowStart + resolvedColumnCount, subviews.count)
+
+            return subviews[rowStart..<rowEnd].map { subview in
+                subview.sizeThatFits(ProposedViewSize(width: columnWidth, height: nil)).height
+            }
+            .max() ?? 0
+        }
+    }
+
+    private func columnWidth(for width: CGFloat) -> CGFloat {
+        let resolvedColumnCount = max(1, columnCount)
+        let totalSpacing = CGFloat(resolvedColumnCount - 1) * horizontalSpacing
+
+        return max(0, (width - totalSpacing) / CGFloat(resolvedColumnCount))
     }
 }
 
@@ -375,10 +454,10 @@ private struct BWReportingSection<Content: View>: View {
                 content
             }
             .padding(12)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 8, style: .continuous))
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 

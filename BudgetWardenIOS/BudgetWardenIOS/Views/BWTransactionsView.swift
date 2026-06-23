@@ -15,10 +15,11 @@ struct BWTransactionsView: View {
     let store: BWAppStore
     let budget: BWBudget
     let currency: BWCurrency
-    @Binding var editor: BWTransactionEditor?
     @Binding var searchText: String
+    @Binding var transactionPendingEdit: BWTransactionListItem?
+    let navigationTransitionNamespace: Namespace.ID
+    let saveTransaction: (BWTransactionDraft) async -> Bool
 
-    @State private var transactionPendingEdit: BWTransactionListItem?
     @State private var transactionsPendingDeletion: [BWTransactionListItem] = []
 
     private var transactions: [BWTransactionListItem] {
@@ -52,52 +53,55 @@ struct BWTransactionsView: View {
     }
 
     var body: some View {
-        List {
-            Section {
-                searchField
-            }
+        VStack(spacing: 0) {
+            List {
+                Section {
+                    searchField
+                }
 
-            if transactions.isEmpty {
-                ContentUnavailableView("No Transactions", systemImage: "tray")
-            }
-            else if filteredTransactions.isEmpty {
-                ContentUnavailableView.search(text: searchText)
-            }
-            else {
-                ForEach(filteredTransactions) { item in
-                    NavigationLink {
-                        transactionEditor(for: item)
-                    } label: {
-                        transactionRow(item)
-                    }
-                    .swipeActions(edge: .trailing) {
-                        Button("Delete", systemImage: "trash", role: .destructive) {
-                            Task {
-                                await deleteTransaction(item)
+                if transactions.isEmpty {
+                    ContentUnavailableView("No Transactions", systemImage: "tray")
+                }
+                else if filteredTransactions.isEmpty {
+                    ContentUnavailableView.search(text: searchText)
+                }
+                else {
+                    ForEach(filteredTransactions) { item in
+                        NavigationLink {
+                            transactionEditor(for: item)
+                        } label: {
+                            transactionRow(item)
+                                .matchedTransitionSource(id: item.id, in: navigationTransitionNamespace)
+                        }
+                        .swipeActions(edge: .trailing) {
+                            Button("Delete", systemImage: "trash", role: .destructive) {
+                                Task {
+                                    await deleteTransaction(item)
+                                }
+                            }
+
+                            Button("Edit", systemImage: "pencil") {
+                                transactionPendingEdit = item
+                            }
+                            .tint(.blue)
+                        }
+                        .contextMenu {
+                            Button("Edit", systemImage: "pencil") {
+                                transactionPendingEdit = item
+                            }
+
+                            Button("Delete", systemImage: "trash", role: .destructive) {
+                                confirmDeletion(of: [item])
                             }
                         }
-
-                        Button("Edit", systemImage: "pencil") {
-                            transactionPendingEdit = item
-                        }
-                        .tint(.blue)
                     }
-                    .contextMenu {
-                        Button("Edit", systemImage: "pencil") {
-                            transactionPendingEdit = item
-                        }
-
-                        Button("Delete", systemImage: "trash", role: .destructive) {
-                            confirmDeletion(of: [item])
-                        }
+                    .onDelete { offsets in
+                        deleteTransactions(at: offsets)
                     }
-                }
-                .onDelete { offsets in
-                    deleteTransactions(at: offsets)
                 }
             }
+            .contentMargins(.top, 5, for: .scrollContent)
         }
-        .contentMargins(.top, 5, for: .scrollContent)
         .alert(
             deleteConfirmationTitle,
             isPresented: Binding(
@@ -122,20 +126,6 @@ struct BWTransactionsView: View {
                 Text("This action cannot be undone.")
             }
         )
-        .navigationDestination(
-            isPresented: Binding(
-                get: { transactionPendingEdit != nil },
-                set: { isPresented in
-                    if !isPresented {
-                        transactionPendingEdit = nil
-                    }
-                }
-            )
-        ) {
-            if let transactionPendingEdit {
-                transactionEditor(for: transactionPendingEdit)
-            }
-        }
     }
 
     private var searchField: some View {
@@ -199,6 +189,7 @@ struct BWTransactionsView: View {
             embedsInNavigationStack: false,
             showsCancelButton: false
         )
+        .navigationTransition(.zoom(sourceID: item.id, in: navigationTransitionNamespace))
     }
 
     private func orderedCategories() -> [BWCategory] {
@@ -234,35 +225,6 @@ struct BWTransactionsView: View {
             in: budget.id,
             from: item.category.id
         )
-    }
-
-    private func saveTransaction(_ draft: BWTransactionDraft) async -> Bool {
-        switch draft.mode {
-            case .create:
-                return await store.createTransaction(
-                    in: budget.id,
-                    categoryID: draft.categoryID,
-                    title: draft.title,
-                    description: draft.description,
-                    date: draft.date,
-                    amount: draft.amount
-                )
-            case .edit(let item):
-                let transaction = BWTransaction(
-                    id: item.transaction.id,
-                    title: draft.title,
-                    description: draft.description,
-                    date: draft.date,
-                    amount: draft.amount
-                )
-
-                return await store.updateTransaction(
-                    transaction,
-                    in: budget.id,
-                    from: item.category.id,
-                    to: draft.categoryID
-                )
-        }
     }
 
     private func searchableText(for item: BWTransactionListItem) -> String {

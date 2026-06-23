@@ -24,10 +24,10 @@ struct BWApp: App {
 }
 
 enum BWUITestSupport {
-    static let testingArgument = "-BWUITesting"
-    static let resetStateArgument = "-BWResetUITestState"
+    nonisolated static let testingArgument = "-BWUITesting"
+    nonisolated static let resetStateArgument = "-BWResetUITestState"
 
-    static var isEnabled: Bool {
+    nonisolated static var isEnabled: Bool {
         ProcessInfo.processInfo.arguments.contains(testingArgument)
     }
 

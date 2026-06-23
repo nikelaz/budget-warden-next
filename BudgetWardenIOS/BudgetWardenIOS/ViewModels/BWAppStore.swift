@@ -21,7 +21,7 @@ final class BWAppStore {
     let vault = BWVault()
 
     private(set) var budgets: [BWBudget] = []
-    private(set) var vaultLocation: BWVaultLocation = .local
+    private(set) var vaultLocation: BWVaultLocation = .iCloud
     private(set) var vaultURL: URL?
     private(set) var skippedFiles: [String] = []
 
@@ -101,6 +101,24 @@ final class BWAppStore {
         _ = await mutateAndSaveBudget(BWBudgetMutation.deleteCategory(
             in: budget,
             categoryID: category.id
+        ))
+    }
+
+    func moveCategories(
+        in budgetID: UUID,
+        for categoryType: BWCategoryType,
+        fromOffsets sourceOffsets: IndexSet,
+        toOffset destination: Int
+    ) async -> Bool {
+        guard let budget = budget(withID: budgetID) else {
+            return false
+        }
+
+        return await mutateAndSaveBudget(BWBudgetMutation.moveCategories(
+            in: budget,
+            for: categoryType,
+            fromOffsets: sourceOffsets,
+            toOffset: destination
         ))
     }
 

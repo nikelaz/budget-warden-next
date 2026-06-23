@@ -6,7 +6,7 @@ struct ConfigureVaultView: View {
     @EnvironmentObject var windowStore: BWWindowStore
 
     @State private var vaultUrl: URL? = nil
-    @State private var selectedLocation: BWVaultLocation = .local
+    @State private var selectedLocation: BWVaultLocation = .iCloud
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -45,7 +45,7 @@ struct ConfigureVaultView: View {
                     .foregroundStyle(vaultUrl != nil ? .primary : .secondary)
                     .textSelection(.enabled)
 
-                Button("Choose Folder") {
+                Button("Choose Local Folder") {
                     Task {
                         if let error = await store.selectVaultFolder() {
                             windowStore.setError(error)
@@ -55,6 +55,7 @@ struct ConfigureVaultView: View {
                         selectedLocation = await store.vault.currentLocation()
                     }
                 }
+                .disabled(selectedLocation != .local)
             }
 
             HStack {

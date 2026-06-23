@@ -12,8 +12,8 @@ import AppleCore
 import Foundation
 
 enum BWVaultLocation: String, CaseIterable, Identifiable, Sendable {
-    case local
     case iCloud
+    case local
 
     var id: String {
         rawValue
@@ -22,7 +22,7 @@ enum BWVaultLocation: String, CaseIterable, Identifiable, Sendable {
     var title: String {
         switch self {
             case .local:
-                return "Local Files"
+                return "Local Folder"
             case .iCloud:
                 return "iCloud Drive"
         }
@@ -43,14 +43,9 @@ actor BWVault: Sendable {
     init() {
         let savedLocation = UserDefaults.standard.string(forKey: Self.vaultLocationKey)
             .flatMap(BWVaultLocation.init(rawValue:))
-        location = savedLocation ?? .local
+        let initialLocation = savedLocation ?? Self.defaultLocation
 
-        switch Self.resolveVaultURL(location: location) {
-            case .success(let url):
-                self.url = url
-            case .failure:
-                self.url = nil
-        }
+        (location, url) = Self.resolveInitialVault(location: initialLocation)
     }
 
     func currentLocation() -> BWVaultLocation {
@@ -255,6 +250,24 @@ actor BWVault: Sendable {
         }
     }
 
+    private static func resolveInitialVault(location: BWVaultLocation) -> (BWVaultLocation, URL?) {
+        switch resolveVaultURL(location: location) {
+            case .success(let url):
+                return (location, url)
+            case .failure:
+                guard location == .iCloud else {
+                    return (location, nil)
+                }
+
+                switch resolveVaultURL(location: .local) {
+                    case .success(let url):
+                        return (.local, url)
+                    case .failure:
+                        return (location, nil)
+                }
+        }
+    }
+
     private static func resolveBookmarkedLocalVaultURL() -> URL? {
         guard let bookmark = UserDefaults.standard.data(forKey: localVaultBookmarkKey) else {
             return nil
@@ -302,6 +315,10 @@ actor BWVault: Sendable {
 
     private static var localVaultFolderName: String {
         BWUITestSupport.isEnabled ? uiTestVaultFolderName : defaultVaultFolderName
+    }
+
+    private static var defaultLocation: BWVaultLocation {
+        BWUITestSupport.isEnabled ? .local : .iCloud
     }
 
     static func resetUITestState() {

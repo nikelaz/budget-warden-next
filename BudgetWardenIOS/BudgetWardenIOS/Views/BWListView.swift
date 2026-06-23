@@ -15,6 +15,7 @@ struct BWListView: View {
     let store: BWAppStore
     let createBudget: () -> Void
     let configureVault: () -> Void
+    let navigationTransitionNamespace: Namespace.ID
 
     @State private var budgetsPendingDeletion: [BWBudget] = []
 
@@ -26,7 +27,10 @@ struct BWListView: View {
 
             ForEach(store.budgets) { budget in
                 NavigationLink(value: budget.id) {
-                    BWSummaryRow(budget: budget)
+                    BWSummaryRow(
+                        budget: budget,
+                        navigationTransitionNamespace: navigationTransitionNamespace
+                    )
                 }
                 .accessibilityIdentifier("budgetRow_\(budget.title)")
                 .contextMenu {

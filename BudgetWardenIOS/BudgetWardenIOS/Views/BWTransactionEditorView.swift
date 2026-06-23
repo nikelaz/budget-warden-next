@@ -116,12 +116,18 @@ struct BWTransactionEditorView: View {
                 }
                 .accessibilityIdentifier("transactionCategoryPicker")
 
-                TextField("Title", text: $title)
-                    .accessibilityIdentifier("transactionTitleTextField")
+                LabeledContent("Title") {
+                    TextField("Title", text: $title)
+                        .multilineTextAlignment(.trailing)
+                        .accessibilityIdentifier("transactionTitleTextField")
+                }
 
-                TextField("Amount", text: $amount)
-                    .keyboardType(.decimalPad)
-                    .accessibilityIdentifier("transactionAmountTextField")
+                LabeledContent("Amount") {
+                    TextField("0.00", text: $amount)
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                        .accessibilityIdentifier("transactionAmountTextField")
+                }
 
                 DatePicker(
                     "Date",

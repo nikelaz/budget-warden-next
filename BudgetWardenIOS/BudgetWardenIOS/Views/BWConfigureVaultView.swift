@@ -37,12 +37,12 @@ struct BWConfigureVaultView: View {
 struct BWVaultSettingsSections: View {
     let store: BWAppStore
 
-    @State private var selectedLocation: BWVaultLocation = .local
+    @State private var selectedLocation: BWVaultLocation = .iCloud
     @State private var isFolderImporterPresented = false
 
     var body: some View {
         Group {
-            Section("Location") {
+            Section("Vault Location") {
                 Picker("Storage", selection: $selectedLocation) {
                     ForEach(BWVaultLocation.allCases) { location in
                         Text(location.title).tag(location)
@@ -52,26 +52,28 @@ struct BWVaultSettingsSections: View {
                 .onChange(of: selectedLocation) { _, newLocation in
                     Task {
                         await store.setVaultLocation(newLocation)
+                        selectedLocation = store.vaultLocation
                     }
                 }
             }
 
-            Section("Vault Folder") {
-                LabeledContent("Current") {
-                    Text(store.vaultURL?.lastPathComponent ?? "Unavailable")
-                        .foregroundStyle(store.vaultURL == nil ? .secondary : .primary)
-                }
+            if selectedLocation == .local {
+                Section("Vault Folder") {
+                    LabeledContent("Current") {
+                        Text(store.vaultURL?.lastPathComponent ?? "Unavailable")
+                            .foregroundStyle(store.vaultURL == nil ? .secondary : .primary)
+                    }
 
-                if let vaultURL = store.vaultURL {
-                    Text(vaultURL.path)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
+                    if let vaultURL = store.vaultURL {
+                        Text(vaultURL.path)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
 
-                Button("Choose Local Folder", systemImage: "folder") {
-                    isFolderImporterPresented = true
+                    Button("Choose Local Folder", systemImage: "folder") {
+                        isFolderImporterPresented = true
+                    }
                 }
-                .disabled(selectedLocation != .local)
             }
         }
         .task {

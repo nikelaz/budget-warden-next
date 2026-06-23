@@ -71,8 +71,11 @@ struct BWCategoryEditorView: View {
     private var content: some View {
         Form {
             Section("Category") {
-                TextField("Title", text: $title)
-                    .accessibilityIdentifier("categoryTitleTextField")
+                LabeledContent("Title") {
+                    TextField("Title", text: $title)
+                        .multilineTextAlignment(.trailing)
+                        .accessibilityIdentifier("categoryTitleTextField")
+                }
 
                 Picker("Type", selection: $categoryType) {
                     ForEach(BWCategoryType.allCases, id: \.self) { categoryType in
@@ -84,9 +87,12 @@ struct BWCategoryEditorView: View {
             }
 
             Section("Amounts") {
-                TextField("Planned", text: $plannedAmount)
-                    .keyboardType(.decimalPad)
-                    .accessibilityIdentifier("categoryPlannedTextField")
+                LabeledContent("Planned") {
+                    TextField("0.00", text: $plannedAmount)
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                        .accessibilityIdentifier("categoryPlannedTextField")
+                }
 
                 if let actualAmount {
                     LabeledContent("Actual") {

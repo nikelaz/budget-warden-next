@@ -15,13 +15,15 @@ struct BWRootView: View {
     @State private var store = BWAppStore()
     @State private var navigationPath: [UUID] = []
     @State private var activeSheet: BWRootSheet?
+    @Namespace private var budgetNavigationNamespace
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
             BWListView(
                 store: store,
                 createBudget: showCreateBudget,
-                configureVault: showConfigureVault
+                configureVault: showConfigureVault,
+                navigationTransitionNamespace: budgetNavigationNamespace
             )
                 .navigationDestination(for: UUID.self, destination: destination)
         }
@@ -72,6 +74,7 @@ struct BWRootView: View {
                 createBudget: showCreateBudget,
                 showBudgetList: showBudgetList
             )
+            .navigationTransition(.zoom(sourceID: budgetID, in: budgetNavigationNamespace))
         }
         else {
             ContentUnavailableView("Budget Not Found", systemImage: "folder.badge.questionmark")
