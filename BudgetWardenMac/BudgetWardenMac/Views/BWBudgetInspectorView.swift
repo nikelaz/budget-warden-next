@@ -84,7 +84,7 @@ struct BWBudgetInspectorView: View {
                     deleteCategory(category.wrappedValue)
                 }
             ) {
-                Task {
+                Task(priority: .userInitiated) {
                     await store.saveCurrentBudgetNow(
                         budgetID: budgetID,
                         windowStore: windowStore

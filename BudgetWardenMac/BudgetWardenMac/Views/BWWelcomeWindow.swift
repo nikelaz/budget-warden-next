@@ -44,7 +44,7 @@ struct BWWelcomeWindow: Scene {
                 await store.loadBudgetsFromVault()
             }
             .onOpenURL { url in
-                Task {
+                Task(priority: .userInitiated) {
                     if await store.openBudget(at: url, windowStore: windowStore) {
                         openWindow(id: "window-main")
                         dismissWindow(id: "window-welcome")
@@ -83,7 +83,7 @@ struct BWWelcomeWindow: Scene {
                         return
                     }
 
-                    Task {
+                    Task(priority: .userInitiated) {
                         await store.removeBudget(
                             url: budgetUrl,
                             windowStore: windowStore
@@ -154,7 +154,7 @@ struct BWWelcomeWindow: Scene {
                 }
                 
                 Button("Open Budget", systemImage: "folder") {
-                    Task {
+                    Task(priority: .userInitiated) {
                         if await store.openBudget(windowStore: windowStore) {
                             openWindow(id: "window-main")
                             dismissWindow(id: "window-welcome")

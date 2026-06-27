@@ -46,6 +46,7 @@ struct BWTransactionsView: View {
     ]
     @State private var isCreatingTransaction = false
     @State private var isFilterPresented = false
+    @State private var isDateFilterEnabled = false
     @State private var startDate = Date()
     @State private var endDate = Date()
     @State private var minimumAmount = ""
@@ -274,17 +275,22 @@ struct BWTransactionsView: View {
 
     private var filterView: some View {
         Form {
-            DatePicker(
-                "Start Date",
-                selection: $startDate,
-                displayedComponents: .date
-            )
+            Toggle("Date Range", isOn: $isDateFilterEnabled)
 
-            DatePicker(
-                "End Date",
-                selection: $endDate,
-                displayedComponents: .date
-            )
+            Group {
+                DatePicker(
+                    "Start Date",
+                    selection: $startDate,
+                    displayedComponents: .date
+                )
+
+                DatePicker(
+                    "End Date",
+                    selection: $endDate,
+                    displayedComponents: .date
+                )
+            }
+            .disabled(!isDateFilterEnabled)
 
             TextField("Minimum Amount", text: $minimumAmount, prompt: Text("0.00"))
                 .textFieldStyle(.roundedBorder)
@@ -327,6 +333,10 @@ struct BWTransactionsView: View {
     }
 
     private func matchesDateFilters(_ item: BWTransactionListItem) -> Bool {
+        guard isDateFilterEnabled else {
+            return true
+        }
+
         let calendar = Calendar.current
         let transactionDay = calendar.startOfDay(for: item.date)
         let startDay = calendar.startOfDay(for: startDate)
@@ -370,6 +380,7 @@ struct BWTransactionsView: View {
 
     private func resetFilters() {
         let dateRange = transactionDateRange
+        isDateFilterEnabled = false
         startDate = dateRange.oldest
         endDate = dateRange.newest
         minimumAmount = ""

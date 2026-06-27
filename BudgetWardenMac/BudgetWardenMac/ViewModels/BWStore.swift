@@ -393,7 +393,7 @@ class BWStore: ObservableObject {
         pendingBudgetSaveTasks[budget.id]?.cancel()
         pendingBudgetSaveSnapshots[budget.id] = budget
 
-        pendingBudgetSaveTasks[budget.id] = Task { @MainActor [weak self] in
+        pendingBudgetSaveTasks[budget.id] = Task(priority: .userInitiated) { @MainActor [weak self] in
             do {
                 try await Task.sleep(nanoseconds: self?.autosaveDelayNanoseconds ?? 800_000_000)
             }

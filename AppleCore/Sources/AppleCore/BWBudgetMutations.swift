@@ -87,7 +87,6 @@ public enum BWBudgetMutation {
 
         let oldCategoryType = budget.categories[index].categoryType
         var category = updatedCategory
-        category.title = trimmedTitle
 
         if category.categoryType != oldCategoryType {
             category.ordinal = nextOrdinal(

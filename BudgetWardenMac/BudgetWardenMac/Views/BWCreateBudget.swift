@@ -79,7 +79,7 @@ struct CreateBudgetView: View {
                 .keyboardShortcut(.cancelAction)
 
                 Button("Save") {
-                    Task {
+                    Task(priority: .userInitiated) {
                         if await store.createBudget(
                             title: title,
                             template: selectedTemplate,

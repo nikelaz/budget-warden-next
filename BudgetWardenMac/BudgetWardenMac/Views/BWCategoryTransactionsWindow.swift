@@ -30,6 +30,7 @@ struct BWCategoryTransactionsWindow: View {
     ]
     @State private var isCreatingTransaction = false
     @State private var isFilterPresented = false
+    @State private var isDateFilterEnabled = false
     @State private var startDate = Date()
     @State private var endDate = Date()
     @State private var minimumAmount = ""
@@ -161,7 +162,7 @@ struct BWCategoryTransactionsWindow: View {
         }
         .sheet(item: $windowStore.saveConflict) { conflict in
             BWBudgetConflictResolutionView(conflict: conflict) { choice in
-                Task {
+                Task(priority: .userInitiated) {
                     await store.resolveSaveConflict(
                         conflict,
                         choice: choice,
@@ -171,7 +172,7 @@ struct BWCategoryTransactionsWindow: View {
             }
         }
         .onDisappear {
-            Task {
+            Task(priority: .userInitiated) {
                 if let error = await store.flushPendingSaves(windowStore: windowStore) {
                     windowStore.setError(error)
                 }
@@ -182,7 +183,7 @@ struct BWCategoryTransactionsWindow: View {
                 return
             }
 
-            Task {
+            Task(priority: .userInitiated) {
                 if let error = await store.flushPendingSaves(windowStore: windowStore) {
                     windowStore.setError(error)
                 }
@@ -240,17 +241,22 @@ struct BWCategoryTransactionsWindow: View {
 
     private var filterView: some View {
         Form {
-            DatePicker(
-                "Start Date",
-                selection: $startDate,
-                displayedComponents: .date
-            )
+            Toggle("Date Range", isOn: $isDateFilterEnabled)
 
-            DatePicker(
-                "End Date",
-                selection: $endDate,
-                displayedComponents: .date
-            )
+            Group {
+                DatePicker(
+                    "Start Date",
+                    selection: $startDate,
+                    displayedComponents: .date
+                )
+
+                DatePicker(
+                    "End Date",
+                    selection: $endDate,
+                    displayedComponents: .date
+                )
+            }
+            .disabled(!isDateFilterEnabled)
 
             TextField("Minimum Amount", text: $minimumAmount, prompt: Text("0.00"))
                 .textFieldStyle(.roundedBorder)
@@ -291,6 +297,10 @@ struct BWCategoryTransactionsWindow: View {
     }
 
     private func matchesDateFilters(_ transaction: BWTransaction) -> Bool {
+        guard isDateFilterEnabled else {
+            return true
+        }
+
         let calendar = Calendar.current
         let transactionDay = calendar.startOfDay(for: transaction.date)
         let startDay = calendar.startOfDay(for: startDate)
@@ -338,6 +348,7 @@ struct BWCategoryTransactionsWindow: View {
 
     private func resetFilters() {
         let dateRange = transactionDateRange
+        isDateFilterEnabled = false
         startDate = dateRange.oldest
         endDate = dateRange.newest
         minimumAmount = ""
@@ -374,7 +385,7 @@ private struct BWCreateCategoryTransactionView: View {
                             .textFieldStyle(.roundedBorder)
                             .foregroundStyle(parsedAmount == nil && !amount.isEmpty ? .red : .primary)
 
-                        Text(store.selectedCurrency.rawValue)
+                        Text(store.selectedCurrency.symbol)
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }

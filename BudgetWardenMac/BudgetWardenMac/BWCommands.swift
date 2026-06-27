@@ -42,7 +42,7 @@ struct BWCommands: Commands {
 
         CommandGroup(after: .newItem) {
             Button("Open Budget", systemImage: "folder") {
-                Task {
+                Task(priority: .userInitiated) {
                     if await store.openBudget(windowStore: windowStore) {
                         openWindow(id: "window-main")
                         dismissWindow(id: "window-welcome")

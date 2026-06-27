@@ -26,7 +26,7 @@ struct ConfigureVaultView: View {
             }
             .pickerStyle(.radioGroup)
             .onChange(of: selectedLocation) { _, newLocation in
-                Task {
+                Task(priority: .userInitiated) {
                     if let error = await store.setVaultLocation(newLocation) {
                         windowStore.setError(error)
                     }
@@ -47,7 +47,7 @@ struct ConfigureVaultView: View {
                         .textSelection(.enabled)
 
                     Button("Choose Local Folder") {
-                        Task {
+                        Task(priority: .userInitiated) {
                             if let error = await store.selectVaultFolder() {
                                 windowStore.setError(error)
                             }

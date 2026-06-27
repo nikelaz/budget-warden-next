@@ -89,7 +89,7 @@ struct BudgetView: View {
     }
 
     private func promptDeleteCategory(_ category: BWCategory) {
-        Task {
+        Task(priority: .userInitiated) {
             await store.saveCurrentBudgetNow(
                 budgetID: store.currentBudget?.id,
                 windowStore: windowStore

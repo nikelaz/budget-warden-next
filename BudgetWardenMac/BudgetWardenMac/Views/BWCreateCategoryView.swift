@@ -42,7 +42,7 @@ struct CreateCategoryView: View {
                 }
 
                 Button("Save") {
-                    Task {
+                    Task(priority: .userInitiated) {
                         guard let plannedAmount = parsedPlannedAmount else {
                             return
                         }
@@ -111,7 +111,7 @@ struct CreateGeneralCategoryView: View {
                 }
 
                 Button("Save") {
-                    Task {
+                    Task(priority: .userInitiated) {
                         guard let plannedAmount = parsedPlannedAmount else {
                             return
                         }
