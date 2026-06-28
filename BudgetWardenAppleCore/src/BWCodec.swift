@@ -58,6 +58,14 @@ nonisolated public final class BWCodec {
         var decodedBudget = budget
         decodedBudget.url = url
 
+        if decodedBudget.schemaVersion == nil {
+            decodedBudget.schemaVersion = 1;
+        }
+
+        if decodedBudget.revisionId == nil {
+            decodedBudget.revisionId = UUID();
+        }
+
         return .success(decodedBudget)
     }
 }
