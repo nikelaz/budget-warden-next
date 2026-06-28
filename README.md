@@ -1,6 +1,6 @@
 # Budget Warden
 
-Budget Warden is a source-available native macOS budgeting app (iOS, Android and Windows support planned). It stores budgets as plain `.budget` files. 
+Budget Warden is a source-available native Apple budgeting app. It stores budgets as plain `.budget` files.
 
 ## Requirements
 
@@ -9,10 +9,10 @@ Budget Warden is a source-available native macOS budgeting app (iOS, Android and
 
 ## Development
 
-XCode Project:
+Xcode workspace:
 
 ```sh
-open macos/BudgetWarden.xcodeproj
+open BudgetWarden.xcworkspace
 ```
 
 ## License
