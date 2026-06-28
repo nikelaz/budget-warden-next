@@ -9,7 +9,7 @@
  */
 
 import SwiftUI
-import AppleCore
+import BudgetWardenAppleCore
 
 struct BWCategoryTransactionsWindowValue: Codable, Hashable {
     let budgetID: UUID
@@ -18,7 +18,6 @@ struct BWCategoryTransactionsWindowValue: Codable, Hashable {
 
 struct BWCategoryTransactionsWindow: View {
     @EnvironmentObject var store: BWStore
-    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var windowStore = BWWindowStore()
 
     let value: BWCategoryTransactionsWindowValue
@@ -119,19 +118,23 @@ struct BWCategoryTransactionsWindow: View {
                     categoryID: value.categoryID,
                     transaction: transaction,
                     deleteTransaction: {
-                        store.deleteTransaction(
-                            categoryID: value.categoryID,
-                            transactionID: transaction.id,
-                            windowStore: windowStore
-                        )
-                        selection = nil
+                        Task(priority: .userInitiated) {
+                            await store.deleteTransaction(
+                                categoryID: value.categoryID,
+                                transactionID: transaction.id,
+                                windowStore: windowStore
+                            )
+                            selection = nil
+                        }
                     },
                     saveTransaction: { updatedTransaction in
-                        _ = store.updateTransaction(
-                            categoryID: value.categoryID,
-                            transaction: updatedTransaction,
-                            windowStore: windowStore
-                        )
+                        Task(priority: .userInitiated) {
+                            _ = await store.updateTransaction(
+                                categoryID: value.categoryID,
+                                transaction: updatedTransaction,
+                                windowStore: windowStore
+                            )
+                        }
                     }
                 )
             }
@@ -159,35 +162,6 @@ struct BWCategoryTransactionsWindow: View {
             }
         } message: {
             Text(windowStore.errorMessage)
-        }
-        .sheet(item: $windowStore.saveConflict) { conflict in
-            BWBudgetConflictResolutionView(conflict: conflict) { choice in
-                Task(priority: .userInitiated) {
-                    await store.resolveSaveConflict(
-                        conflict,
-                        choice: choice,
-                        windowStore: windowStore
-                    )
-                }
-            }
-        }
-        .onDisappear {
-            Task(priority: .userInitiated) {
-                if let error = await store.flushPendingSaves(windowStore: windowStore) {
-                    windowStore.setError(error)
-                }
-            }
-        }
-        .onChange(of: scenePhase) { _, newPhase in
-            guard newPhase != .active else {
-                return
-            }
-
-            Task(priority: .userInitiated) {
-                if let error = await store.flushPendingSaves(windowStore: windowStore) {
-                    windowStore.setError(error)
-                }
-            }
         }
     }
 
@@ -434,19 +408,21 @@ private struct BWCreateCategoryTransactionView: View {
                 }
 
                 Button("Save") {
-                    guard let parsedAmount else {
-                        return
-                    }
+                    Task(priority: .userInitiated) {
+                        guard let parsedAmount else {
+                            return
+                        }
 
-                    if store.createTransaction(
-                        categoryID: categoryID,
-                        title: trimmedTitle,
-                        description: trimmedDescription,
-                        date: date,
-                        amount: parsedAmount,
-                        windowStore: windowStore
-                    ) {
-                        onClose()
+                        if await store.createTransaction(
+                            categoryID: categoryID,
+                            title: trimmedTitle,
+                            description: trimmedDescription,
+                            date: date,
+                            amount: parsedAmount,
+                            windowStore: windowStore
+                        ) {
+                            onClose()
+                        }
                     }
                 }
                 .keyboardShortcut(.defaultAction)
@@ -642,10 +618,7 @@ struct BWTransactionInspectorView: View {
     }
 
     private func orderedCategories(for type: BWCategoryType) -> [BWCategory] {
-        BWBudgetMutation.orderedCategories(
-            in: BWBudget(title: "", categories: categories),
-            for: type
-        )
+        BWBudget(title: "", categories: categories).orderedCategories(for: type)
     }
 
     private func resetFields() {

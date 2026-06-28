@@ -1,3 +1,11 @@
+import Foundation
+
+public enum BWTemplateSelection: Hashable, Sendable {
+    case basic
+    case blank
+    case previous(URL)
+}
+
 public struct BWTemplate {
     public static func basicBudget(title: String) -> BWBudget {
         BWBudget(

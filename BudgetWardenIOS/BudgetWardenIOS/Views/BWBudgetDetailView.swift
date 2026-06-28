@@ -8,11 +8,11 @@
  *
  */
 
-import AppleCore
+import BudgetWardenAppleCore
 import SwiftUI
 
-struct BWDetailView: View {
-    let store: BWAppStore
+struct BWBudgetDetailView: View {
+    let store: BWStore
     let budget: BWBudget
     let currency: BWCurrency
     @Binding var editor: BWCategoryEditor?
@@ -44,11 +44,19 @@ struct BWDetailView: View {
                             NavigationLink {
                                 categoryEditor(for: category)
                             } label: {
-                                BWCategoryRow(
-                                    category: category,
-                                    selectedAmount: selectedAmount,
-                                    currency: currency
-                                )
+                                HStack(alignment: .firstTextBaseline) {
+                                    Text(category.title)
+                                        .font(.body)
+                                        .accessibilityIdentifier("categoryTitle_\(category.title)")
+
+                                    Spacer()
+
+                                    Text(selectedAmount.amount(for: category).formattedMoneyAmount(currency: currency))
+                                        .font(.body.monospacedDigit())
+                                        .foregroundStyle(.secondary)
+                                        .accessibilityIdentifier("categoryAmount_\(category.title)")
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
                                 .matchedTransitionSource(id: category.id, in: navigationTransitionNamespace)
                             }
                             .accessibilityIdentifier("categoryRow_\(category.title)")
@@ -121,7 +129,7 @@ struct BWDetailView: View {
             }
         )
         .sheet(item: $editor) { editor in
-            BWCategoryEditorView(
+            BWCategoryDetailsView(
                 editor: editor,
                 currency: currency,
                 saveCategory: saveCategory
@@ -130,7 +138,7 @@ struct BWDetailView: View {
     }
 
     private func categories(for categoryType: BWCategoryType) -> [BWCategory] {
-        BWBudgetMutation.orderedCategories(in: budget, for: categoryType)
+        budget.orderedCategories(for: categoryType)
     }
 
     private func createLabel(for categoryType: BWCategoryType) -> String {
@@ -186,7 +194,7 @@ struct BWDetailView: View {
     }
 
     private func categoryEditor(for category: BWCategory) -> some View {
-        BWCategoryEditorView(
+        BWCategoryDetailsView(
             editor: .edit(category),
             currency: currency,
             saveCategory: saveCategory,

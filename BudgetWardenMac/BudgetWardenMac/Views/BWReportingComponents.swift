@@ -10,7 +10,7 @@
 
 import Charts
 import SwiftUI
-import AppleCore
+import BudgetWardenAppleCore
 
 enum BWReportingScope {
     case inspector

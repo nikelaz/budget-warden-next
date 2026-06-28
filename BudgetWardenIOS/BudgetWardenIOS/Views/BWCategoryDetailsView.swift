@@ -8,10 +8,10 @@
  *
  */
 
-import AppleCore
+import BudgetWardenAppleCore
 import SwiftUI
 
-struct BWCategoryEditorView: View {
+struct BWCategoryDetailsView: View {
     let editor: BWCategoryEditor
     let currency: BWCurrency
     let saveCategory: (BWCategoryDraft) async -> Bool

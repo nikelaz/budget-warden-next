@@ -159,7 +159,7 @@ public enum BWReportingSummary {
         categoryType: BWCategoryType,
         amountMode: BWReportingAmountMode
     ) -> [BWReportingAmountSegment] {
-        BWBudgetMutation.orderedCategories(in: budget, for: categoryType)
+        budget.orderedCategories(for: categoryType)
             .filter { $0[keyPath: amountMode.amountKeyPath] > 0 }
             .map {
                 BWReportingAmountSegment(

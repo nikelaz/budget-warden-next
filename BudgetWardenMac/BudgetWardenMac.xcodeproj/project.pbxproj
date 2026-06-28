@@ -7,8 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		5A5CF7CD2FBB508E004D0D1D /* BudgetWardenMacTestPlan.xctestplan in Resources */ = {isa = PBXBuildFile; fileRef = 5A5CF7CC2FBB508E004D0D1D /* BudgetWardenMacTestPlan.xctestplan */; };
-		AB0000010000000000000001 /* AppleCore in Frameworks */ = {isa = PBXBuildFile; productRef = AB0000030000000000000003 /* AppleCore */; };
+		AB0000010000000000000001 /* BudgetWardenAppleCore in Frameworks */ = {isa = PBXBuildFile; productRef = AB0000030000000000000003 /* BudgetWardenAppleCore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -22,7 +21,6 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		5A5CF7CC2FBB508E004D0D1D /* BudgetWardenMacTestPlan.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = BudgetWardenMacTestPlan.xctestplan; sourceTree = "<group>"; };
 		5A87E6702FB1961B0029A3E7 /* Budget Warden.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Budget Warden.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5A87E6802FB2E0010029A3E7 /* BudgetWardenMacUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BudgetWardenMacUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -45,7 +43,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				AB0000010000000000000001 /* AppleCore in Frameworks */,
+				AB0000010000000000000001 /* BudgetWardenAppleCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -62,7 +60,6 @@
 		5A87E6672FB1961B0029A3E7 = {
 			isa = PBXGroup;
 			children = (
-				5A5CF7CC2FBB508E004D0D1D /* BudgetWardenMacTestPlan.xctestplan */,
 				5A87E6722FB1961B0029A3E7 /* BudgetWardenMac */,
 				5A87E6812FB2E0010029A3E7 /* BudgetWardenMacUITests */,
 				5A87E6712FB1961B0029A3E7 /* Products */,
@@ -98,7 +95,7 @@
 			);
 			name = BudgetWardenMac;
 			packageProductDependencies = (
-				AB0000030000000000000003 /* AppleCore */,
+				AB0000030000000000000003 /* BudgetWardenAppleCore */,
 			);
 			productName = BudgetWardenMac;
 			productReference = 5A87E6702FB1961B0029A3E7 /* Budget Warden.app */;
@@ -156,7 +153,7 @@
 			mainGroup = 5A87E6672FB1961B0029A3E7;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				AB0000020000000000000002 /* XCLocalSwiftPackageReference "../AppleCore" */,
+				AB0000020000000000000002 /* XCLocalSwiftPackageReference "../BudgetWardenAppleCore" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 5A87E6712FB1961B0029A3E7 /* Products */;
@@ -174,7 +171,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				5A5CF7CD2FBB508E004D0D1D /* BudgetWardenMacTestPlan.xctestplan in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -486,17 +482,17 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		AB0000020000000000000002 /* XCLocalSwiftPackageReference "../AppleCore" */ = {
+		AB0000020000000000000002 /* XCLocalSwiftPackageReference "../BudgetWardenAppleCore" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = ../AppleCore;
+			relativePath = ../BudgetWardenAppleCore;
 		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		AB0000030000000000000003 /* AppleCore */ = {
+		AB0000030000000000000003 /* BudgetWardenAppleCore */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = AB0000020000000000000002 /* XCLocalSwiftPackageReference "../AppleCore" */;
-			productName = AppleCore;
+			package = AB0000020000000000000002 /* XCLocalSwiftPackageReference "../BudgetWardenAppleCore" */;
+			productName = BudgetWardenAppleCore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

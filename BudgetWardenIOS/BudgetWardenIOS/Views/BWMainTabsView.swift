@@ -8,16 +8,16 @@
  *
  */
 
-import AppleCore
+import BudgetWardenAppleCore
 import SwiftUI
 
-struct BWWorkspaceView: View {
-    let store: BWAppStore
+struct BWMainTabsView: View {
+    let store: BWStore
     let budgetID: UUID
     let createBudget: () -> Void
     let showBudgetList: () -> Void
 
-    @State private var selectedTab: BWWorkspaceTab = .budget
+    @State private var selectedTab: BWTabs = .budget
     @State private var categoryEditor: BWCategoryEditor?
     @State private var categoryPendingEdit: BWCategory?
     @State private var transactionEditor: BWTransactionEditor?
@@ -32,7 +32,7 @@ struct BWWorkspaceView: View {
     var body: some View {
         if let budget {
             TabView(selection: $selectedTab) {
-                BWDetailView(
+                BWBudgetDetailView(
                     store: store,
                     budget: budget,
                     currency: store.selectedCurrency,
@@ -44,7 +44,7 @@ struct BWWorkspaceView: View {
                     .tabItem {
                         Label("Budget", systemImage: "list.bullet.rectangle")
                     }
-                    .tag(BWWorkspaceTab.budget)
+                    .tag(BWTabs.budget)
 
                 BWReportingView(
                     budget: budget,
@@ -53,7 +53,7 @@ struct BWWorkspaceView: View {
                     .tabItem {
                         Label("Reporting", systemImage: "chart.pie")
                     }
-                    .tag(BWWorkspaceTab.reporting)
+                    .tag(BWTabs.reporting)
 
                 BWTransactionsView(
                     store: store,
@@ -67,7 +67,7 @@ struct BWWorkspaceView: View {
                 .tabItem {
                     Label("Transactions", systemImage: "list.bullet.clipboard")
                 }
-                .tag(BWWorkspaceTab.transactions)
+                .tag(BWTabs.transactions)
 
                 BWSettingsView(
                     store: store,
@@ -76,14 +76,14 @@ struct BWWorkspaceView: View {
                     .tabItem {
                         Label("Settings", systemImage: "gearshape")
                     }
-                    .tag(BWWorkspaceTab.settings)
+                    .tag(BWTabs.settings)
             }
             .tabViewStyle(.sidebarAdaptable)
             .navigationTitle(budget.title)
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarBackButtonHidden(true)
             .sheet(item: $transactionEditor) { editor in
-                BWTransactionEditorView(
+                BWTransactionDetailsView(
                     editor: editor,
                     categories: orderedCategories(in: budget),
                     currency: store.selectedCurrency,
@@ -196,7 +196,7 @@ struct BWWorkspaceView: View {
     }
 
     private func orderedCategories(in budget: BWBudget) -> [BWCategory] {
-        BWBudgetMutation.orderedCategories(in: budget)
+        budget.orderedCategories()
     }
 
     private var categoryEditIsPresented: Binding<Bool> {
@@ -222,7 +222,7 @@ struct BWWorkspaceView: View {
     }
 
     private func categoryEditor(for category: BWCategory) -> some View {
-        BWCategoryEditorView(
+        BWCategoryDetailsView(
             editor: .edit(category),
             currency: store.selectedCurrency,
             saveCategory: saveCategory,
@@ -236,7 +236,7 @@ struct BWWorkspaceView: View {
     }
 
     private func transactionEditor(for item: BWTransactionListItem, in budget: BWBudget) -> some View {
-        BWTransactionEditorView(
+        BWTransactionDetailsView(
             editor: .edit(item),
             categories: orderedCategories(in: budget),
             currency: store.selectedCurrency,
@@ -303,7 +303,7 @@ struct BWWorkspaceView: View {
     }
 }
 
-private enum BWWorkspaceTab: Hashable {
+private enum BWTabs: Hashable {
     case budget
     case reporting
     case transactions

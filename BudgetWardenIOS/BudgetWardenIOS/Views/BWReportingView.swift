@@ -8,7 +8,7 @@
  *
  */
 
-import AppleCore
+import BudgetWardenAppleCore
 import Charts
 import SwiftUI
 

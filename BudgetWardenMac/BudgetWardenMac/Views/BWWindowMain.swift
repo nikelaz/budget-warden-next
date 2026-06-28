@@ -9,11 +9,10 @@
  */
 
 import SwiftUI
-import AppleCore
+import BudgetWardenAppleCore
 
-struct BWMainWindow: Scene {
+struct BWWindowMain: Scene {
     @EnvironmentObject var store: BWStore
-    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openWindow) private var openWindow
 
     @StateObject private var windowStore = BWWindowStore()
@@ -97,39 +96,10 @@ struct BWMainWindow: Scene {
                 )
                 .frame(minWidth: 420)
             }
-            .sheet(item: $windowStore.saveConflict) { conflict in
-                BWBudgetConflictResolutionView(conflict: conflict) { choice in
-                    Task(priority: .userInitiated) {
-                        await store.resolveSaveConflict(
-                            conflict,
-                            choice: choice,
-                            windowStore: windowStore
-                        )
-                    }
-                }
-            }
             .onOpenURL { url in
                 Task(priority: .userInitiated) {
                     if await store.openBudget(at: url, windowStore: windowStore) {
                         openWindow(id: "window-main")
-                    }
-                }
-            }
-            .onDisappear {
-                Task(priority: .userInitiated) {
-                    if let error = await store.flushPendingSaves(windowStore: windowStore) {
-                        windowStore.setError(error)
-                    }
-                }
-            }
-            .onChange(of: scenePhase) { _, newPhase in
-                guard newPhase != .active else {
-                    return
-                }
-
-                Task(priority: .userInitiated) {
-                    if let error = await store.flushPendingSaves(windowStore: windowStore) {
-                        windowStore.setError(error)
                     }
                 }
             }

@@ -8,10 +8,10 @@
  *
  */
 
-import AppleCore
+import BudgetWardenAppleCore
 import SwiftUI
 
-struct BWTransactionEditorView: View {
+struct BWTransactionDetailsView: View {
     let editor: BWTransactionEditor
     let categories: [BWCategory]
     let currency: BWCurrency

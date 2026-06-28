@@ -9,12 +9,12 @@
  */
 
 import SwiftUI
-import AppleCore
+import BudgetWardenAppleCore
 
 private let WINDOW_WIDTH: CGFloat = 760
 private let WINDOW_HEIGHT: CGFloat = 420
 
-struct BWWelcomeWindow: Scene { 
+struct BWWindowWelcome: Scene { 
     @EnvironmentObject var store: BWStore
 
     @Environment(\.openWindow) private var openWindow

@@ -9,7 +9,7 @@
  */
 
 import SwiftUI
-import AppleCore
+import BudgetWardenAppleCore
 
 struct CreateTransactionView: View {
     @EnvironmentObject var store: BWStore
@@ -118,22 +118,24 @@ struct CreateTransactionView: View {
                 }
 
                 Button("Save") {
-                    guard
-                        let selectedCategoryID,
-                        let amount = parsedAmount
-                    else {
-                        return
-                    }
+                    Task(priority: .userInitiated) {
+                        guard
+                            let selectedCategoryID,
+                            let amount = parsedAmount
+                        else {
+                            return
+                        }
 
-                    if store.createTransaction(
-                        categoryID: selectedCategoryID,
-                        title: trimmedTitle,
-                        description: trimmedDescription,
-                        date: date,
-                        amount: amount,
-                        windowStore: windowStore
-                    ) {
-                        onClose()
+                        if await store.createTransaction(
+                            categoryID: selectedCategoryID,
+                            title: trimmedTitle,
+                            description: trimmedDescription,
+                            date: date,
+                            amount: amount,
+                            windowStore: windowStore
+                        ) {
+                            onClose()
+                        }
                     }
                 }
                 .keyboardShortcut(.defaultAction)
@@ -165,7 +167,7 @@ struct CreateTransactionView: View {
             return []
         }
 
-        return BWBudgetMutation.orderedCategories(in: budget, for: type)
+        return budget.orderedCategories(for: type)
     }
 
     private var isValid: Bool {

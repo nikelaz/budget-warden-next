@@ -9,7 +9,7 @@
  */
 
 import SwiftUI
-import AppleCore
+import BudgetWardenAppleCore
 
 struct BWCommands: Commands {
     @EnvironmentObject var store: BWStore

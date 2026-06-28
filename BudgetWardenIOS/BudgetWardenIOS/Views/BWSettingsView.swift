@@ -8,18 +8,18 @@
  *
  */
 
-import AppleCore
+import BudgetWardenAppleCore
 import SwiftUI
 
 struct BWSettingsView: View {
-    let store: BWAppStore
+    let store: BWStore
     let budget: BWBudget
 
     @State private var title: String
     @State private var isCurrencyPickerPresented = false
     @FocusState private var focusedField: Field?
 
-    init(store: BWAppStore, budget: BWBudget) {
+    init(store: BWStore, budget: BWBudget) {
         self.store = store
         self.budget = budget
         _title = State(initialValue: budget.title)

@@ -10,9 +10,7 @@
  */
 
 import SwiftUI
-import AppleCore
-
-typealias BudgetTemplateSelection = BWBudgetTemplateSelection
+import BudgetWardenAppleCore
 
 struct CreateBudgetView: View {
     @EnvironmentObject var store: BWStore
@@ -22,7 +20,7 @@ struct CreateBudgetView: View {
     @Environment(\.dismissWindow) private var dismissWindow
 
     @State private var title: Swift.String
-    @State private var selectedTemplate: BudgetTemplateSelection = .basic
+    @State private var selectedTemplate: BWTemplateSelection = .basic
 
     let onCreateSuccess: () -> Void
 
@@ -51,10 +49,10 @@ struct CreateBudgetView: View {
                         .selectionDisabled(true)
 
                     Text("Basic budget (recommended)")
-                        .tag(BudgetTemplateSelection.basic)
+                        .tag(BWTemplateSelection.basic)
 
                     Text("Blank budget")
-                        .tag(BudgetTemplateSelection.blank)
+                        .tag(BWTemplateSelection.blank)
 
                     Text("Previous budget")
                         .selectionDisabled(true)
@@ -62,7 +60,7 @@ struct CreateBudgetView: View {
                     ForEach(store.budgetsInVault) { budget in
                         if let budgetUrl = budget.url {
                             Text(budget.title)
-                                .tag(BudgetTemplateSelection.previous(budgetUrl))
+                                .tag(BWTemplateSelection.previous(budgetUrl))
                         }
                     }
                 }, label: {

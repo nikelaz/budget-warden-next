@@ -9,7 +9,7 @@
  */
 
 import SwiftUI
-import AppleCore
+import BudgetWardenAppleCore
 
 enum BWCategoryTableRowType {
     case regular
@@ -89,21 +89,16 @@ struct BudgetView: View {
     }
 
     private func promptDeleteCategory(_ category: BWCategory) {
-        Task(priority: .userInitiated) {
-            await store.saveCurrentBudgetNow(
-                budgetID: store.currentBudget?.id,
-                windowStore: windowStore
-            )
-
-            categoryPendingDeletion = category
-        }
+        categoryPendingDeletion = category
     }
 
     private func deleteCategory(_ category: BWCategory) {
-        store.deleteCategory(category, windowStore: windowStore)
+        Task(priority: .userInitiated) {
+            await store.deleteCategory(category, windowStore: windowStore)
 
-        if selection == category.id.uuidString {
-            selection = nil
+            if selection == category.id.uuidString {
+                selection = nil
+            }
         }
     }
 
@@ -170,7 +165,7 @@ struct BudgetView: View {
             return []
         }
 
-        return BWBudgetMutation.orderedCategories(in: budget, for: categoryType)
+        return budget.orderedCategories(for: categoryType)
     }
 
     private var hasCategories: Bool {

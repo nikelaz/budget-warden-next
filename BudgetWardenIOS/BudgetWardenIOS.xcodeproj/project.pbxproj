@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		B10000010000000000000001 /* AppleCore in Frameworks */ = {isa = PBXBuildFile; productRef = B10000030000000000000003 /* AppleCore */; };
+		B10000010000000000000001 /* BudgetWardenAppleCore in Frameworks */ = {isa = PBXBuildFile; productRef = B10000030000000000000003 /* BudgetWardenAppleCore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -43,7 +43,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B10000010000000000000001 /* AppleCore in Frameworks */,
+				B10000010000000000000001 /* BudgetWardenAppleCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -95,7 +95,7 @@
 			);
 			name = BudgetWardenIOS;
 			packageProductDependencies = (
-				B10000030000000000000003 /* AppleCore */,
+				B10000030000000000000003 /* BudgetWardenAppleCore */,
 			);
 			productName = BudgetWardenIOS;
 			productReference = B10000040000000000000004 /* BudgetWardenIOS.app */;
@@ -153,7 +153,7 @@
 			mainGroup = B10000070000000000000007;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				B10000020000000000000002 /* XCLocalSwiftPackageReference "../AppleCore" */,
+				B10000020000000000000002 /* XCLocalSwiftPackageReference "../BudgetWardenAppleCore" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B10000080000000000000008 /* Products */;
@@ -492,17 +492,17 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		B10000020000000000000002 /* XCLocalSwiftPackageReference "../AppleCore" */ = {
+		B10000020000000000000002 /* XCLocalSwiftPackageReference "../BudgetWardenAppleCore" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = ../AppleCore;
+			relativePath = ../BudgetWardenAppleCore;
 		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		B10000030000000000000003 /* AppleCore */ = {
+		B10000030000000000000003 /* BudgetWardenAppleCore */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = B10000020000000000000002 /* XCLocalSwiftPackageReference "../AppleCore" */;
-			productName = AppleCore;
+			package = B10000020000000000000002 /* XCLocalSwiftPackageReference "../BudgetWardenAppleCore" */;
+			productName = BudgetWardenAppleCore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

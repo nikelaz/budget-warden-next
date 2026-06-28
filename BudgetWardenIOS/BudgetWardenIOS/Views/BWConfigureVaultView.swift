@@ -10,9 +10,10 @@
 
 import SwiftUI
 import UniformTypeIdentifiers
+import BudgetWardenAppleCore
 
 struct BWConfigureVaultView: View {
-    let store: BWAppStore
+    let store: BWStore
 
     @Environment(\.dismiss) private var dismiss
 
@@ -35,7 +36,7 @@ struct BWConfigureVaultView: View {
 }
 
 struct BWVaultSettingsSections: View {
-    let store: BWAppStore
+    let store: BWStore
 
     @State private var selectedLocation: BWVaultLocation = .iCloud
     @State private var isFolderImporterPresented = false

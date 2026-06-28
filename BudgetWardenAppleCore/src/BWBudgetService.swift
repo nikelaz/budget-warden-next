@@ -1,0 +1,627 @@
+/*
+ * Budget Warden
+ * Copyright (c) 2026 Lazarov & Co EOOD
+ * Author: Nikola Lazarov
+ *
+ * Licensed under the Source-Available Educational License.
+ * See the LICENSE file in the project root for full terms.
+ *
+ */
+
+import Foundation
+
+public struct BWBudgetDirectoryReadResult: Sendable {
+    public var budgets: [BWBudget]
+    public var skippedFiles: [String]
+
+    public init(budgets: [BWBudget], skippedFiles: [String]) {
+        self.budgets = budgets
+        self.skippedFiles = skippedFiles
+    }
+}
+
+public struct BWBudgetOpenResult: Sendable {
+    public var budget: BWBudget
+    public var vaultReadResult: BWBudgetDirectoryReadResult?
+
+    public init(
+        budget: BWBudget,
+        vaultReadResult: BWBudgetDirectoryReadResult? = nil
+    ) {
+        self.budget = budget
+        self.vaultReadResult = vaultReadResult
+    }
+}
+
+public enum BWBudgetService {
+    public static func loadBudgets(
+        vault: BWVault
+    ) async -> Result<BWBudgetDirectoryReadResult, BWError> {
+        switch await vault.readBudgetsFromVault() {
+            case .failure(let error):
+                return .failure(error)
+            case .success(let result):
+                return .success(normalizeDirectoryReadResult(result))
+        }
+    }
+
+    public static func openBudget(
+        at url: URL,
+        vault: BWVault
+    ) async -> Result<BWBudgetOpenResult, BWError> {
+        guard BWFiles.isBudgetFile(url) else {
+            return .failure(.invalidBudgetFile(message: "This is not a Budget Warden budget file."))
+        }
+
+        if await vault.containsBudgetFile(url: url) {
+            switch await loadBudgets(vault: vault) {
+                case .failure(let error):
+                    return .failure(error)
+                case .success(let result):
+                    if let budget = result.budgets.first(where: {
+                        $0.url?.standardizedFileURL == url.standardizedFileURL
+                    }) {
+                        return .success(BWBudgetOpenResult(
+                            budget: budget,
+                            vaultReadResult: result
+                        ))
+                    }
+            }
+        }
+
+        switch BWFiles.readBudgetFile(url: url) {
+            case .failure(let error):
+                return .failure(error)
+            case .success(let budget):
+                switch normalizeActualAmounts(in: budget) {
+                    case .failure(let error):
+                        return .failure(error)
+                    case .success(let budget):
+                        return .success(BWBudgetOpenResult(budget: budget))
+                }
+        }
+    }
+
+    public static func createBudget(
+        title: String,
+        template: BWTemplateSelection,
+        budgetsInVault: [BWBudget],
+        vault: BWVault
+    ) async -> Result<BWBudget, BWError> {
+        let budget: BWBudget
+
+        switch template {
+            case .basic:
+                budget = BWTemplate.basicBudget(title: title)
+            case .blank:
+                budget = BWBudget(title: title)
+            case .previous(let url):
+                guard let previousBudget = budgetsInVault.first(where: { $0.url == url }) else {
+                    return .failure(.findPreviousBudget())
+                }
+
+                budget = previousBudget.cloneAsTemplate(newTitle: title)
+        }
+
+        let json: String
+
+        switch BWCodec.encodeBudget(budget: budget) {
+            case .failure(let error):
+                return .failure(.creatingBudget(underlying: error))
+            case .success(let result):
+                json = result
+        }
+
+        let fileName = BWFiles.normalizedFileName(from: title)
+        let saveFileResult = await vault.saveNewBudgetInVault(
+            fileName: fileName,
+            fileExtension: BWFiles.budgetFileExtension,
+            contents: json
+        )
+
+        switch saveFileResult {
+            case .failure(let error):
+                return .failure(.creatingBudget(underlying: error))
+            case .success(let fileURL):
+                var savedBudget = budget
+                savedBudget.url = fileURL
+                return .success(savedBudget)
+        }
+    }
+
+    public static func deleteBudget(
+        _ budget: BWBudget,
+        vault: BWVault
+    ) async -> Result<Void, BWError> {
+        guard let url = budget.url else {
+            return .success(())
+        }
+
+        guard BWFiles.isBudgetFile(url) else {
+            return .failure(.budgetRemove())
+        }
+
+        return await vault.removeBudgetFromVault(url: url)
+    }
+
+    public static func saveBudget(
+        _ budget: BWBudget,
+        vault: BWVault
+    ) async -> Result<BWBudget, BWError> {
+        guard let budgetURL = budget.url else {
+            return .failure(.saveFailed())
+        }
+
+        let normalizedBudget: BWBudget
+
+        switch normalizeActualAmounts(in: budget) {
+            case .failure(let error):
+                return .failure(error)
+            case .success(let budget):
+                normalizedBudget = budget
+        }
+
+        let json: String
+
+        switch BWCodec.encodeBudget(budget: normalizedBudget) {
+            case .failure(let error):
+                return .failure(.saveFailed(underlying: error))
+            case .success(let result):
+                json = result
+        }
+
+        guard BWFiles.isBudgetFile(budgetURL) else {
+            return .failure(.saveFailed())
+        }
+
+        let saveResult: Result<Void, BWError>
+
+        if await vault.containsBudgetFile(url: budgetURL) {
+            saveResult = await vault.saveBudgetFile(url: budgetURL, contents: json)
+        }
+        else {
+            saveResult = BWFiles.saveFile(url: budgetURL, contents: json)
+        }
+
+        switch saveResult {
+            case .failure(let error):
+                return .failure(.saveFailed(underlying: error))
+            case .success:
+                return .success(normalizedBudget)
+        }
+    }
+
+    public static func createCategory(
+        in budget: BWBudget,
+        title: String,
+        plannedAmount: UInt64,
+        categoryType: BWCategoryType,
+        vault: BWVault
+    ) async -> Result<BWBudget, BWError> {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmedTitle.isEmpty else {
+            return .failure(.validation())
+        }
+
+        var budget = budget
+        let category = BWCategory(
+            ordinal: nextOrdinal(in: budget, for: categoryType),
+            title: trimmedTitle,
+            amountPlanned: plannedAmount,
+            categoryType: categoryType
+        )
+
+        budget.categories.append(category)
+
+        switch normalizeActualAmounts(in: budget) {
+            case .failure(let error):
+                return .failure(error)
+            case .success(let budget):
+                return await saveBudget(budget, vault: vault)
+        }
+    }
+
+    public static func updateBudgetTitle(
+        in budget: BWBudget,
+        title: String,
+        vault: BWVault
+    ) async -> Result<BWBudget, BWError> {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmedTitle.isEmpty else {
+            return .failure(.validation())
+        }
+
+        var budget = budget
+        budget.title = trimmedTitle
+        return await saveBudget(budget, vault: vault)
+    }
+
+    public static func updateCategory(
+        in budget: BWBudget,
+        category: BWCategory,
+        vault: BWVault
+    ) async -> Result<BWBudget, BWError> {
+        let trimmedTitle = category.title.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmedTitle.isEmpty else {
+            return .failure(.validation())
+        }
+
+        var budget = budget
+
+        guard let index = budget.categories.firstIndex(where: { $0.id == category.id }) else {
+            return .failure(.validation())
+        }
+
+        let oldCategoryType = budget.categories[index].categoryType
+        var category = category
+
+        if category.categoryType != oldCategoryType {
+            category.ordinal = nextOrdinal(
+                in: budget,
+                for: category.categoryType,
+                except: category.id
+            )
+        }
+
+        budget.categories[index] = category
+        normalizeCategoryOrdinals(in: &budget, for: oldCategoryType)
+        normalizeCategoryOrdinals(in: &budget, for: category.categoryType)
+
+        switch normalizeActualAmounts(in: budget) {
+            case .failure(let error):
+                return .failure(error)
+            case .success(let budget):
+                return await saveBudget(budget, vault: vault)
+        }
+    }
+
+    public static func deleteCategory(
+        in budget: BWBudget,
+        categoryID: UUID,
+        vault: BWVault
+    ) async -> Result<BWBudget, BWError> {
+        var budget = budget
+
+        guard let index = budget.categories.firstIndex(where: { $0.id == categoryID }) else {
+            return .failure(.validation())
+        }
+
+        let categoryType = budget.categories[index].categoryType
+        budget.categories.remove(at: index)
+        normalizeCategoryOrdinals(in: &budget, for: categoryType)
+
+        switch normalizeActualAmounts(in: budget) {
+            case .failure(let error):
+                return .failure(error)
+            case .success(let budget):
+                return await saveBudget(budget, vault: vault)
+        }
+    }
+
+    public static func canMoveCategory(
+        _ category: BWCategory,
+        in budget: BWBudget,
+        by offset: Int
+    ) -> Bool {
+        guard abs(offset) == 1 else {
+            return false
+        }
+
+        let categories = orderedCategoryIndexes(in: budget, for: category.categoryType)
+
+        guard let index = categories.firstIndex(where: { $0.category.id == category.id }) else {
+            return false
+        }
+
+        let targetIndex = index + offset
+        return targetIndex >= 0 && targetIndex < categories.count
+    }
+
+    public static func moveCategory(
+        _ category: BWCategory,
+        in budget: BWBudget,
+        by offset: Int,
+        vault: BWVault
+    ) async -> Result<BWBudget, BWError> {
+        guard abs(offset) == 1 else {
+            return .failure(.validation())
+        }
+
+        var budget = budget
+        var categories = orderedCategoryIndexes(in: budget, for: category.categoryType)
+
+        guard let index = categories.firstIndex(where: { $0.category.id == category.id }) else {
+            return .failure(.validation())
+        }
+
+        let targetIndex = index + offset
+
+        guard targetIndex >= 0 && targetIndex < categories.count else {
+            return .failure(.validation())
+        }
+
+        categories.swapAt(index, targetIndex)
+
+        for (ordinal, categoryIndex) in categories.map(\.index).enumerated() {
+            budget.categories[categoryIndex].ordinal = ordinal
+        }
+
+        switch normalizeActualAmounts(in: budget) {
+            case .failure(let error):
+                return .failure(error)
+            case .success(let budget):
+                return await saveBudget(budget, vault: vault)
+        }
+    }
+
+    public static func moveCategories(
+        in budget: BWBudget,
+        for categoryType: BWCategoryType,
+        fromOffsets sourceOffsets: IndexSet,
+        toOffset destination: Int,
+        vault: BWVault
+    ) async -> Result<BWBudget, BWError> {
+        guard !sourceOffsets.isEmpty else {
+            return await saveBudget(budget, vault: vault)
+        }
+
+        var budget = budget
+        let categories = orderedCategoryIndexes(in: budget, for: categoryType)
+
+        guard sourceOffsets.allSatisfy({ categories.indices.contains($0) }),
+              (0...categories.count).contains(destination)
+        else {
+            return .failure(.validation())
+        }
+
+        let sortedSourceOffsets = sourceOffsets.sorted()
+        let movedCategories = sortedSourceOffsets.map { categories[$0] }
+        var remainingCategories = categories.enumerated()
+            .filter { !sourceOffsets.contains($0.offset) }
+            .map(\.element)
+
+        let adjustedDestination = destination - sortedSourceOffsets.filter { $0 < destination }.count
+
+        guard (0...remainingCategories.count).contains(adjustedDestination) else {
+            return .failure(.validation())
+        }
+
+        remainingCategories.insert(contentsOf: movedCategories, at: adjustedDestination)
+
+        for (ordinal, categoryIndex) in remainingCategories.map(\.index).enumerated() {
+            budget.categories[categoryIndex].ordinal = ordinal
+        }
+
+        switch normalizeActualAmounts(in: budget) {
+            case .failure(let error):
+                return .failure(error)
+            case .success(let budget):
+                return await saveBudget(budget, vault: vault)
+        }
+    }
+
+    public static func createTransaction(
+        in budget: BWBudget,
+        categoryID: UUID,
+        title: String,
+        description: String,
+        date: Date,
+        amount: UInt64,
+        vault: BWVault
+    ) async -> Result<BWBudget, BWError> {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmedTitle.isEmpty, amount > 0 else {
+            return .failure(.validation())
+        }
+
+        var budget = budget
+
+        guard let categoryIndex = budget.categories.firstIndex(where: { $0.id == categoryID }) else {
+            return .failure(.validation())
+        }
+
+        budget.categories[categoryIndex].transactions.append(BWTransaction(
+            title: trimmedTitle,
+            description: trimmedDescription,
+            date: date,
+            amount: amount
+        ))
+
+        switch normalizeActualAmounts(in: budget) {
+            case .failure(let error):
+                return .failure(error)
+            case .success(let budget):
+                return await saveBudget(budget, vault: vault)
+        }
+    }
+
+    public static func updateTransaction(
+        in budget: BWBudget,
+        transaction: BWTransaction,
+        from sourceCategoryID: UUID,
+        to destinationCategoryID: UUID,
+        vault: BWVault
+    ) async -> Result<BWBudget, BWError> {
+        let trimmedTitle = transaction.title.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmedTitle.isEmpty, transaction.amount > 0 else {
+            return .failure(.validation())
+        }
+
+        var budget = budget
+
+        guard let sourceCategoryIndex = budget.categories.firstIndex(where: { $0.id == sourceCategoryID }),
+              let destinationCategoryIndex = budget.categories.firstIndex(where: { $0.id == destinationCategoryID }),
+              let transactionIndex = budget.categories[sourceCategoryIndex].transactions.firstIndex(where: { $0.id == transaction.id })
+        else {
+            return .failure(.validation())
+        }
+
+        let updatedTransaction = BWTransaction(
+            id: transaction.id,
+            title: trimmedTitle,
+            description: transaction.description.trimmingCharacters(in: .whitespacesAndNewlines),
+            date: transaction.date,
+            amount: transaction.amount
+        )
+
+        if sourceCategoryID == destinationCategoryID {
+            budget.categories[sourceCategoryIndex].transactions[transactionIndex] = updatedTransaction
+        }
+        else {
+            budget.categories[sourceCategoryIndex].transactions.remove(at: transactionIndex)
+            budget.categories[destinationCategoryIndex].transactions.append(updatedTransaction)
+        }
+
+        switch normalizeActualAmounts(in: budget) {
+            case .failure(let error):
+                return .failure(error)
+            case .success(let budget):
+                return await saveBudget(budget, vault: vault)
+        }
+    }
+
+    public static func deleteTransaction(
+        in budget: BWBudget,
+        transactionID: UUID,
+        from categoryID: UUID,
+        vault: BWVault
+    ) async -> Result<BWBudget, BWError> {
+        var budget = budget
+
+        guard let categoryIndex = budget.categories.firstIndex(where: { $0.id == categoryID }),
+              let transactionIndex = budget.categories[categoryIndex].transactions.firstIndex(where: { $0.id == transactionID })
+        else {
+            return .failure(.validation())
+        }
+
+        budget.categories[categoryIndex].transactions.remove(at: transactionIndex)
+
+        switch normalizeActualAmounts(in: budget) {
+            case .failure(let error):
+                return .failure(error)
+            case .success(let budget):
+                return await saveBudget(budget, vault: vault)
+        }
+    }
+
+    static func orderedCategories(
+        in budget: BWBudget,
+        for categoryType: BWCategoryType? = nil
+    ) -> [BWCategory] {
+        budget.categories.enumerated()
+            .filter { _, category in
+                categoryType.map { category.categoryType == $0 } ?? true
+            }
+            .sorted { lhs, rhs in
+                if lhs.element.categoryType != rhs.element.categoryType {
+                    return lhs.element.categoryType.rawValue < rhs.element.categoryType.rawValue
+                }
+
+                if lhs.element.ordinal == rhs.element.ordinal {
+                    return lhs.offset < rhs.offset
+                }
+
+                return lhs.element.ordinal < rhs.element.ordinal
+            }
+            .map(\.element)
+    }
+
+    private static func nextOrdinal(
+        in budget: BWBudget,
+        for categoryType: BWCategoryType,
+        except categoryID: UUID? = nil
+    ) -> Int {
+        let maxOrdinal = budget.categories
+            .filter { category in
+                category.categoryType == categoryType && category.id != categoryID
+            }
+            .map(\.ordinal)
+            .max()
+
+        return (maxOrdinal ?? -1) + 1
+    }
+
+    private static func normalizeCategoryOrdinals(
+        in budget: inout BWBudget,
+        for categoryType: BWCategoryType
+    ) {
+        let categories = orderedCategoryIndexes(in: budget, for: categoryType)
+
+        for (ordinal, categoryIndex) in categories.map(\.index).enumerated() {
+            budget.categories[categoryIndex].ordinal = ordinal
+        }
+    }
+
+    private static func normalizeActualAmounts(in budget: BWBudget) -> Result<BWBudget, BWError> {
+        var budget = budget
+
+        guard recalculateActualAmounts(in: &budget) else {
+            return .failure(.amountOverflow)
+        }
+
+        return .success(budget)
+    }
+
+    private static func recalculateActualAmounts(in budget: inout BWBudget) -> Bool {
+        for index in budget.categories.indices {
+            guard let amountActual = UInt64.sumMoneyAmounts(
+                budget.categories[index].transactions.map(\.amount)
+            ) else {
+                return false
+            }
+
+            budget.categories[index].amountActual = amountActual
+        }
+
+        return true
+    }
+
+    private static func normalizeDirectoryReadResult(
+        _ result: BWBudgetDirectoryReadResult
+    ) -> BWBudgetDirectoryReadResult {
+        var budgets: [BWBudget] = []
+        var skippedFiles = result.skippedFiles
+
+        for budget in result.budgets {
+            switch normalizeActualAmounts(in: budget) {
+                case .failure:
+                    skippedFiles.append(budget.url?.lastPathComponent ?? budget.title)
+                case .success(let budget):
+                    budgets.append(budget)
+            }
+        }
+
+        return BWBudgetDirectoryReadResult(
+            budgets: budgets,
+            skippedFiles: skippedFiles
+        )
+    }
+
+    private static func orderedCategoryIndexes(
+        in budget: BWBudget,
+        for categoryType: BWCategoryType
+    ) -> [(index: Int, category: BWCategory)] {
+        budget.categories.enumerated()
+            .filter { $0.element.categoryType == categoryType }
+            .sorted { lhs, rhs in
+                if lhs.element.ordinal == rhs.element.ordinal {
+                    return lhs.offset < rhs.offset
+                }
+
+                return lhs.element.ordinal < rhs.element.ordinal
+            }
+            .map { (index: $0.offset, category: $0.element) }
+    }
+}
+
+public extension BWBudget {
+    func orderedCategories(for categoryType: BWCategoryType? = nil) -> [BWCategory] {
+        BWBudgetService.orderedCategories(in: self, for: categoryType)
+    }
+}

@@ -8,18 +8,18 @@
  *
  */
 
-import AppleCore
+import BudgetWardenAppleCore
 import SwiftUI
 
 struct BWCreateBudgetView: View {
-    let store: BWAppStore
+    let store: BWStore
 
     @Environment(\.dismiss) private var dismiss
 
     @State private var title: String
     @State private var selectedTemplate: BWTemplateSelection = .basic
 
-    init(store: BWAppStore) {
+    init(store: BWStore) {
         self.store = store
         _title = State(initialValue: Self.currentMonthTitle())
     }

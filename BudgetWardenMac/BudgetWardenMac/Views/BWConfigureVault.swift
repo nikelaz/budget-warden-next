@@ -1,5 +1,5 @@
 import SwiftUI
-import AppleCore
+import BudgetWardenAppleCore
 
 struct ConfigureVaultView: View {
     @EnvironmentObject var store: BWStore

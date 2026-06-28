@@ -9,7 +9,7 @@
  */
 
 import SwiftUI
-import AppleCore
+import BudgetWardenAppleCore
 
 struct BWReportingView: View {
     @ObservedObject var store: BWStore

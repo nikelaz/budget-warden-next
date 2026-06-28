@@ -9,34 +9,17 @@
  */
 
 import SwiftUI
-import AppleCore
 
 @main
 struct BWApp: App {
     @StateObject private var store = BWStore()
 
     var body: some Scene {
-        BWWelcomeWindow()
+        BWWindowWelcome()
             .environmentObject(store)
-        BWMainWindow()
+        BWWindowMain()
             .environmentObject(store)
-        WindowGroup(
-            "Category Transactions",
-            id: "window-category-transactions",
-            for: BWCategoryTransactionsWindowValue.self
-        ) { $value in
-            if let value {
-                BWCategoryTransactionsWindow(value: value)
-                    .environmentObject(store)
-            }
-            else {
-                ContentUnavailableView(
-                    "Category Not Found",
-                    systemImage: "folder.badge.questionmark"
-                )
-            }
-        }
-        .defaultSize(width: 900, height: 560)
-        .restorationBehavior(.disabled)
+        BWWindowCategoryTransactions()
+            .environmentObject(store)
     }
 }

@@ -9,7 +9,7 @@
  */
 
 import SwiftUI
-import AppleCore
+import BudgetWardenAppleCore
 
 enum BWBudgetInspectorPanel: Hashable {
     case reporting
@@ -75,21 +75,19 @@ struct BWBudgetInspectorView: View {
                 canMoveUp: store.canMoveCategory(category.wrappedValue, by: -1),
                 canMoveDown: store.canMoveCategory(category.wrappedValue, by: 1),
                 moveUp: {
-                    store.moveCategory(category.wrappedValue, by: -1, windowStore: windowStore)
+                    Task(priority: .userInitiated) {
+                        await store.moveCategory(category.wrappedValue, by: -1, windowStore: windowStore)
+                    }
                 },
                 moveDown: {
-                    store.moveCategory(category.wrappedValue, by: 1, windowStore: windowStore)
+                    Task(priority: .userInitiated) {
+                        await store.moveCategory(category.wrappedValue, by: 1, windowStore: windowStore)
+                    }
                 },
                 deleteCategory: {
                     deleteCategory(category.wrappedValue)
                 }
             ) {
-                Task(priority: .userInitiated) {
-                    await store.saveCurrentBudgetNow(
-                        budgetID: budgetID,
-                        windowStore: windowStore
-                    )
-                }
             }
         }
     }
@@ -108,10 +106,12 @@ struct BWBudgetInspectorView: View {
                 store.currentBudget?.categories.first { $0.id == categoryID } ?? selectedCategory
             },
             set: { updatedCategory in
-                store.updateCategory(
-                    updatedCategory,
-                    windowStore: windowStore
-                )
+                Task(priority: .userInitiated) {
+                    await store.updateCategory(
+                        updatedCategory,
+                        windowStore: windowStore
+                    )
+                }
             }
         )
     }

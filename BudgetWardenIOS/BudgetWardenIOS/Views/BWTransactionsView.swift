@@ -8,11 +8,11 @@
  *
  */
 
-import AppleCore
+import BudgetWardenAppleCore
 import SwiftUI
 
 struct BWTransactionsView: View {
-    let store: BWAppStore
+    let store: BWStore
     let budget: BWBudget
     let currency: BWCurrency
     @Binding var searchText: String
@@ -178,7 +178,7 @@ struct BWTransactionsView: View {
     }
 
     private func transactionEditor(for item: BWTransactionListItem) -> some View {
-        BWTransactionEditorView(
+        BWTransactionDetailsView(
             editor: .edit(item),
             categories: orderedCategories(),
             currency: currency,
@@ -193,7 +193,7 @@ struct BWTransactionsView: View {
     }
 
     private func orderedCategories() -> [BWCategory] {
-        BWBudgetMutation.orderedCategories(in: budget)
+        budget.orderedCategories()
     }
 
     private func deleteTransactions(at offsets: IndexSet) {

@@ -10,7 +10,7 @@
 
 import Combine
 import SwiftUI
-import AppleCore
+import BudgetWardenAppleCore
 
 @MainActor
 class BWWindowStore: ObservableObject {
@@ -19,7 +19,6 @@ class BWWindowStore: ObservableObject {
     @Published var isPreferencesDialogOpen = false
     @Published var isErrorState: Bool = false
     @Published var errorMessage: String = ""
-    @Published var saveConflict: BWBudgetSaveConflict? = nil
 
     func openPreferencesDialog() {
         isPreferencesDialogOpen = true
@@ -40,19 +39,10 @@ class BWWindowStore: ObservableObject {
     func setError(_ err: BWError) {
         isErrorState = true
         errorMessage = err.localizedDescription
-        bwLog(err)
     }
 
     func clearError() {
         isErrorState = false
-    }
-
-    func setSaveConflict(_ conflict: BWBudgetSaveConflict) {
-        saveConflict = conflict
-    }
-
-    func clearSaveConflict() {
-        saveConflict = nil
     }
 
     func openVaultConfigDialog() {

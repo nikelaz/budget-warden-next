@@ -46,7 +46,7 @@ nonisolated public final class BWCodec {
             return .failure(.decodingJson())
         }
         
-        var budget: BWBudget
+        let budget: BWBudget
 
         do {
             budget = try Self.makeDecoder().decode(BWBudget.self, from: data)
@@ -55,26 +55,9 @@ nonisolated public final class BWCodec {
             return .failure(.decodingJson(underlying: error))
         }
         
-        budget.url = url
+        var decodedBudget = budget
+        decodedBudget.url = url
 
-        guard normalizeActualAmounts(in: &budget) else {
-            return .failure(.amountOverflow)
-        }
-
-        return .success(budget)
-    }
-
-    public static func normalizeActualAmounts(in budget: inout BWBudget) -> Bool {
-        for index in budget.categories.indices {
-            guard let amountActual = UInt64.sumMoneyAmounts(
-                budget.categories[index].transactions.map(\.amount)
-            ) else {
-                return false
-            }
-
-            budget.categories[index].amountActual = amountActual
-        }
-
-        return true
+        return .success(decodedBudget)
     }
 }

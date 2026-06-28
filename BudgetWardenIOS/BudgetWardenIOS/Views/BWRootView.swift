@@ -8,18 +8,18 @@
  *
  */
 
-import AppleCore
+import BudgetWardenAppleCore
 import SwiftUI
 
 struct BWRootView: View {
-    @State private var store = BWAppStore()
+    @State private var store = BWStore()
     @State private var navigationPath: [UUID] = []
     @State private var activeSheet: BWRootSheet?
     @Namespace private var budgetNavigationNamespace
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
-            BWListView(
+            BWBudgetListView(
                 store: store,
                 createBudget: showCreateBudget,
                 configureVault: showConfigureVault,
@@ -49,7 +49,9 @@ struct BWRootView: View {
             store.selectBudget(withID: budgetID)
         }
         .onOpenURL { url in
-            store.openBudget(at: url)
+            Task {
+                await store.openBudget(at: url)
+            }
         }
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
@@ -57,13 +59,6 @@ struct BWRootView: View {
                     BWCreateBudgetView(store: store)
                 case .configureVault:
                     BWConfigureVaultView(store: store)
-            }
-        }
-        .sheet(item: saveConflictBinding) { conflict in
-            BWBudgetConflictResolutionView(conflict: conflict) { choice in
-                Task {
-                    await store.resolveSaveConflict(conflict, choice: choice)
-                }
             }
         }
         .alert("Could Not Open Budget", isPresented: errorIsPresented) {
@@ -75,7 +70,7 @@ struct BWRootView: View {
     @ViewBuilder
     private func destination(for budgetID: UUID) -> some View {
         if store.budget(withID: budgetID) != nil {
-            BWWorkspaceView(
+            BWMainTabsView(
                 store: store,
                 budgetID: budgetID,
                 createBudget: showCreateBudget,
@@ -116,13 +111,6 @@ struct BWRootView: View {
                     store.errorMessage = nil
                 }
             }
-        )
-    }
-
-    private var saveConflictBinding: Binding<BWBudgetSaveConflict?> {
-        Binding(
-            get: { store.saveConflict },
-            set: { store.saveConflict = $0 }
         )
     }
 }

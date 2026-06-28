@@ -9,7 +9,7 @@
  */
 
 import SwiftUI
-import AppleCore
+import BudgetWardenAppleCore
 
 private struct BWTransactionListItem: Identifiable {
     let id: UUID
@@ -167,28 +167,34 @@ struct BWTransactionsView: View {
                         categories: store.currentBudget?.categories ?? [],
                         transaction: selectedTransaction.transaction,
                         deleteTransaction: {
-                            store.deleteTransaction(
-                                categoryID: selectedTransaction.categoryID,
-                                transactionID: selectedTransaction.id,
-                                windowStore: windowStore
-                            )
-                            selection = nil
+                            Task(priority: .userInitiated) {
+                                await store.deleteTransaction(
+                                    categoryID: selectedTransaction.categoryID,
+                                    transactionID: selectedTransaction.id,
+                                    windowStore: windowStore
+                                )
+                                selection = nil
+                            }
                         },
                         saveTransaction: { updatedTransaction in
-                            _ = store.updateTransaction(
-                                categoryID: selectedTransaction.categoryID,
-                                transaction: updatedTransaction,
-                                windowStore: windowStore
-                            )
+                            Task(priority: .userInitiated) {
+                                _ = await store.updateTransaction(
+                                    categoryID: selectedTransaction.categoryID,
+                                    transaction: updatedTransaction,
+                                    windowStore: windowStore
+                                )
+                            }
                         },
                         saveCategory: { categoryID in
-                            if store.moveTransaction(
-                                transactionID: selectedTransaction.id,
-                                from: selectedTransaction.categoryID,
-                                to: categoryID,
-                                windowStore: windowStore
-                            ) {
-                                selection = selectedTransaction.id
+                            Task(priority: .userInitiated) {
+                                if await store.moveTransaction(
+                                    transactionID: selectedTransaction.id,
+                                    from: selectedTransaction.categoryID,
+                                    to: categoryID,
+                                    windowStore: windowStore
+                                ) {
+                                    selection = selectedTransaction.id
+                                }
                             }
                         }
                     )

@@ -8,11 +8,11 @@
  *
  */
 
-import AppleCore
+import BudgetWardenAppleCore
 import SwiftUI
 
-struct BWListView: View {
-    let store: BWAppStore
+struct BWBudgetListView: View {
+    let store: BWStore
     let createBudget: () -> Void
     let configureVault: () -> Void
     let navigationTransitionNamespace: Namespace.ID
@@ -27,10 +27,9 @@ struct BWListView: View {
 
             ForEach(store.budgets) { budget in
                 NavigationLink(value: budget.id) {
-                    BWSummaryRow(
-                        budget: budget,
-                        navigationTransitionNamespace: navigationTransitionNamespace
-                    )
+                    Text(budget.title)
+                        .font(.headline)
+                        .matchedTransitionSource(id: budget.id, in: navigationTransitionNamespace)
                 }
                 .accessibilityIdentifier("budgetRow_\(budget.title)")
                 .contextMenu {

@@ -94,7 +94,7 @@ final class BudgetWardenIOSUITests: XCTestCase {
         assertCategoryAmount(app: app, title: "Salary", amount: formattedMoneyAmount("123.45"))
 
         openTransactionsTab(app: app)
-        XCTAssertTrue(app.buttons["transactionRow_\(transactionTitle)"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["transactionTitle_\(transactionTitle)"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["transactionCategory_\(transactionTitle)"].waitForExistence(timeout: 5))
         assertStaticTextValue(
             app.staticTexts["transactionAmount_\(transactionTitle)"],
@@ -139,6 +139,11 @@ final class BudgetWardenIOSUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = uiTestLaunchArguments(resetState: resetState)
         app.launch()
+
+        if resetState {
+            resetBudgetsThroughUI(app: app)
+        }
+
         return app
     }
 
@@ -153,6 +158,7 @@ final class BudgetWardenIOSUITests: XCTestCase {
     }
 
     private func createBudget(app: XCUIApplication, budgetName: String) {
+        openBudgetListIfNeeded(app: app)
         tapButton(app.buttons["addBudgetButton"])
 
         let titleInput = app.textFields["createBudgetTitleTextField"]
@@ -165,6 +171,8 @@ final class BudgetWardenIOSUITests: XCTestCase {
     }
 
     private func openBudget(app: XCUIApplication, budgetName: String) {
+        openBudgetListIfNeeded(app: app)
+
         let budgetRow = app.buttons["budgetRow_\(budgetName)"]
         XCTAssertTrue(budgetRow.waitForExistence(timeout: 5))
         budgetRow.tap()
@@ -172,12 +180,55 @@ final class BudgetWardenIOSUITests: XCTestCase {
     }
 
     private func openBudgetList(app: XCUIApplication) {
+        openBudgetListIfNeeded(app: app)
+    }
+
+    private func openBudgetListIfNeeded(app: XCUIApplication) {
+        if app.navigationBars["Budgets"].waitForExistence(timeout: 2) {
+            return
+        }
+
         let allBudgetsButton = app.buttons["allBudgetsButton"]
 
         XCTAssertTrue(allBudgetsButton.waitForExistence(timeout: 5))
         allBudgetsButton.tap()
 
         XCTAssertTrue(app.navigationBars["Budgets"].waitForExistence(timeout: 5))
+    }
+
+    private func resetBudgetsThroughUI(app: XCUIApplication) {
+        openBudgetListIfNeeded(app: app)
+
+        let budgetRows = app.buttons.matching(NSPredicate(
+            format: "identifier BEGINSWITH %@",
+            "budgetRow_"
+        ))
+        waitForBudgetListContent(app: app, budgetRows: budgetRows)
+
+        var attemptsRemaining = 50
+
+        while budgetRows.count > 0 && attemptsRemaining > 0 {
+            let budgetRow = budgetRows.element(boundBy: 0)
+            XCTAssertTrue(budgetRow.waitForExistence(timeout: 5))
+            budgetRow.swipeLeft()
+            tapButton(app.buttons["Delete"])
+            attemptsRemaining -= 1
+        }
+
+        XCTAssertEqual(budgetRows.count, 0)
+        XCTAssertTrue(app.staticTexts["No Budgets"].waitForExistence(timeout: 5))
+    }
+
+    private func waitForBudgetListContent(app: XCUIApplication, budgetRows: XCUIElementQuery) {
+        let emptyState = app.staticTexts["No Budgets"]
+
+        for _ in 0..<10 {
+            if emptyState.exists || budgetRows.count > 0 {
+                return
+            }
+
+            RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.5))
+        }
     }
 
     private func openBudgetListFromToolbarDropdown(app: XCUIApplication, budgetName: String) {
@@ -218,6 +269,8 @@ final class BudgetWardenIOSUITests: XCTestCase {
 
     private func openCategoryEditor(app: XCUIApplication, title: String) {
         openBudgetTab(app: app)
+        assertCategoryExists(app: app, title: title)
+
         let categoryRow = app.buttons["categoryRow_\(title)"]
         XCTAssertTrue(categoryRow.waitForExistence(timeout: 5))
         categoryRow.tap()
@@ -247,7 +300,7 @@ final class BudgetWardenIOSUITests: XCTestCase {
         replaceText(in: amountInput, with: amount)
 
         tapButton(app.buttons["transactionSaveButton"])
-        XCTAssertTrue(app.buttons["transactionRow_\(transactionTitle)"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["transactionTitle_\(transactionTitle)"].waitForExistence(timeout: 5))
     }
 
     private func openBudgetTab(app: XCUIApplication) {
@@ -299,8 +352,25 @@ final class BudgetWardenIOSUITests: XCTestCase {
     }
 
     private func replaceText(in textField: XCUIElement, with text: String) {
+        XCTAssertTrue(textField.waitForExistence(timeout: 5))
         textField.tap()
-        textField.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 40))
+
+        if let currentText = textField.value as? String, !currentText.isEmpty {
+            textField.press(forDuration: 1.0)
+
+            let selectAll = XCUIApplication().menuItems["Select All"]
+            if selectAll.waitForExistence(timeout: 2) {
+                selectAll.tap()
+            }
+            else {
+                textField.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+                textField.typeText(String(
+                    repeating: XCUIKeyboardKey.delete.rawValue,
+                    count: currentText.count
+                ))
+            }
+        }
+
         textField.typeText(text)
     }
 

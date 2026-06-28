@@ -3,19 +3,22 @@
 import PackageDescription
 
 let package = Package(
-    name: "AppleCore",
+    name: "BudgetWardenAppleCore",
     platforms: [
         .iOS(.v18),
         .macOS(.v15)
     ],
     products: [
         .library(
-            name: "AppleCore",
-            targets: ["AppleCore"]
+            name: "BudgetWardenAppleCore",
+            targets: ["BudgetWardenAppleCore"]
         )
     ],
     targets: [
-        .target(name: "AppleCore")
+        .target(
+            name: "BudgetWardenAppleCore",
+            path: "src"
+        )
     ],
     swiftLanguageModes: [.v6]
 )
