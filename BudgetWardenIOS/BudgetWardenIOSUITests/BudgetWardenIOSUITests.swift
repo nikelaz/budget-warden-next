@@ -68,7 +68,7 @@ final class BudgetWardenIOSUITests: XCTestCase {
 
         openCategoryEditor(app: app, title: updatedCategoryTitle)
         tapButton(app.buttons["categoryEditorDeleteButton"])
-        tapButton(app.buttons["categoryEditorDeleteConfirmButton"])
+        tapFirstButton(app: app, identifier: "categoryEditorDeleteConfirmButton")
 
         XCTAssertFalse(app.buttons["categoryRow_\(updatedCategoryTitle)"].waitForExistence(timeout: 5))
 
@@ -300,7 +300,7 @@ final class BudgetWardenIOSUITests: XCTestCase {
         replaceText(in: amountInput, with: amount)
 
         tapButton(app.buttons["transactionSaveButton"])
-        XCTAssertTrue(app.staticTexts["transactionTitle_\(transactionTitle)"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["transactionRow_\(transactionTitle)"].waitForExistence(timeout: 5))
     }
 
     private func openBudgetTab(app: XCUIApplication) {
@@ -377,5 +377,10 @@ final class BudgetWardenIOSUITests: XCTestCase {
     private func tapButton(_ button: XCUIElement) {
         XCTAssertTrue(button.waitForExistence(timeout: 5))
         button.tap()
+    }
+
+    private func tapFirstButton(app: XCUIApplication, identifier: String) {
+        let button = app.buttons.matching(identifier: identifier).firstMatch
+        tapButton(button)
     }
 }

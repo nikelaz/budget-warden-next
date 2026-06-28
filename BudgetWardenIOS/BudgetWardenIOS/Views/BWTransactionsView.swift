@@ -73,6 +73,7 @@ struct BWTransactionsView: View {
                             transactionRow(item)
                                 .matchedTransitionSource(id: item.id, in: navigationTransitionNamespace)
                         }
+                        .accessibilityIdentifier("transactionRow_\(item.transaction.title)")
                         .swipeActions(edge: .trailing) {
                             Button("Delete", systemImage: "trash", role: .destructive) {
                                 Task {
@@ -174,7 +175,6 @@ struct BWTransactionsView: View {
 
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityIdentifier("transactionRow_\(item.transaction.title)")
     }
 
     private func transactionEditor(for item: BWTransactionListItem) -> some View {
