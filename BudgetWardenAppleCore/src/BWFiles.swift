@@ -64,21 +64,6 @@ public enum BWFiles {
     }
 
     public static func readBudgetFile(url: URL) -> Result<BWBudget, BWError> {
-        coordinatedRead(url: url) { coordinatedURL in
-            do {
-                let json = try String(contentsOf: coordinatedURL, encoding: .utf8)
-                return BWCodec.decodeBudget(json: json, url: url)
-            }
-            catch {
-                return .failure(.readingFile(underlying: error))
-            }
-        }
-    }
-
-    private static func coordinatedRead<Value>(
-        url: URL,
-        read: (URL) -> Result<Value, BWError>
-    ) -> Result<Value, BWError> {
         let didStartAccessing = url.startAccessingSecurityScopedResource()
 
         defer {
@@ -89,14 +74,20 @@ public enum BWFiles {
 
         let coordinator = NSFileCoordinator(filePresenter: nil)
         var coordinationError: NSError?
-        var result: Result<Value, BWError> = .failure(.readingFile())
+        var result: Result<BWBudget, BWError> = .failure(.readingFile())
 
         coordinator.coordinate(
             readingItemAt: url,
             options: [],
             error: &coordinationError
         ) { coordinatedURL in
-            result = read(coordinatedURL)
+            do {
+                let json = try String(contentsOf: coordinatedURL, encoding: .utf8)
+                result = BWCodec.decodeBudget(json: json, url: url)
+            }
+            catch {
+                result = .failure(.readingFile(underlying: error))
+            }
         }
 
         if let coordinationError {

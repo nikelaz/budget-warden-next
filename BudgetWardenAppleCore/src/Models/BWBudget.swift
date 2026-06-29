@@ -13,7 +13,7 @@ import Foundation
 nonisolated public struct BWBudget: Codable, Sendable, Identifiable {
     // Encoded
     public var id: UUID
-    public var revisionId: UUID?
+    public var revision: Int64?
     public var schemaVersion: Int?
     public var title: String
     public var categories: [BWCategory]
@@ -25,7 +25,7 @@ nonisolated public struct BWBudget: Codable, Sendable, Identifiable {
     // Basically makes "url" a runtime-only key - not JSON encoded 
     enum CodingKeys: String, CodingKey {
         case id
-        case revisionId
+        case revision
         case schemaVersion
         case title
         case categories

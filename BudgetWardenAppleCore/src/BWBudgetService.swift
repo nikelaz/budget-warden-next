@@ -152,13 +152,26 @@ public enum BWBudgetService {
             return .failure(.saveFailed())
         }
 
-        let normalizedBudget: BWBudget
+        var normalizedBudget: BWBudget
 
         switch normalizeActualAmounts(in: budget) {
             case .failure(let error):
                 return .failure(error)
             case .success(let budget):
                 normalizedBudget = budget
+        }
+
+        let _rebaseRes = BWRebase.rebase(budgetInMemory: normalizedBudget, operation: .TransactionCreate)
+
+        if normalizedBudget.revision == nil {
+            normalizedBudget.revision = 1;
+        }
+
+        if normalizedBudget.revision == Int64.max {
+            normalizedBudget.revision = 1;
+        }
+        else {
+            normalizedBudget.revision! += 1;
         }
 
         let json: String
@@ -566,6 +579,15 @@ public enum BWBudgetService {
         }
 
         return .success(budget)
+    }
+
+    private static func mergeBudget(
+        _ budget: BWBudget,
+        with budgetOnDisk: BWBudget
+    ) -> Result<BWBudget, BWError> {
+        // The current on-disk budget is loaded here so conflict-aware merging can compare
+        // against the latest file contents without changing today's overwrite behavior.
+        .success(budget)
     }
 
     private static func recalculateActualAmounts(in budget: inout BWBudget) -> Bool {

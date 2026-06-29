@@ -25,6 +25,7 @@ public enum BWError: Error, Sendable {
     case findPreviousBudget(underlying: Error? = nil)
     case budgetRemove(underlying: Error? = nil)
     case validation(underlying: Error? = nil)
+    case rebaseFailed(underlying: Error? = nil)
 }
 
 extension BWError: LocalizedError {
@@ -58,6 +59,8 @@ extension BWError: LocalizedError {
                 return "Could not remove budget."
             case .validation:
                 return "The entered budget data is invalid."
+            case .rebaseFailed:
+                return "Could not merge your changes with the saved budget file. Try restarting the program."
         }
     }
 }
@@ -77,7 +80,8 @@ extension BWError {
                  .saveCancelled(let error),
                  .findPreviousBudget(let error),
                  .budgetRemove(let error),
-                 .validation(let error):
+                 .validation(let error),
+                 .rebaseFailed(let error):
                 return error
             case .amountOverflow:
                 return nil

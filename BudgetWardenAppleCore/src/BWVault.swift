@@ -232,6 +232,28 @@ public actor BWVault: Sendable {
         }.value
     }
 
+    public func readBudgetFile(url budgetURL: URL) async -> Result<BWBudget, BWError> {
+        guard let url else {
+            return .failure(.vaultNotSet())
+        }
+
+        return await Task.detached(priority: .userInitiated) {
+            let didStartAccessing = url.startAccessingSecurityScopedResource()
+
+            defer {
+                if didStartAccessing {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+
+            guard BWFiles.isBudgetFile(budgetURL, in: url) else {
+                return .failure(.readingFile())
+            }
+
+            return BWFiles.readBudgetFile(url: budgetURL.standardizedFileURL)
+        }.value
+    }
+
     public func removeBudgetFromVault(url budgetURL: URL) async -> Result<Void, BWError> {
         guard let url else {
             return .failure(.vaultNotSet())
