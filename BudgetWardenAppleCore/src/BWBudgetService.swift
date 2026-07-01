@@ -146,7 +146,8 @@ public enum BWBudgetService {
 
     public static func saveBudget(
         _ budget: BWBudget,
-        vault: BWVault
+        vault: BWVault,
+        operation: BWRebaseOperation
     ) async -> Result<BWBudget, BWError> {
         guard let budgetURL = budget.url else {
             return .failure(.saveFailed())
@@ -161,7 +162,17 @@ public enum BWBudgetService {
                 normalizedBudget = budget
         }
 
-        let _rebaseRes = BWRebase.rebase(budgetInMemory: normalizedBudget, operation: .TransactionCreate)
+        switch BWRebase.rebase(budgetInMemory: normalizedBudget, operation: operation) {
+            case .failure(let error):
+                return .failure(.saveFailed(underlying: error))
+            case .success(let budget):
+                switch normalizeActualAmounts(in: budget) {
+                    case .failure(let error):
+                        return .failure(error)
+                    case .success(let budget):
+                        normalizedBudget = budget
+                }
+        }
 
         if normalizedBudget.revision == nil {
             normalizedBudget.revision = 1;
@@ -231,7 +242,7 @@ public enum BWBudgetService {
             case .failure(let error):
                 return .failure(error)
             case .success(let budget):
-                return await saveBudget(budget, vault: vault)
+                return await saveBudget(budget, vault: vault, operation: .CategoryCreate(categoryId: category.id))
         }
     }
 
@@ -248,7 +259,7 @@ public enum BWBudgetService {
 
         var budget = budget
         budget.title = trimmedTitle
-        return await saveBudget(budget, vault: vault)
+        return await saveBudget(budget, vault: vault, operation: .BudgetUpdate)
     }
 
     public static func updateCategory(
@@ -287,7 +298,7 @@ public enum BWBudgetService {
             case .failure(let error):
                 return .failure(error)
             case .success(let budget):
-                return await saveBudget(budget, vault: vault)
+                return await saveBudget(budget, vault: vault, operation: .CategoryUpdate(categoryId: category.id))
         }
     }
 
@@ -310,7 +321,7 @@ public enum BWBudgetService {
             case .failure(let error):
                 return .failure(error)
             case .success(let budget):
-                return await saveBudget(budget, vault: vault)
+                return await saveBudget(budget, vault: vault, operation: .CategoryDelete(categoryId: categoryID))
         }
     }
 
@@ -366,7 +377,7 @@ public enum BWBudgetService {
             case .failure(let error):
                 return .failure(error)
             case .success(let budget):
-                return await saveBudget(budget, vault: vault)
+                return await saveBudget(budget, vault: vault, operation: .CategoryUpdate(categoryId: category.id))
         }
     }
 
@@ -378,7 +389,7 @@ public enum BWBudgetService {
         vault: BWVault
     ) async -> Result<BWBudget, BWError> {
         guard !sourceOffsets.isEmpty else {
-            return await saveBudget(budget, vault: vault)
+            return await saveBudget(budget, vault: vault, operation: .Other)
         }
 
         var budget = budget
@@ -392,6 +403,7 @@ public enum BWBudgetService {
 
         let sortedSourceOffsets = sourceOffsets.sorted()
         let movedCategories = sortedSourceOffsets.map { categories[$0] }
+        let movedCategoryIds = movedCategories.map(\.category.id)
         var remainingCategories = categories.enumerated()
             .filter { !sourceOffsets.contains($0.offset) }
             .map(\.element)
@@ -412,7 +424,11 @@ public enum BWBudgetService {
             case .failure(let error):
                 return .failure(error)
             case .success(let budget):
-                return await saveBudget(budget, vault: vault)
+                return await saveBudget(
+                    budget,
+                    vault: vault,
+                    operation: .CategoriesBulkOrdinalUpdate(categoryIds: movedCategoryIds)
+                )
         }
     }
 
@@ -438,18 +454,20 @@ public enum BWBudgetService {
             return .failure(.validation())
         }
 
-        budget.categories[categoryIndex].transactions.append(BWTransaction(
+        let transaction = BWTransaction(
             title: trimmedTitle,
             description: trimmedDescription,
             date: date,
             amount: amount
-        ))
+        )
+
+        budget.categories[categoryIndex].transactions.append(transaction)
 
         switch normalizeActualAmounts(in: budget) {
             case .failure(let error):
                 return .failure(error)
             case .success(let budget):
-                return await saveBudget(budget, vault: vault)
+                return await saveBudget(budget, vault: vault, operation: .TransactionCreate(categoryId: categoryID, transactionId: transaction.id))
         }
     }
 
@@ -469,7 +487,6 @@ public enum BWBudgetService {
         var budget = budget
 
         guard let sourceCategoryIndex = budget.categories.firstIndex(where: { $0.id == sourceCategoryID }),
-              let destinationCategoryIndex = budget.categories.firstIndex(where: { $0.id == destinationCategoryID }),
               let transactionIndex = budget.categories[sourceCategoryIndex].transactions.firstIndex(where: { $0.id == transaction.id })
         else {
             return .failure(.validation())
@@ -488,6 +505,11 @@ public enum BWBudgetService {
         }
         else {
             budget.categories[sourceCategoryIndex].transactions.remove(at: transactionIndex)
+
+            guard let destinationCategoryIndex = budget.categories.firstIndex(where: { $0.id == destinationCategoryID }) else {
+                return .failure(.validation())
+            }
+
             budget.categories[destinationCategoryIndex].transactions.append(updatedTransaction)
         }
 
@@ -495,7 +517,15 @@ public enum BWBudgetService {
             case .failure(let error):
                 return .failure(error)
             case .success(let budget):
-                return await saveBudget(budget, vault: vault)
+                return await saveBudget(
+                    budget,
+                    vault: vault,
+                    operation: .TransactionUpdate(
+                        sourceCategoryId: sourceCategoryID,
+                        destinationCategoryId: destinationCategoryID,
+                        transactionId: updatedTransaction.id
+                    )
+                )
         }
     }
 
@@ -519,7 +549,7 @@ public enum BWBudgetService {
             case .failure(let error):
                 return .failure(error)
             case .success(let budget):
-                return await saveBudget(budget, vault: vault)
+                return await saveBudget(budget, vault: vault, operation: .TransactionDelete(categoryId: categoryID, transactionId: transactionID))
         }
     }
 
