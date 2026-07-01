@@ -74,15 +74,18 @@ public enum BWRebase {
             case .CategoryUpdate(let categoryId):
                 var rebasedBudget = budgetOnDisk
 
-                guard let categoryIndex = rebasedBudget.categories.firstIndex(where: { $0.id == categoryId }) else {
-                    return .failure(.rebaseFailed())
-                }
+                let categoryIndex = rebasedBudget.categories.firstIndex(where: { $0.id == categoryId })
 
                 guard let updatedCategory = budgetInMemory.categories.first(where: { $0.id == categoryId }) else {
                     return .failure(.rebaseFailed())
                 }
 
-                rebasedBudget.categories[categoryIndex] = updatedCategory
+                if categoryIndex == nil {
+                    rebasedBudget.categories.append(updatedCategory)
+                    return .success(rebasedBudget)
+                }
+                
+                rebasedBudget.categories[categoryIndex!] = updatedCategory
 
                 return .success(rebasedBudget)
             case .CategoryDelete(let categoryId):
