@@ -88,6 +88,22 @@ struct BWBudgetListView: View {
                     .accessibilityIdentifier("vaultButton")
             }
         }
+        .onAppear {
+            updateAutoRefreshDeleteBlocker()
+        }
+        .onDisappear {
+            store.setAutoRefreshSuspended(false, reason: "budgetListDelete")
+        }
+        .onChange(of: budgetsPendingDeletion.map(\.id)) { _, _ in
+            updateAutoRefreshDeleteBlocker()
+        }
+    }
+
+    private func updateAutoRefreshDeleteBlocker() {
+        store.setAutoRefreshSuspended(
+            !budgetsPendingDeletion.isEmpty,
+            reason: "budgetListDelete"
+        )
     }
 
     private var deleteConfirmationTitle: String {

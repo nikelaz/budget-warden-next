@@ -19,6 +19,7 @@ struct BWWindowWelcome: Scene {
 
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
+    @Environment(\.scenePhase) private var scenePhase
 
     @StateObject private var windowStore = BWWindowStore()
 
@@ -42,6 +43,7 @@ struct BWWindowWelcome: Scene {
             .containerBackground(.regularMaterial, for: .window)
             .task {
                 await store.loadBudgetsFromVault()
+                store.setAutoRefreshActive(scenePhase == .active)
             }
             .onOpenURL { url in
                 Task(priority: .userInitiated) {
@@ -50,6 +52,18 @@ struct BWWindowWelcome: Scene {
                         dismissWindow(id: "window-welcome")
                     }
                 }
+            }
+            .onAppear {
+                updateAutoRefreshDialogBlocker()
+            }
+            .onDisappear {
+                store.setAutoRefreshSuspended(false, reason: "welcomeWindowDialog")
+            }
+            .onChange(of: scenePhase) { _, phase in
+                store.setAutoRefreshActive(phase == .active)
+            }
+            .onChange(of: hasAutoRefreshBlockingDialog) { _, _ in
+                updateAutoRefreshDialogBlocker()
             }
             .alert("Error", isPresented: $windowStore.isErrorState) {
                 Button("OK") {
@@ -135,6 +149,21 @@ struct BWWindowWelcome: Scene {
         .commands {
             BWCommands(windowStore: windowStore)
         }
+    }
+
+    private var hasAutoRefreshBlockingDialog: Bool {
+        windowStore.isBudgetDialogOpen
+            || windowStore.isVaultConfigDialogOpen
+            || windowStore.isPreferencesDialogOpen
+            || windowStore.isErrorState
+            || isDeleteBudgetDialogPresented
+    }
+
+    private func updateAutoRefreshDialogBlocker() {
+        store.setAutoRefreshSuspended(
+            hasAutoRefreshBlockingDialog,
+            reason: "welcomeWindowDialog"
+        )
     }
 
     var leftColumn: some View {

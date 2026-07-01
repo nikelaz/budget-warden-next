@@ -101,16 +101,27 @@ public enum BWRebase {
             case .TransactionCreate(let categoryId, let transactionId):
                 var rebasedBudget = budgetOnDisk
 
-                guard let categoryIndex = rebasedBudget.categories.firstIndex(where: { $0.id == categoryId }) else {
-                    return .failure(.rebaseFailed())
-                }
-
                 guard let categoryInMemory = budgetInMemory.categories.first(where: { $0.id == categoryId }) else {
                     return .failure(.rebaseFailed())
                 }
 
-                guard let newTransaction = categoryInMemory.transactions.first(where: { $0.id == transactionId}) else {
+                var categoryIndex = rebasedBudget.categories.firstIndex(where: { $0.id == categoryId })
+
+                if categoryIndex == nil {
+                    rebasedBudget.categories.append(categoryInMemory)
+                    categoryIndex = rebasedBudget.categories.firstIndex(where: { $0.id == categoryId })
+                }
+
+                guard let categoryIndex else {
                     return .failure(.rebaseFailed())
+                }
+
+                guard let newTransaction = categoryInMemory.transactions.first(where: { $0.id == transactionId }) else {
+                    return .failure(.rebaseFailed())
+                }
+
+                if rebasedBudget.categories[categoryIndex].transactions.contains(where: { $0.id == transactionId }) {
+                    return .success(rebasedBudget)
                 }
 
                 rebasedBudget.categories[categoryIndex].transactions.append(newTransaction)
@@ -156,6 +167,13 @@ public enum BWRebase {
                 }
 
                 guard let transactionIndex = rebasedBudget.categories[categoryIndex].transactions.firstIndex(where: { $0.id == transactionId }) else {
+                    guard let movedCategoryIndex = rebasedBudget.categories.firstIndex(where: { category in
+                        category.transactions.contains(where: { $0.id == transactionId })
+                    }) else {
+                        return .failure(.rebaseFailed())
+                    }
+
+                    rebasedBudget.categories[movedCategoryIndex].transactions.removeAll(where: { $0.id == transactionId })
                     return .success(rebasedBudget)
                 }
 

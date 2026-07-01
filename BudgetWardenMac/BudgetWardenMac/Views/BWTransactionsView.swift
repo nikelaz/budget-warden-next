@@ -56,6 +56,17 @@ struct BWTransactionsView: View {
         store.currentBudget?.categories.isEmpty == false
     }
 
+    private var hasAutoRefreshBlockingEditor: Bool {
+        isCreatingTransaction || isFilterPresented
+    }
+
+    private func updateAutoRefreshEditorBlocker() {
+        store.setAutoRefreshSuspended(
+            hasAutoRefreshBlockingEditor,
+            reason: "transactionsViewEditor"
+        )
+    }
+
     private var transactions: [BWTransactionListItem] {
         guard let budget = store.currentBudget else {
             return []
@@ -215,6 +226,18 @@ struct BWTransactionsView: View {
                 .environmentObject(store)
                 .environmentObject(windowStore)
                 .frame(minWidth: 360)
+            }
+            .onAppear {
+                updateAutoRefreshEditorBlocker()
+            }
+            .onDisappear {
+                store.setAutoRefreshSuspended(false, reason: "transactionsViewEditor")
+            }
+            .onChange(of: isCreatingTransaction) { _, _ in
+                updateAutoRefreshEditorBlocker()
+            }
+            .onChange(of: isFilterPresented) { _, _ in
+                updateAutoRefreshEditorBlocker()
             }
     }
 

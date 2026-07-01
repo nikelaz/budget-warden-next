@@ -41,6 +41,12 @@ final class BWStore {
     private(set) var vaultURL: URL?
     private(set) var skippedFiles: [String] = []
 
+    @ObservationIgnored private var autoRefreshTask: Task<Void, Never>?
+    @ObservationIgnored private var autoRefreshSnapshot: BWBudgetFileSnapshot?
+    @ObservationIgnored private var autoRefreshBlockers: Set<String> = []
+    @ObservationIgnored private var autoRefreshMutationCount = 0
+    @ObservationIgnored private var isRefreshingFromDisk = false
+
     var selectedBudgetID: UUID?
     var errorMessage: String?
     var isLoadingBudgets = false
@@ -57,6 +63,10 @@ final class BWStore {
         selectedCurrency = savedCurrency ?? .defaultCurrency
     }
 
+    deinit {
+        autoRefreshTask?.cancel()
+    }
+
     static func resetUITestVaultState() {
         BWVault.resetStoredState(configuration: vaultConfiguration)
 
@@ -69,6 +79,138 @@ final class BWStore {
         }
         catch {
             // UI tests will surface vault setup failures during app launch.
+        }
+    }
+
+    func setAutoRefreshActive(_ isActive: Bool) {
+        if isActive {
+            startAutoRefreshLoop()
+        }
+        else {
+            stopAutoRefreshLoop()
+        }
+    }
+
+    func setAutoRefreshSuspended(_ isSuspended: Bool, reason: String) {
+        if isSuspended {
+            autoRefreshBlockers.insert(reason)
+        }
+        else {
+            autoRefreshBlockers.remove(reason)
+        }
+    }
+
+    private func startAutoRefreshLoop() {
+        guard autoRefreshTask == nil else {
+            return
+        }
+
+        autoRefreshTask = Task { [weak self] in
+            await self?.refreshFromDiskIfIdle()
+
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(3))
+                }
+                catch {
+                    break
+                }
+
+                await self?.refreshFromDiskIfIdle()
+            }
+        }
+    }
+
+    private func stopAutoRefreshLoop() {
+        autoRefreshTask?.cancel()
+        autoRefreshTask = nil
+    }
+
+    private func withAutoRefreshPaused<T>(_ operation: () async -> T) async -> T {
+        autoRefreshMutationCount += 1
+
+        defer {
+            autoRefreshMutationCount -= 1
+        }
+
+        return await operation()
+    }
+
+    private func updateAutoRefreshSnapshot() async {
+        switch await BWBudgetService.refreshSnapshot(for: budgets, vault: vault) {
+            case .failure:
+                autoRefreshSnapshot = nil
+            case .success(let snapshot):
+                autoRefreshSnapshot = snapshot.openFiles
+        }
+    }
+
+    private func refreshFromDiskIfIdle() async {
+        guard !isLoadingBudgets,
+              autoRefreshMutationCount == 0,
+              autoRefreshBlockers.isEmpty,
+              !isRefreshingFromDisk
+        else {
+            return
+        }
+
+        isRefreshingFromDisk = true
+
+        defer {
+            isRefreshingFromDisk = false
+        }
+
+        switch await BWBudgetService.refreshSnapshot(for: budgets, vault: vault) {
+            case .failure:
+                return
+            case .success(let snapshot):
+                guard let autoRefreshSnapshot else {
+                    self.autoRefreshSnapshot = snapshot.openFiles
+                    return
+                }
+
+                guard autoRefreshSnapshot != snapshot.openFiles else {
+                    return
+                }
+
+                await reloadBudgetsForAutoRefresh(snapshot: snapshot)
+                self.autoRefreshSnapshot = snapshot.openFiles
+        }
+    }
+
+    private func reloadBudgetsForAutoRefresh(snapshot: BWBudgetRefreshSnapshot) async {
+        let previousSelectedBudgetID = self.selectedBudgetID
+        let externalURLs = BWBudgetService.externalBudgetURLs(
+            in: budgets,
+            vaultSnapshot: snapshot.vault
+        )
+        var refreshedBudgets: [BWBudget]
+
+        switch await BWBudgetService.loadBudgets(vault: vault) {
+            case .failure:
+                return
+            case .success(let result):
+                refreshedBudgets = result.budgets
+                skippedFiles = result.skippedFiles
+        }
+
+        for url in externalURLs {
+            switch await BWBudgetService.openBudget(at: url, vault: vault) {
+                case .failure:
+                    continue
+                case .success(let result):
+                    upsertBudget(result.budget, in: &refreshedBudgets)
+            }
+        }
+
+        budgets = refreshedBudgets
+
+        if let previousSelectedBudgetID,
+           budget(withID: previousSelectedBudgetID) != nil {
+            self.selectedBudgetID = previousSelectedBudgetID
+        }
+        else {
+            restoreSelection()
         }
     }
 
@@ -94,15 +236,17 @@ final class BWStore {
             return false
         }
 
-        let result = await BWBudgetService.createCategory(
-            in: budget,
-            title: title,
-            plannedAmount: plannedAmount,
-            categoryType: categoryType,
-            vault: vault
-        )
+        return await withAutoRefreshPaused {
+            let result = await BWBudgetService.createCategory(
+                in: budget,
+                title: title,
+                plannedAmount: plannedAmount,
+                categoryType: categoryType,
+                vault: vault
+            )
 
-        return handleBudgetMutation(result)
+            return await handleBudgetMutation(result)
+        }
     }
 
     func updateBudgetTitle(_ title: String, for budgetID: UUID) async -> Bool {
@@ -110,13 +254,15 @@ final class BWStore {
             return false
         }
 
-        let result = await BWBudgetService.updateBudgetTitle(
-            in: budget,
-            title: title,
-            vault: vault
-        )
+        return await withAutoRefreshPaused {
+            let result = await BWBudgetService.updateBudgetTitle(
+                in: budget,
+                title: title,
+                vault: vault
+            )
 
-        return handleBudgetMutation(result)
+            return await handleBudgetMutation(result)
+        }
     }
 
     func updateCategory(_ updatedCategory: BWCategory, in budgetID: UUID) async -> Bool {
@@ -124,13 +270,15 @@ final class BWStore {
             return false
         }
 
-        let result = await BWBudgetService.updateCategory(
-            in: budget,
-            category: updatedCategory,
-            vault: vault
-        )
+        return await withAutoRefreshPaused {
+            let result = await BWBudgetService.updateCategory(
+                in: budget,
+                category: updatedCategory,
+                vault: vault
+            )
 
-        return handleBudgetMutation(result)
+            return await handleBudgetMutation(result)
+        }
     }
 
     func deleteCategory(_ category: BWCategory, in budgetID: UUID) async {
@@ -138,13 +286,15 @@ final class BWStore {
             return
         }
 
-        let result = await BWBudgetService.deleteCategory(
-            in: budget,
-            categoryID: category.id,
-            vault: vault
-        )
+        await withAutoRefreshPaused {
+            let result = await BWBudgetService.deleteCategory(
+                in: budget,
+                categoryID: category.id,
+                vault: vault
+            )
 
-        _ = handleBudgetMutation(result)
+            _ = await handleBudgetMutation(result)
+        }
     }
 
     func moveCategories(
@@ -157,15 +307,17 @@ final class BWStore {
             return false
         }
 
-        let result = await BWBudgetService.moveCategories(
-            in: budget,
-            for: categoryType,
-            fromOffsets: sourceOffsets,
-            toOffset: destination,
-            vault: vault
-        )
+        return await withAutoRefreshPaused {
+            let result = await BWBudgetService.moveCategories(
+                in: budget,
+                for: categoryType,
+                fromOffsets: sourceOffsets,
+                toOffset: destination,
+                vault: vault
+            )
 
-        return handleBudgetMutation(result)
+            return await handleBudgetMutation(result)
+        }
     }
 
     func createTransaction(
@@ -180,17 +332,19 @@ final class BWStore {
             return false
         }
 
-        let result = await BWBudgetService.createTransaction(
-            in: budget,
-            categoryID: categoryID,
-            title: title,
-            description: description,
-            date: date,
-            amount: amount,
-            vault: vault
-        )
+        return await withAutoRefreshPaused {
+            let result = await BWBudgetService.createTransaction(
+                in: budget,
+                categoryID: categoryID,
+                title: title,
+                description: description,
+                date: date,
+                amount: amount,
+                vault: vault
+            )
 
-        return handleBudgetMutation(result)
+            return await handleBudgetMutation(result)
+        }
     }
 
     func updateTransaction(
@@ -203,15 +357,17 @@ final class BWStore {
             return false
         }
 
-        let result = await BWBudgetService.updateTransaction(
-            in: budget,
-            transaction: transaction,
-            from: sourceCategoryID,
-            to: destinationCategoryID,
-            vault: vault
-        )
+        return await withAutoRefreshPaused {
+            let result = await BWBudgetService.updateTransaction(
+                in: budget,
+                transaction: transaction,
+                from: sourceCategoryID,
+                to: destinationCategoryID,
+                vault: vault
+            )
 
-        return handleBudgetMutation(result)
+            return await handleBudgetMutation(result)
+        }
     }
 
     func deleteTransaction(
@@ -223,14 +379,16 @@ final class BWStore {
             return
         }
 
-        let result = await BWBudgetService.deleteTransaction(
-            in: budget,
-            transactionID: transaction.id,
-            from: categoryID,
-            vault: vault
-        )
+        await withAutoRefreshPaused {
+            let result = await BWBudgetService.deleteTransaction(
+                in: budget,
+                transactionID: transaction.id,
+                from: categoryID,
+                vault: vault
+            )
 
-        _ = handleBudgetMutation(result)
+            _ = await handleBudgetMutation(result)
+        }
     }
 
     func refreshVaultState() async {
@@ -255,6 +413,7 @@ final class BWStore {
                 budgets = result.budgets
                 skippedFiles = result.skippedFiles
                 restoreSelection()
+                await updateAutoRefreshSnapshot()
         }
     }
 
@@ -279,44 +438,53 @@ final class BWStore {
     }
 
     func openBudget(at url: URL) async {
-        switch await BWBudgetService.openBudget(at: url, vault: vault) {
-            case .failure(let error):
-                errorMessage = error.localizedDescription
-            case .success(let result):
-                if let vaultReadResult = result.vaultReadResult {
-                    budgets = vaultReadResult.budgets
-                    skippedFiles = vaultReadResult.skippedFiles
-                }
+        await withAutoRefreshPaused {
+            switch await BWBudgetService.openBudget(at: url, vault: vault) {
+                case .failure(let error):
+                    errorMessage = error.localizedDescription
+                case .success(let result):
+                    if let vaultReadResult = result.vaultReadResult {
+                        budgets = vaultReadResult.budgets
+                        skippedFiles = vaultReadResult.skippedFiles
+                    }
 
-                open(result.budget)
+                    open(result.budget)
+                    await updateAutoRefreshSnapshot()
+            }
         }
     }
 
     func createBudget(title: String, template: BWTemplateSelection) async -> Bool {
-        switch await BWBudgetService.createBudget(
-            title: title,
-            template: template,
-            budgetsInVault: budgets,
-            vault: vault
-        ) {
-            case .failure(let error):
-                errorMessage = error.localizedDescription
-                return false
-            case .success(let budget):
-                open(budget)
-                await loadBudgets()
-                selectBudget(withID: budget.id)
-                return true
+        await withAutoRefreshPaused {
+            switch await BWBudgetService.createBudget(
+                title: title,
+                template: template,
+                budgetsInVault: budgets,
+                vault: vault
+            ) {
+                case .failure(let error):
+                    errorMessage = error.localizedDescription
+                    return false
+                case .success(let budget):
+                    open(budget)
+                    await loadBudgets()
+                    selectBudget(withID: budget.id)
+                    await updateAutoRefreshSnapshot()
+                    return true
+            }
         }
     }
 
     func deleteBudget(_ budget: BWBudget) async {
-        switch await BWBudgetService.deleteBudget(budget, vault: vault) {
-            case .failure(let error):
-                errorMessage = error.localizedDescription
-            case .success:
-                budgets.removeAll { $0.id == budget.id }
-                clearSelectionIfNeeded(deletedBudgetID: budget.id)
+        await withAutoRefreshPaused {
+            switch await BWBudgetService.deleteBudget(budget, vault: vault) {
+                case .failure(let error):
+                    errorMessage = error.localizedDescription
+                case .success:
+                    budgets.removeAll { $0.id == budget.id }
+                    clearSelectionIfNeeded(deletedBudgetID: budget.id)
+                    await updateAutoRefreshSnapshot()
+            }
         }
     }
 
@@ -331,25 +499,29 @@ final class BWStore {
     }
 
     func setVaultLocation(_ location: BWVaultLocation) async {
-        switch await vault.setLocation(location) {
-            case .failure(let error):
-                errorMessage = error.localizedDescription
-            case .success:
-                await loadBudgets()
-        }
+        await withAutoRefreshPaused {
+            switch await vault.setLocation(location) {
+                case .failure(let error):
+                    errorMessage = error.localizedDescription
+                case .success:
+                    await loadBudgets()
+            }
 
-        await refreshVaultState()
+            await refreshVaultState()
+        }
     }
 
     func setLocalVaultFolder(_ url: URL) async {
-        switch await vault.setLocalVaultFolder(url) {
-            case .failure(let error):
-                errorMessage = error.localizedDescription
-            case .success:
-                await loadBudgets()
-        }
+        await withAutoRefreshPaused {
+            switch await vault.setLocalVaultFolder(url) {
+                case .failure(let error):
+                    errorMessage = error.localizedDescription
+                case .success:
+                    await loadBudgets()
+            }
 
-        await refreshVaultState()
+            await refreshVaultState()
+        }
     }
 
     private func restoreSelection() {
@@ -372,7 +544,7 @@ final class BWStore {
         selectedBudgetID = budgets.first?.id
     }
 
-    private func handleBudgetMutation(_ result: Result<BWBudget, BWError>) -> Bool {
+    private func handleBudgetMutation(_ result: Result<BWBudget, BWError>) async -> Bool {
         switch result {
             case .failure(.validation):
                 return false
@@ -381,11 +553,16 @@ final class BWStore {
                 return false
             case .success(let budget):
                 upsertBudget(budget)
+                await updateAutoRefreshSnapshot()
                 return true
         }
     }
 
     private func upsertBudget(_ budget: BWBudget) {
+        upsertBudget(budget, in: &budgets)
+    }
+
+    private func upsertBudget(_ budget: BWBudget, in budgets: inout [BWBudget]) {
         if let index = budgets.firstIndex(where: { $0.id == budget.id }) {
             budgets[index] = budget
         }

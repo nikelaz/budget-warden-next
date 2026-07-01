@@ -34,6 +34,61 @@ public struct BWBudgetOpenResult: Sendable {
 }
 
 public enum BWBudgetService {
+    public static func refreshSnapshot(
+        for budgets: [BWBudget],
+        vault: BWVault
+    ) async -> Result<BWBudgetRefreshSnapshot, BWError> {
+        switch await vault.budgetFileSnapshot() {
+            case .failure(let error):
+                return .failure(error)
+            case .success(let vaultSnapshot):
+                let externalURLs = externalBudgetURLs(
+                    in: budgets,
+                    vaultSnapshot: vaultSnapshot
+                )
+                var files = vaultSnapshot.files
+
+                for url in externalURLs {
+                    switch BWFiles.budgetFileState(url: url) {
+                        case .success(let state):
+                            files.append(state)
+                        case .failure:
+                            continue
+                    }
+                }
+
+                return .success(BWBudgetRefreshSnapshot(
+                    vault: vaultSnapshot,
+                    openFiles: BWBudgetFileSnapshot(files: files)
+                ))
+        }
+    }
+
+    public static func externalBudgetURLs(
+        in budgets: [BWBudget],
+        vaultSnapshot: BWBudgetFileSnapshot
+    ) -> [URL] {
+        var urls: [URL] = []
+        var seenPaths: Set<String> = []
+
+        for budget in budgets {
+            guard let url = budget.url?.standardizedFileURL,
+                  !vaultSnapshot.contains(url)
+            else {
+                continue
+            }
+
+            guard !seenPaths.contains(url.path) else {
+                continue
+            }
+
+            urls.append(url)
+            seenPaths.insert(url.path)
+        }
+
+        return urls
+    }
+
     public static func loadBudgets(
         vault: BWVault
     ) async -> Result<BWBudgetDirectoryReadResult, BWError> {
@@ -164,7 +219,7 @@ public enum BWBudgetService {
 
         switch BWRebase.rebase(budgetInMemory: normalizedBudget, operation: operation) {
             case .failure(let error):
-                return .failure(.saveFailed(underlying: error))
+                return .failure(error)
             case .success(let budget):
                 switch normalizeActualAmounts(in: budget) {
                     case .failure(let error):

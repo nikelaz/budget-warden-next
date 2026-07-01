@@ -172,6 +172,23 @@ struct BudgetView: View {
         store.currentBudget?.categories.isEmpty == false
     }
 
+    private var hasAutoRefreshBlockingEditor: Bool {
+        isCreatingIncomeDialogOpen
+            || isCreatingExpenseDialogOpen
+            || isCreatingSavingsDialogOpen
+            || isCreatingDebtDialogOpen
+            || isCreatingCategoryDialogOpen
+            || isCreatingTransactionDialogOpen
+            || categoryPendingDeletion != nil
+    }
+
+    private func updateAutoRefreshEditorBlocker() {
+        store.setAutoRefreshSuspended(
+            hasAutoRefreshBlockingEditor,
+            reason: "budgetViewEditor"
+        )
+    }
+
     var body: some View {
         Table(of: BWCategoryTableRow.self, selection: $selection) {
             TableColumn("Category") { tableRow in
@@ -507,6 +524,33 @@ struct BudgetView: View {
             }
         } message: {
             Text("This will remove the category and its transactions from the budget.")
+        }
+        .onAppear {
+            updateAutoRefreshEditorBlocker()
+        }
+        .onDisappear {
+            store.setAutoRefreshSuspended(false, reason: "budgetViewEditor")
+        }
+        .onChange(of: isCreatingIncomeDialogOpen) { _, _ in
+            updateAutoRefreshEditorBlocker()
+        }
+        .onChange(of: isCreatingExpenseDialogOpen) { _, _ in
+            updateAutoRefreshEditorBlocker()
+        }
+        .onChange(of: isCreatingSavingsDialogOpen) { _, _ in
+            updateAutoRefreshEditorBlocker()
+        }
+        .onChange(of: isCreatingDebtDialogOpen) { _, _ in
+            updateAutoRefreshEditorBlocker()
+        }
+        .onChange(of: isCreatingCategoryDialogOpen) { _, _ in
+            updateAutoRefreshEditorBlocker()
+        }
+        .onChange(of: isCreatingTransactionDialogOpen) { _, _ in
+            updateAutoRefreshEditorBlocker()
+        }
+        .onChange(of: categoryPendingDeletion?.id) { _, _ in
+            updateAutoRefreshEditorBlocker()
         }
     }
 }

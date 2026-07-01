@@ -60,7 +60,7 @@ extension BWError: LocalizedError {
             case .validation:
                 return "The entered budget data is invalid."
             case .rebaseFailed:
-                return "Could not merge your changes with the saved budget file. Try restarting the program."
+                return "Could not merge your change with the saved budget file. Try restarting the program."
         }
     }
 }

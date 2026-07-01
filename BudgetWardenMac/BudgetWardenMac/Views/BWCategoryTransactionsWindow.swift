@@ -51,6 +51,17 @@ struct BWCategoryTransactionsWindow: View {
         return "\(category.title) Transactions"
     }
 
+    private var hasAutoRefreshBlockingEditor: Bool {
+        isCreatingTransaction || isFilterPresented || windowStore.isErrorState
+    }
+
+    private func updateAutoRefreshEditorBlocker() {
+        store.setAutoRefreshSuspended(
+            hasAutoRefreshBlockingEditor,
+            reason: "categoryTransactionsWindowEditor"
+        )
+    }
+
     private var filteredTransactions: [BWTransaction] {
         sortedTransactions(category?.transactions.filter(matchesFilters) ?? [])
     }
@@ -162,6 +173,21 @@ struct BWCategoryTransactionsWindow: View {
             }
         } message: {
             Text(windowStore.errorMessage)
+        }
+        .onAppear {
+            updateAutoRefreshEditorBlocker()
+        }
+        .onDisappear {
+            store.setAutoRefreshSuspended(false, reason: "categoryTransactionsWindowEditor")
+        }
+        .onChange(of: isCreatingTransaction) { _, _ in
+            updateAutoRefreshEditorBlocker()
+        }
+        .onChange(of: isFilterPresented) { _, _ in
+            updateAutoRefreshEditorBlocker()
+        }
+        .onChange(of: windowStore.isErrorState) { _, _ in
+            updateAutoRefreshEditorBlocker()
         }
     }
 

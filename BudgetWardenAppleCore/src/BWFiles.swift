@@ -45,6 +45,36 @@ public enum BWFiles {
             && fileURL.deletingLastPathComponent() == directoryURL
     }
 
+    public static func budgetFileState(url: URL) -> Result<BWBudgetFileState, BWError> {
+        guard isBudgetFile(url) else {
+            return .failure(.readingFile())
+        }
+
+        let didStartAccessing = url.startAccessingSecurityScopedResource()
+
+        defer {
+            if didStartAccessing {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        do {
+            let values = try url.resourceValues(forKeys: [
+                .contentModificationDateKey,
+                .fileSizeKey
+            ])
+
+            return .success(BWBudgetFileState(
+                url: url,
+                modificationDate: values.contentModificationDate,
+                fileSize: values.fileSize.map(Int64.init)
+            ))
+        }
+        catch {
+            return .failure(.readingFile(underlying: error))
+        }
+    }
+
     public static func saveFile(url: URL, contents: String) -> Result<Void, BWError> {
         let didStartAccessing = url.startAccessingSecurityScopedResource()
 

@@ -73,6 +73,29 @@ struct BWSettingsView: View {
 
             title = budget.title
         }
+        .onAppear {
+            updateAutoRefreshEditorBlocker()
+        }
+        .onDisappear {
+            store.setAutoRefreshSuspended(false, reason: "settingsEditor")
+        }
+        .onChange(of: isCurrencyPickerPresented) { _, _ in
+            updateAutoRefreshEditorBlocker()
+        }
+        .onChange(of: focusedField) { _, _ in
+            updateAutoRefreshEditorBlocker()
+        }
+    }
+
+    private var hasAutoRefreshBlockingEditor: Bool {
+        isCurrencyPickerPresented || focusedField == .name
+    }
+
+    private func updateAutoRefreshEditorBlocker() {
+        store.setAutoRefreshSuspended(
+            hasAutoRefreshBlockingEditor,
+            reason: "settingsEditor"
+        )
     }
 
     private func saveTitle() async {

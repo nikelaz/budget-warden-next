@@ -189,10 +189,30 @@ struct BWMainTabsView: View {
                     }
                 }
             }
+            .onAppear {
+                updateAutoRefreshEditorBlocker()
+            }
+            .onDisappear {
+                store.setAutoRefreshSuspended(false, reason: "budgetEditor")
+            }
+            .onChange(of: hasEditorOpen) { _, _ in
+                updateAutoRefreshEditorBlocker()
+            }
         }
         else {
             ContentUnavailableView("Budget Not Found", systemImage: "folder.badge.questionmark")
         }
+    }
+
+    private var hasEditorOpen: Bool {
+        categoryEditor != nil
+            || categoryPendingEdit != nil
+            || transactionEditor != nil
+            || transactionPendingEdit != nil
+    }
+
+    private func updateAutoRefreshEditorBlocker() {
+        store.setAutoRefreshSuspended(hasEditorOpen, reason: "budgetEditor")
     }
 
     private func orderedCategories(in budget: BWBudget) -> [BWCategory] {

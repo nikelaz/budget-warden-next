@@ -12,6 +12,8 @@ import BudgetWardenAppleCore
 import SwiftUI
 
 struct BWRootView: View {
+    @Environment(\.scenePhase) private var scenePhase
+
     @State private var store = BWStore()
     @State private var navigationPath: [UUID] = []
     @State private var activeSheet: BWRootSheet?
@@ -30,6 +32,10 @@ struct BWRootView: View {
         .task {
             await store.loadBudgets()
             openInitialBudget()
+            updateAutoRefreshActivity(for: scenePhase)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            updateAutoRefreshActivity(for: phase)
         }
         .onChange(of: store.selectedBudgetID) { _, selectedBudgetID in
             guard let selectedBudgetID else {
@@ -61,6 +67,9 @@ struct BWRootView: View {
                     BWConfigureVaultView(store: store)
             }
         }
+        .onChange(of: activeSheet) { _, sheet in
+            store.setAutoRefreshSuspended(sheet != nil, reason: "rootSheet")
+        }
         .alert("Could Not Open Budget", isPresented: errorIsPresented) {
         } message: {
             Text(store.errorMessage ?? "")
@@ -89,6 +98,11 @@ struct BWRootView: View {
         }
 
         navigationPath = [selectedBudgetID]
+    }
+
+    private func updateAutoRefreshActivity(for phase: ScenePhase) {
+        let isActive = phase == .active
+        store.setAutoRefreshActive(isActive)
     }
 
     private func showCreateBudget() {

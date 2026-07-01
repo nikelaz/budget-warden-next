@@ -14,6 +14,7 @@ import BudgetWardenAppleCore
 struct BWWindowMain: Scene {
     @EnvironmentObject var store: BWStore
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.scenePhase) private var scenePhase
 
     @StateObject private var windowStore = BWWindowStore()
 
@@ -103,6 +104,19 @@ struct BWWindowMain: Scene {
                     }
                 }
             }
+            .onAppear {
+                store.setAutoRefreshActive(scenePhase == .active)
+                updateAutoRefreshDialogBlocker()
+            }
+            .onDisappear {
+                store.setAutoRefreshSuspended(false, reason: "mainWindowDialog")
+            }
+            .onChange(of: scenePhase) { _, phase in
+                store.setAutoRefreshActive(phase == .active)
+            }
+            .onChange(of: hasAutoRefreshBlockingDialog) { _, _ in
+                updateAutoRefreshDialogBlocker()
+            }
         }
         .defaultSize(width: 1280, height: 720)
         .defaultLaunchBehavior(.suppressed)
@@ -110,5 +124,19 @@ struct BWWindowMain: Scene {
         .commands {
             BWCommands(windowStore: windowStore)
         }
+    }
+
+    private var hasAutoRefreshBlockingDialog: Bool {
+        windowStore.isBudgetDialogOpen
+            || windowStore.isVaultConfigDialogOpen
+            || windowStore.isPreferencesDialogOpen
+            || windowStore.isErrorState
+    }
+
+    private func updateAutoRefreshDialogBlocker() {
+        store.setAutoRefreshSuspended(
+            hasAutoRefreshBlockingDialog,
+            reason: "mainWindowDialog"
+        )
     }
 }

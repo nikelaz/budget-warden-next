@@ -159,6 +159,22 @@ public actor BWVault: Sendable {
         }.value
     }
 
+    public func budgetFileSnapshot() async -> Result<BWBudgetFileSnapshot, BWError> {
+        guard let url else {
+            switch Self.resolveVaultURL(location: location, configuration: configuration) {
+                case .success(let url):
+                    self.url = url
+                    return await budgetFileSnapshot()
+                case .failure(let error):
+                    return .failure(error)
+            }
+        }
+
+        return await Task.detached(priority: .utility) {
+            Self.budgetFileSnapshot(forDirectory: url)
+        }.value
+    }
+
     public func containsBudgetFile(url budgetURL: URL) -> Bool {
         guard let url else {
             return false
@@ -351,6 +367,49 @@ public actor BWVault: Sendable {
                 budgets: budgets,
                 skippedFiles: skippedFiles
             ))
+        }
+        catch {
+            return .failure(.vaultNotSet(underlying: error))
+        }
+    }
+
+    private static func budgetFileSnapshot(forDirectory url: URL) -> Result<BWBudgetFileSnapshot, BWError> {
+        let didStartAccessing = url.startAccessingSecurityScopedResource()
+
+        defer {
+            if didStartAccessing {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        do {
+            try FileManager.default.createDirectory(
+                at: url,
+                withIntermediateDirectories: true
+            )
+
+            let files = try FileManager.default.contentsOfDirectory(
+                at: url,
+                includingPropertiesForKeys: [
+                    .contentModificationDateKey,
+                    .fileSizeKey
+                ]
+            )
+
+            let states = files.compactMap { file -> BWBudgetFileState? in
+                guard BWFiles.isBudgetFile(file) else {
+                    return nil
+                }
+
+                switch BWFiles.budgetFileState(url: file) {
+                    case .success(let state):
+                        return state
+                    case .failure:
+                        return nil
+                }
+            }
+
+            return .success(BWBudgetFileSnapshot(files: states))
         }
         catch {
             return .failure(.vaultNotSet(underlying: error))
