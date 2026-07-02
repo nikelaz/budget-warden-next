@@ -341,7 +341,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = KCDH4VF88Y;
 				ENABLE_APP_SANDBOX = YES;
@@ -357,7 +357,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 1.2.1;
+				MARKETING_VERSION = 1.2.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.lazarovco.budgetwarden;
 				PRODUCT_NAME = "Budget Warden";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -381,7 +381,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = KCDH4VF88Y;
 				ENABLE_APP_SANDBOX = YES;
@@ -397,7 +397,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 1.2.1;
+				MARKETING_VERSION = 1.2.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.lazarovco.budgetwarden;
 				PRODUCT_NAME = "Budget Warden";
 				PROVISIONING_PROFILE_SPECIFIER = "";

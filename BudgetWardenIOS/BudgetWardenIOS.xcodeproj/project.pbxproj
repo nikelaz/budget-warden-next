@@ -336,7 +336,7 @@
 				CODE_SIGN_ENTITLEMENTS = BudgetWardenIOS/BudgetWardenIOS.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 17;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = KCDH4VF88Y;
 				ENABLE_PREVIEWS = YES;
@@ -356,7 +356,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2;
+				MARKETING_VERSION = 2.0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.lazarovco.budgetwarden;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -380,7 +380,7 @@
 				CODE_SIGN_ENTITLEMENTS = BudgetWardenIOS/BudgetWardenIOS.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 17;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = KCDH4VF88Y;
 				ENABLE_PREVIEWS = YES;
@@ -400,7 +400,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2;
+				MARKETING_VERSION = 2.0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.lazarovco.budgetwarden;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
