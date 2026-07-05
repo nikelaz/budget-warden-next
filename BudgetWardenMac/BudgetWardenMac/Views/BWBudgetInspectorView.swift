@@ -26,7 +26,7 @@ struct BWBudgetInspectorView: View {
     let deleteCategory: (BWCategory) -> Void
 
     var body: some View {
-        let category = selectedCategoryBinding()
+        let category = selectedCategory()
 
         VStack(spacing: 0) {
             Picker("Inspector Panel", selection: $inspectorPanel) {
@@ -56,7 +56,7 @@ struct BWBudgetInspectorView: View {
     }
 
     @ViewBuilder
-    private func inspectorContent(category: Binding<BWCategory>?) -> some View {
+    private func inspectorContent(category: BWCategory?) -> some View {
         if inspectorPanel == .reporting || category == nil {
             if let budget = store.currentBudget {
                 BWBudgetReportingInspectorContent(budget: budget, currency: store.selectedCurrency)
@@ -72,27 +72,34 @@ struct BWBudgetInspectorView: View {
             BWCategoryInspectorView(
                 category: category,
                 budgetID: budgetID,
-                canMoveUp: store.canMoveCategory(category.wrappedValue, by: -1),
-                canMoveDown: store.canMoveCategory(category.wrappedValue, by: 1),
+                canMoveUp: store.canMoveCategory(category, by: -1),
+                canMoveDown: store.canMoveCategory(category, by: 1),
                 moveUp: {
                     Task(priority: .userInitiated) {
-                        await store.moveCategory(category.wrappedValue, by: -1, windowStore: windowStore)
+                        await store.moveCategory(category, by: -1, windowStore: windowStore)
                     }
                 },
                 moveDown: {
                     Task(priority: .userInitiated) {
-                        await store.moveCategory(category.wrappedValue, by: 1, windowStore: windowStore)
+                        await store.moveCategory(category, by: 1, windowStore: windowStore)
                     }
                 },
                 deleteCategory: {
-                    deleteCategory(category.wrappedValue)
+                    deleteCategory(category)
+                },
+                saveCategory: { updatedCategory in
+                    Task(priority: .userInitiated) {
+                        await store.updateCategory(
+                            updatedCategory,
+                            windowStore: windowStore
+                        )
+                    }
                 }
-            ) {
-            }
+            )
         }
     }
 
-    private func selectedCategoryBinding() -> Binding<BWCategory>? {
+    private func selectedCategory() -> BWCategory? {
         guard
             let selection,
             let categoryID = UUID(uuidString: selection),
@@ -101,26 +108,14 @@ struct BWBudgetInspectorView: View {
             return nil
         }
 
-        return Binding(
-            get: {
-                store.currentBudget?.categories.first { $0.id == categoryID } ?? selectedCategory
-            },
-            set: { updatedCategory in
-                Task(priority: .userInitiated) {
-                    await store.updateCategory(
-                        updatedCategory,
-                        windowStore: windowStore
-                    )
-                }
-            }
-        )
+        return selectedCategory
     }
 }
 
 private struct BWCategoryInspectorView: View {
     @Environment(\.openWindow) private var openWindow
 
-    @Binding var category: BWCategory
+    let category: BWCategory
 
     let budgetID: UUID
     let canMoveUp: Bool
@@ -128,12 +123,35 @@ private struct BWCategoryInspectorView: View {
     let moveUp: () -> Void
     let moveDown: () -> Void
     let deleteCategory: () -> Void
-    let saveNow: () -> Void
+    let saveCategory: (BWCategory) -> Void
 
+    @State private var draftCategory: BWCategory
     @State private var accumulatedAmountText = ""
     @State private var plannedAmountText = ""
     @State private var isDeleteConfirmationPresented = false
+    @State private var pendingSaveTask: Task<Void, Never>?
     @FocusState private var focusedField: Field?
+
+    init(
+        category: BWCategory,
+        budgetID: UUID,
+        canMoveUp: Bool,
+        canMoveDown: Bool,
+        moveUp: @escaping () -> Void,
+        moveDown: @escaping () -> Void,
+        deleteCategory: @escaping () -> Void,
+        saveCategory: @escaping (BWCategory) -> Void
+    ) {
+        self.category = category
+        self.budgetID = budgetID
+        self.canMoveUp = canMoveUp
+        self.canMoveDown = canMoveDown
+        self.moveUp = moveUp
+        self.moveDown = moveDown
+        self.deleteCategory = deleteCategory
+        self.saveCategory = saveCategory
+        _draftCategory = State(initialValue: category)
+    }
 
     private enum Field: Hashable {
         case title
@@ -150,7 +168,7 @@ private struct BWCategoryInspectorView: View {
     }
 
     private var showsAccumulatedAmount: Bool {
-        switch category.categoryType {
+        switch draftCategory.categoryType {
             case .income, .expenses:
                 return false
             case .savings, .debt:
@@ -161,20 +179,31 @@ private struct BWCategoryInspectorView: View {
     var body: some View {
         VStack {
             Form {
-                TextField("Title", text: $category.title)
+                TextField("Title", text: $draftCategory.title)
                     .accessibilityIdentifier("categoryInspectorTitleTextField")
                     .focused($focusedField, equals: .title)
                     .onSubmit {
                         saveNow()
                     }
+                    .onChange(of: draftCategory.title) { _, _ in
+                        guard draftCategory.title != category.title else {
+                            return
+                        }
 
-                Picker("Type", selection: $category.categoryType) {
+                        scheduleSave()
+                    }
+
+                Picker("Type", selection: $draftCategory.categoryType) {
                     ForEach(BWCategoryType.allCases, id: \.self) { categoryType in
                         Text(categoryType.title)
                             .tag(categoryType)
                     }
                 }
-                .onChange(of: category.categoryType) { _, _ in
+                .onChange(of: draftCategory.categoryType) { _, _ in
+                    guard draftCategory.categoryType != category.categoryType else {
+                        return
+                    }
+
                     saveNow()
                 }
 
@@ -211,7 +240,12 @@ private struct BWCategoryInspectorView: View {
                         }
                         .onChange(of: accumulatedAmountText) { _, newValue in
                             if let amount = UInt64.parseMoneyAmount(newValue, emptyValue: 0) {
-                                category.amountAccumulated = amount
+                                guard draftCategory.amountAccumulated != amount else {
+                                    return
+                                }
+
+                                draftCategory.amountAccumulated = amount
+                                scheduleSave()
                             }
                         }
                 }
@@ -226,23 +260,28 @@ private struct BWCategoryInspectorView: View {
                     }
                     .onChange(of: plannedAmountText) { _, newValue in
                         if let amount = UInt64.parseMoneyAmount(newValue, emptyValue: 0) {
-                            category.amountPlanned = amount
+                            guard draftCategory.amountPlanned != amount else {
+                                return
+                            }
+
+                            draftCategory.amountPlanned = amount
+                            scheduleSave()
                         }
                     }
 
                 LabeledContent("Actual") {
-                    Text(category.amountActual.moneyInputText)
+                    Text(draftCategory.amountActual.moneyInputText)
                         .accessibilityIdentifier("categoryInspectorActualValue")
                         .monospacedDigit()
                 }
                 
-                if !category.transactions.isEmpty {
+                if !draftCategory.transactions.isEmpty {
                     Button {
                         openWindow(
                             id: "window-category-transactions",
                             value: BWCategoryTransactionsWindowValue(
                                 budgetID: budgetID,
-                                categoryID: category.id
+                                categoryID: draftCategory.id
                             )
                         )
                     } label: {
@@ -268,13 +307,21 @@ private struct BWCategoryInspectorView: View {
         }
         .onChange(of: category.id) { _, _ in
             saveNow()
+            draftCategory = category
             resetAmountFields()
+        }
+        .onChange(of: category.title) { _, newValue in
+            guard focusedField != .title else {
+                return
+            }
+
+            draftCategory.title = newValue
         }
         .onDisappear {
             saveNow()
         }
         .confirmationDialog(
-            "Delete \(category.title)?",
+            "Delete \(draftCategory.title)?",
             isPresented: $isDeleteConfirmationPresented
         ) {
             Button("Delete Category", role: .destructive) {
@@ -290,7 +337,36 @@ private struct BWCategoryInspectorView: View {
     }
 
     private func resetAmountFields() {
-        accumulatedAmountText = category.amountAccumulated.moneyInputText
-        plannedAmountText = category.amountPlanned.moneyInputText
+        accumulatedAmountText = draftCategory.amountAccumulated.moneyInputText
+        plannedAmountText = draftCategory.amountPlanned.moneyInputText
+    }
+
+    private func scheduleSave() {
+        pendingSaveTask?.cancel()
+
+        let categoryToSave = draftCategory
+
+        pendingSaveTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(600))
+
+            guard !Task.isCancelled else {
+                return
+            }
+
+            saveCategory(categoryToSave)
+        }
+    }
+
+    private func saveNow() {
+        pendingSaveTask?.cancel()
+        pendingSaveTask = nil
+
+        guard parsedAccumulatedAmount != nil,
+              parsedPlannedAmount != nil
+        else {
+            return
+        }
+
+        saveCategory(draftCategory)
     }
 }

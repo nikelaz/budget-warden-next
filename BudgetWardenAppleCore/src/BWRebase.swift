@@ -41,7 +41,16 @@ public enum BWRebase {
                 budgetOnDisk = budget
         }
 
-        if budgetInMemory.revision == budgetOnDisk.revision {
+        if let revisionIdInMemory = budgetInMemory.revisionId,
+           let revisionIdOnDisk = budgetOnDisk.revisionId,
+           revisionIdInMemory == revisionIdOnDisk
+        {
+            // exit case one - budgets are identical
+            return .success(budgetInMemory)
+        }
+
+        if (budgetInMemory.revisionId == nil || budgetOnDisk.revisionId == nil) &&
+            budgetInMemory.revision == budgetOnDisk.revision {
             // exit case one - budgets are identical
             return .success(budgetInMemory)
         }
@@ -95,7 +104,7 @@ public enum BWRebase {
                 rebasedCategory.categoryType = updatedCategory.categoryType
                 rebasedCategory.ordinal = updatedCategory.ordinal
                 
-                rebasedBudget.categories[categoryIndex!] = updatedCategory
+                rebasedBudget.categories[categoryIndex!] = rebasedCategory
 
                 return .success(rebasedBudget)
             case .CategoryDelete(let categoryId):

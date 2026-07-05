@@ -158,9 +158,13 @@ public enum BWBudgetService {
                 budget = previousBudget.cloneAsTemplate(newTitle: title)
         }
 
+        var budgetToSave = budget
+        budgetToSave.revision = 1
+        budgetToSave.revisionId = UUID()
+
         let json: String
 
-        switch BWCodec.encodeBudget(budget: budget) {
+        switch BWCodec.encodeBudget(budget: budgetToSave) {
             case .failure(let error):
                 return .failure(.creatingBudget(underlying: error))
             case .success(let result):
@@ -178,7 +182,7 @@ public enum BWBudgetService {
             case .failure(let error):
                 return .failure(.creatingBudget(underlying: error))
             case .success(let fileURL):
-                var savedBudget = budget
+                var savedBudget = budgetToSave
                 savedBudget.url = fileURL
                 return .success(savedBudget)
         }
@@ -217,9 +221,10 @@ public enum BWBudgetService {
                 case .success(let budget):
                     normalizedBudget = budget
             }
-
+            
             switch BWRebase.rebase(budgetInMemory: normalizedBudget, operation: operation) {
                 case .failure(let error):
+                    print(error)
                     return .failure(error)
                 case .success(let budget):
                     switch normalizeActualAmounts(in: budget) {
@@ -229,9 +234,17 @@ public enum BWBudgetService {
                             normalizedBudget = budget
                     }
             }
-
+            
             let rebasedRevision = normalizedBudget.revision
-            normalizedBudget.revision = UUID()
+            let rebasedRevisionId = normalizedBudget.revisionId
+            let incrementedRevision = (normalizedBudget.revision ?? 0).addingReportingOverflow(1)
+
+            guard !incrementedRevision.overflow else {
+                return .failure(.saveFailed())
+            }
+
+            normalizedBudget.revision = incrementedRevision.partialValue
+            normalizedBudget.revisionId = UUID()
 
             let json: String
 
@@ -250,7 +263,23 @@ public enum BWBudgetService {
                 case .failure(let error):
                     return .failure(.saveFailed(underlying: error))
                 case .success(let budgetOnDisk):
-                    if budgetOnDisk.revision != rebasedRevision {
+                    var isSameRevision: Bool = false
+                    
+                    let revisionIdOnDisk: UUID? = budgetOnDisk.revisionId
+                    let revisionOnDisk: Int64? = budgetOnDisk.revision
+                    
+                    if revisionIdOnDisk == nil && revisionOnDisk == nil {
+                        return .failure(.rebaseFailed())
+                    }
+                    
+                    if revisionIdOnDisk != nil {
+                        isSameRevision = revisionIdOnDisk! == rebasedRevisionId!
+                    }
+                    else if revisionOnDisk != nil {
+                        isSameRevision = revisionOnDisk! == rebasedRevision!
+                    }
+
+                    if !isSameRevision {
                         if attempt == 0 {
                             continue
                         }

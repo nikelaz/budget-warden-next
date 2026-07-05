@@ -63,7 +63,7 @@ nonisolated public final class BWCodec {
         }
 
         if decodedBudget.revision == nil {
-            decodedBudget.revision = UUID()
+            decodedBudget.revision = 0
         }
 
         return .success(decodedBudget)

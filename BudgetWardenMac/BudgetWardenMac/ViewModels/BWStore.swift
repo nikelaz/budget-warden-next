@@ -14,6 +14,31 @@ import AppKit
 import UniformTypeIdentifiers
 import BudgetWardenAppleCore
 
+private actor BWBudgetMutationGate {
+    private var isRunning = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func wait() async {
+        if !isRunning {
+            isRunning = true
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+        }
+    }
+
+    func signal() {
+        guard !waiters.isEmpty else {
+            isRunning = false
+            return
+        }
+
+        waiters.removeFirst().resume()
+    }
+}
+
 @MainActor
 class BWStore: ObservableObject {
     private let currencyKey = "BW_CURRENCY"
@@ -32,6 +57,7 @@ class BWStore: ObservableObject {
     private var autoRefreshMutationCount = 0
     private var isRefreshingFromDisk = false
     private var hasPendingAutoRefresh = false
+    private let budgetMutationGate = BWBudgetMutationGate()
 
     // Currency
     @Published var selectedCurrency: BWCurrency {
@@ -126,6 +152,17 @@ class BWStore: ObservableObject {
         autoRefreshMutationCount -= 1
         await drainPendingAutoRefreshIfNeeded()
 
+        return result
+    }
+
+    private func withBudgetMutation<T>(_ operation: () async -> T) async -> T {
+        await budgetMutationGate.wait()
+
+        let result = await withAutoRefreshPaused {
+            await operation()
+        }
+
+        await budgetMutationGate.signal()
         return result
     }
 
@@ -378,7 +415,7 @@ class BWStore: ObservableObject {
             await selectVaultFolder()
         }
 
-        return await withAutoRefreshPaused {
+        return await withBudgetMutation {
             let budgetCreationRes = await BWBudgetService.createBudget(
                 title: title,
                 template: template,
@@ -411,11 +448,11 @@ class BWStore: ObservableObject {
         categoryType: BWCategoryType,
         windowStore: BWWindowStore
     ) async -> Bool {
-        guard let budget = currentBudget else {
-            return false
-        }
+        return await withBudgetMutation {
+            guard let budget = currentBudget else {
+                return false
+            }
 
-        return await withAutoRefreshPaused {
             let result = await BWBudgetService.createCategory(
                 in: budget,
                 title: title,
@@ -432,11 +469,11 @@ class BWStore: ObservableObject {
     }
 
     func updateCategory(_ updatedCategory: BWCategory, windowStore: BWWindowStore) async -> Bool {
-        guard let budget = currentBudget else {
-            return false
-        }
+        return await withBudgetMutation {
+            guard let budget = currentBudget else {
+                return false
+            }
 
-        return await withAutoRefreshPaused {
             let result = await BWBudgetService.updateCategory(
                 in: budget,
                 category: updatedCategory,
@@ -459,11 +496,11 @@ class BWStore: ObservableObject {
     }
 
     func moveCategory(_ category: BWCategory, by offset: Int, windowStore: BWWindowStore) async -> Bool {
-        guard let budget = currentBudget else {
-            return false
-        }
+        return await withBudgetMutation {
+            guard let budget = currentBudget else {
+                return false
+            }
 
-        return await withAutoRefreshPaused {
             let result = await BWBudgetService.moveCategory(
                 category,
                 in: budget,
@@ -479,11 +516,11 @@ class BWStore: ObservableObject {
     }
 
     func deleteCategory(_ category: BWCategory, windowStore: BWWindowStore) async {
-        guard let budget = currentBudget else {
-            return
-        }
+        await withBudgetMutation {
+            guard let budget = currentBudget else {
+                return
+            }
 
-        await withAutoRefreshPaused {
             let result = await BWBudgetService.deleteCategory(
                 in: budget,
                 categoryID: category.id,
@@ -505,11 +542,11 @@ class BWStore: ObservableObject {
         amount: UInt64,
         windowStore: BWWindowStore
     ) async -> Bool {
-        guard let budget = currentBudget else {
-            return false
-        }
+        return await withBudgetMutation {
+            guard let budget = currentBudget else {
+                return false
+            }
 
-        return await withAutoRefreshPaused {
             let result = await BWBudgetService.createTransaction(
                 in: budget,
                 categoryID: categoryID,
@@ -532,11 +569,11 @@ class BWStore: ObservableObject {
         transaction: BWTransaction,
         windowStore: BWWindowStore
     ) async -> Bool {
-        guard let budget = currentBudget else {
-            return false
-        }
+        return await withBudgetMutation {
+            guard let budget = currentBudget else {
+                return false
+            }
 
-        return await withAutoRefreshPaused {
             let result = await BWBudgetService.updateTransaction(
                 in: budget,
                 transaction: transaction,
@@ -557,11 +594,11 @@ class BWStore: ObservableObject {
         transactionID: UUID,
         windowStore: BWWindowStore
     ) async {
-        guard let budget = currentBudget else {
-            return
-        }
+        await withBudgetMutation {
+            guard let budget = currentBudget else {
+                return
+            }
 
-        await withAutoRefreshPaused {
             let result = await BWBudgetService.deleteTransaction(
                 in: budget,
                 transactionID: transactionID,
@@ -586,14 +623,14 @@ class BWStore: ObservableObject {
             return true
         }
 
-        guard let budget = currentBudget,
-              let sourceCategory = budget.categories.first(where: { $0.id == sourceCategoryID }),
-              let transaction = sourceCategory.transactions.first(where: { $0.id == transactionID })
-        else {
-            return false
-        }
+        return await withBudgetMutation {
+            guard let budget = currentBudget,
+                  let sourceCategory = budget.categories.first(where: { $0.id == sourceCategoryID }),
+                  let transaction = sourceCategory.transactions.first(where: { $0.id == transactionID })
+            else {
+                return false
+            }
 
-        return await withAutoRefreshPaused {
             let result = await BWBudgetService.updateTransaction(
                 in: budget,
                 transaction: transaction,
@@ -652,7 +689,7 @@ class BWStore: ObservableObject {
             }
         }
 
-        let removeBudgetRes = await withAutoRefreshPaused {
+        let removeBudgetRes = await withBudgetMutation {
             await BWBudgetService.deleteBudget(
                 budget,
                 vault: vault

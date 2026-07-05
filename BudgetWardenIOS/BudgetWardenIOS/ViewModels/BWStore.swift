@@ -12,6 +12,31 @@ import BudgetWardenAppleCore
 import Foundation
 import Observation
 
+private actor BWBudgetMutationGate {
+    private var isRunning = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func wait() async {
+        if !isRunning {
+            isRunning = true
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+        }
+    }
+
+    func signal() {
+        guard !waiters.isEmpty else {
+            isRunning = false
+            return
+        }
+
+        waiters.removeFirst().resume()
+    }
+}
+
 @MainActor
 @Observable
 final class BWStore {
@@ -47,6 +72,7 @@ final class BWStore {
     @ObservationIgnored private var autoRefreshMutationCount = 0
     @ObservationIgnored private var isRefreshingFromDisk = false
     @ObservationIgnored private var hasPendingAutoRefresh = false
+    @ObservationIgnored private let budgetMutationGate = BWBudgetMutationGate()
 
     var selectedBudgetID: UUID?
     var errorMessage: String?
@@ -138,6 +164,17 @@ final class BWStore {
         autoRefreshMutationCount -= 1
         await drainPendingAutoRefreshIfNeeded()
 
+        return result
+    }
+
+    private func withBudgetMutation<T>(_ operation: () async -> T) async -> T {
+        await budgetMutationGate.wait()
+
+        let result = await withAutoRefreshPaused {
+            await operation()
+        }
+
+        await budgetMutationGate.signal()
         return result
     }
 
@@ -275,11 +312,11 @@ final class BWStore {
         plannedAmount: UInt64,
         categoryType: BWCategoryType
     ) async -> Bool {
-        guard let budget = budget(withID: budgetID) else {
-            return false
-        }
+        return await withBudgetMutation {
+            guard let budget = budget(withID: budgetID) else {
+                return false
+            }
 
-        return await withAutoRefreshPaused {
             let result = await BWBudgetService.createCategory(
                 in: budget,
                 title: title,
@@ -293,11 +330,11 @@ final class BWStore {
     }
 
     func updateBudgetTitle(_ title: String, for budgetID: UUID) async -> Bool {
-        guard let budget = budget(withID: budgetID) else {
-            return false
-        }
+        return await withBudgetMutation {
+            guard let budget = budget(withID: budgetID) else {
+                return false
+            }
 
-        return await withAutoRefreshPaused {
             let result = await BWBudgetService.updateBudgetTitle(
                 in: budget,
                 title: title,
@@ -309,11 +346,11 @@ final class BWStore {
     }
 
     func updateCategory(_ updatedCategory: BWCategory, in budgetID: UUID) async -> Bool {
-        guard let budget = budget(withID: budgetID) else {
-            return false
-        }
+        return await withBudgetMutation {
+            guard let budget = budget(withID: budgetID) else {
+                return false
+            }
 
-        return await withAutoRefreshPaused {
             let result = await BWBudgetService.updateCategory(
                 in: budget,
                 category: updatedCategory,
@@ -325,11 +362,11 @@ final class BWStore {
     }
 
     func deleteCategory(_ category: BWCategory, in budgetID: UUID) async {
-        guard let budget = budget(withID: budgetID) else {
-            return
-        }
+        await withBudgetMutation {
+            guard let budget = budget(withID: budgetID) else {
+                return
+            }
 
-        await withAutoRefreshPaused {
             let result = await BWBudgetService.deleteCategory(
                 in: budget,
                 categoryID: category.id,
@@ -346,11 +383,11 @@ final class BWStore {
         fromOffsets sourceOffsets: IndexSet,
         toOffset destination: Int
     ) async -> Bool {
-        guard let budget = budget(withID: budgetID) else {
-            return false
-        }
+        return await withBudgetMutation {
+            guard let budget = budget(withID: budgetID) else {
+                return false
+            }
 
-        return await withAutoRefreshPaused {
             let result = await BWBudgetService.moveCategories(
                 in: budget,
                 for: categoryType,
@@ -371,11 +408,11 @@ final class BWStore {
         date: Date,
         amount: UInt64
     ) async -> Bool {
-        guard let budget = budget(withID: budgetID) else {
-            return false
-        }
+        return await withBudgetMutation {
+            guard let budget = budget(withID: budgetID) else {
+                return false
+            }
 
-        return await withAutoRefreshPaused {
             let result = await BWBudgetService.createTransaction(
                 in: budget,
                 categoryID: categoryID,
@@ -396,11 +433,11 @@ final class BWStore {
         from sourceCategoryID: UUID,
         to destinationCategoryID: UUID
     ) async -> Bool {
-        guard let budget = budget(withID: budgetID) else {
-            return false
-        }
+        return await withBudgetMutation {
+            guard let budget = budget(withID: budgetID) else {
+                return false
+            }
 
-        return await withAutoRefreshPaused {
             let result = await BWBudgetService.updateTransaction(
                 in: budget,
                 transaction: transaction,
@@ -418,11 +455,11 @@ final class BWStore {
         in budgetID: UUID,
         from categoryID: UUID
     ) async {
-        guard let budget = budget(withID: budgetID) else {
-            return
-        }
+        await withBudgetMutation {
+            guard let budget = budget(withID: budgetID) else {
+                return
+            }
 
-        await withAutoRefreshPaused {
             let result = await BWBudgetService.deleteTransaction(
                 in: budget,
                 transactionID: transaction.id,
@@ -498,7 +535,7 @@ final class BWStore {
     }
 
     func createBudget(title: String, template: BWTemplateSelection) async -> Bool {
-        await withAutoRefreshPaused {
+        await withBudgetMutation {
             switch await BWBudgetService.createBudget(
                 title: title,
                 template: template,
@@ -519,7 +556,7 @@ final class BWStore {
     }
 
     func deleteBudget(_ budget: BWBudget) async {
-        await withAutoRefreshPaused {
+        await withBudgetMutation {
             switch await BWBudgetService.deleteBudget(budget, vault: vault) {
                 case .failure(let error):
                     errorMessage = error.localizedDescription

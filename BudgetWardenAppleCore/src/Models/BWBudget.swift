@@ -13,7 +13,8 @@ import Foundation
 nonisolated public struct BWBudget: Codable, Sendable, Identifiable {
     // Encoded
     public var id: UUID
-    public var revision: UUID?
+    public var revision: Int64?
+    public var revisionId: UUID?
     public var schemaVersion: Int?
     public var title: String
     public var categories: [BWCategory]
@@ -26,6 +27,7 @@ nonisolated public struct BWBudget: Codable, Sendable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case id
         case revision
+        case revisionId
         case schemaVersion
         case title
         case categories
@@ -33,7 +35,8 @@ nonisolated public struct BWBudget: Codable, Sendable, Identifiable {
 
     public init(
         id: UUID = UUID(),
-        revision: UUID? = nil,
+        revision: Int64? = nil,
+        revisionId: UUID? = nil,
         schemaVersion: Int? = nil,
         title: String,
         categories: [BWCategory] = [],
@@ -41,6 +44,7 @@ nonisolated public struct BWBudget: Codable, Sendable, Identifiable {
     ) {
         self.id = id
         self.revision = revision
+        self.revisionId = revisionId
         self.schemaVersion = schemaVersion
         self.title = title
         self.categories = categories
@@ -56,23 +60,13 @@ nonisolated public struct BWBudget: Codable, Sendable, Identifiable {
         categories = try container.decode([BWCategory].self, forKey: .categories)
         url = nil
         revision = nil
+        revisionId = try container.decodeIfPresent(UUID.self, forKey: .revisionId)
 
         guard container.contains(.revision) else {
             return
         }
 
-        do {
-            revision = try container.decodeIfPresent(UUID.self, forKey: .revision)
-        }
-        catch let uuidDecodingError {
-            do {
-                _ = try container.decode(Int64.self, forKey: .revision)
-                revision = UUID()
-            }
-            catch {
-                throw uuidDecodingError
-            }
-        }
+        revision = try container.decodeIfPresent(Int64.self, forKey: .revision)
     }
 }
 
