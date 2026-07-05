@@ -229,16 +229,7 @@ public enum BWBudgetService {
                 }
         }
 
-        if normalizedBudget.revision == nil {
-            normalizedBudget.revision = 1;
-        }
-
-        if normalizedBudget.revision == Int64.max {
-            normalizedBudget.revision = 1;
-        }
-        else {
-            normalizedBudget.revision! += 1;
-        }
+        normalizedBudget.revision = UUID()
 
         let json: String
 

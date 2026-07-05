@@ -46,7 +46,6 @@ public enum BWRebase {
             return .success(budgetInMemory)
         }
 
-        // @TODO: Better exception handling
         switch operation {
             case .BudgetCreate:
                 return .success(budgetInMemory)
@@ -84,6 +83,17 @@ public enum BWRebase {
                     rebasedBudget.categories.append(updatedCategory)
                     return .success(rebasedBudget)
                 }
+                
+                var rebasedCategory = rebasedBudget.categories[categoryIndex!]
+                
+                // @TODO: More sophisticated/granular logic here
+                // The granularity here means that a hypothetical change could be overriden
+                // because if the conflict is within the category we update all fields with last one wins
+                rebasedCategory.title = updatedCategory.title
+                rebasedCategory.amountPlanned = updatedCategory.amountPlanned
+                rebasedCategory.amountAccumulated = updatedCategory.amountAccumulated
+                rebasedCategory.categoryType = updatedCategory.categoryType
+                rebasedCategory.ordinal = updatedCategory.ordinal
                 
                 rebasedBudget.categories[categoryIndex!] = updatedCategory
 
@@ -192,12 +202,12 @@ public enum BWRebase {
                         continue
                     }
 
-                    rebasedBudget.categories[categoryIndex] = updatedCategory
+                    rebasedBudget.categories[categoryIndex].ordinal = updatedCategory.ordinal
                 }
 
                 return .success(rebasedBudget)
             case .Other:
-                return .success(budgetInMemory)
+                return .failure(.rebaseFailed())
         }
     }
 }
