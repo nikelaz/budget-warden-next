@@ -26,11 +26,12 @@ class BWStore: ObservableObject {
     @Published var isVaultNotSet: Bool = false
     @Published var vaultWarningMessage: String? = nil
 
-    private var autoRefreshTask: Task<Void, Never>?
+    private var autoRefreshMonitor: BWBudgetFileChangeMonitor?
     private var autoRefreshSnapshot: BWBudgetFileSnapshot?
     private var autoRefreshBlockers: Set<String> = []
     private var autoRefreshMutationCount = 0
     private var isRefreshingFromDisk = false
+    private var hasPendingAutoRefresh = false
 
     // Currency
     @Published var selectedCurrency: BWCurrency {
@@ -67,7 +68,7 @@ class BWStore: ObservableObject {
     }
 
     deinit {
-        autoRefreshTask?.cancel()
+        autoRefreshMonitor?.stop()
     }
 
     func setAutoRefreshActive(_ isActive: Bool) {
@@ -86,42 +87,46 @@ class BWStore: ObservableObject {
         else {
             autoRefreshBlockers.remove(reason)
         }
-    }
 
-    private func startAutoRefreshLoop() {
-        guard autoRefreshTask == nil else {
-            return
-        }
-
-        autoRefreshTask = Task { [weak self] in
-            await self?.refreshFromDiskIfIdle()
-
-            while !Task.isCancelled {
-                do {
-                    try await Task.sleep(for: .seconds(3))
-                }
-                catch {
-                    break
-                }
-
-                await self?.refreshFromDiskIfIdle()
+        if autoRefreshBlockers.isEmpty {
+            Task { [weak self] in
+                await self?.drainPendingAutoRefreshIfNeeded()
             }
         }
     }
 
+    private func startAutoRefreshLoop() {
+        guard autoRefreshMonitor == nil else {
+            return
+        }
+
+        autoRefreshMonitor = BWBudgetFileChangeMonitor { [weak self] in
+            Task { @MainActor in
+                await self?.handleAutoRefreshChange()
+            }
+        }
+
+        Task { [weak self] in
+            await self?.refreshFromDiskIfIdle()
+            await self?.updateAutoRefreshPresentedItems()
+        }
+    }
+
     private func stopAutoRefreshLoop() {
-        autoRefreshTask?.cancel()
-        autoRefreshTask = nil
+        autoRefreshMonitor?.stop()
+        autoRefreshMonitor = nil
+        hasPendingAutoRefresh = false
     }
 
     private func withAutoRefreshPaused<T>(_ operation: () async -> T) async -> T {
         autoRefreshMutationCount += 1
 
-        defer {
-            autoRefreshMutationCount -= 1
-        }
+        let result = await operation()
 
-        return await operation()
+        autoRefreshMutationCount -= 1
+        await drainPendingAutoRefreshIfNeeded()
+
+        return result
     }
 
     private func trackedBudgetsForAutoRefresh() -> [BWBudget] {
@@ -144,15 +149,49 @@ class BWStore: ObservableObject {
             case .success(let snapshot):
                 autoRefreshSnapshot = snapshot.openFiles
         }
+
+        await updateAutoRefreshPresentedItems()
     }
 
-    private func refreshFromDiskIfIdle() async {
+    private func updateAutoRefreshPresentedItems() async {
+        guard let autoRefreshMonitor else {
+            return
+        }
+
+        let vaultURL = await vault.currentURL()
+        let budgetURLs = trackedBudgetsForAutoRefresh().compactMap { $0.url }
+
+        autoRefreshMonitor.updatePresentedItems(
+            vaultURL: vaultURL,
+            budgetURLs: budgetURLs
+        )
+    }
+
+    private func handleAutoRefreshChange() async {
+        hasPendingAutoRefresh = true
+        await drainPendingAutoRefreshIfNeeded()
+    }
+
+    private func drainPendingAutoRefreshIfNeeded() async {
+        guard hasPendingAutoRefresh else {
+            return
+        }
+
+        guard await refreshFromDiskIfIdle() else {
+            return
+        }
+
+        hasPendingAutoRefresh = false
+    }
+
+    @discardableResult
+    private func refreshFromDiskIfIdle() async -> Bool {
         guard budgetsInVaultLoaded,
               autoRefreshMutationCount == 0,
               autoRefreshBlockers.isEmpty,
               !isRefreshingFromDisk
         else {
-            return
+            return false
         }
 
         isRefreshingFromDisk = true
@@ -166,19 +205,23 @@ class BWStore: ObservableObject {
             vault: vault
         ) {
             case .failure:
-                return
+                return true
             case .success(let snapshot):
                 guard let autoRefreshSnapshot else {
                     self.autoRefreshSnapshot = snapshot.openFiles
-                    return
+                    await updateAutoRefreshPresentedItems()
+                    return true
                 }
 
                 guard autoRefreshSnapshot != snapshot.openFiles else {
-                    return
+                    await updateAutoRefreshPresentedItems()
+                    return true
                 }
 
                 await reloadBudgetsForAutoRefresh(snapshot: snapshot)
                 self.autoRefreshSnapshot = snapshot.openFiles
+                await updateAutoRefreshPresentedItems()
+                return true
         }
     }
 
