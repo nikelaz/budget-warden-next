@@ -80,8 +80,8 @@ class GoogleDriveClient(private val http: OkHttpClient = OkHttpClient()) {
         }
     }
 
-    suspend fun upload(token: String, folderId: String, file: File, driveId: String?): DriveFile = withContext(Dispatchers.IO) {
-        val metadata = JSONObject().put("name", file.name).apply { if (driveId == null) put("parents", JSONArray().put(folderId)) }
+    suspend fun upload(token: String, folderId: String, file: File, driveId: String?, name: String = file.name): DriveFile = withContext(Dispatchers.IO) {
+        val metadata = JSONObject().put("name", name).apply { if (driveId == null) put("parents", JSONArray().put(folderId)) }
         val body = MultipartBody.Builder().setType("multipart/related".toMediaType())
             .addPart(metadata.toString().toRequestBody("application/json; charset=UTF-8".toMediaType()))
             .addPart(file.asRequestBody(BUDGET_MIME_TYPE.toMediaType())).build()
