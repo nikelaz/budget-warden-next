@@ -21,6 +21,7 @@ struct BWSettingsView: View {
     @State private var preparedShare: BWPreparedCloudShare?
     @State private var sharingError: String?
     @State private var isPreparingShare = false
+    @State private var isGoogleDriveSharePresented = false
     @FocusState private var focusedField: Field?
 
     init(store: BWStore, budget: BWBudget) {
@@ -75,6 +76,15 @@ struct BWSettingsView: View {
                 }
             }
 
+
+            if store.isGoogleDriveBudget(budget) {
+                Section("Collaboration") {
+                    Button("Share with Google Drive", systemImage: "person.crop.circle.badge.plus") {
+                        isGoogleDriveSharePresented = true
+                    }
+                }
+            }
+
             BWVaultSettingsSections(store: store)
         }
         .sheet(isPresented: $isCurrencyPickerPresented) {
@@ -82,6 +92,11 @@ struct BWSettingsView: View {
         }
         .sheet(item: $preparedShare) { prepared in
             BWCloudSharingView(share: prepared.share)
+        }
+        .sheet(isPresented: $isGoogleDriveSharePresented) {
+            BWGoogleDriveSharingView(budget: budget) { email in
+                await store.shareGoogleDriveBudget(budget, with: email)
+            }
         }
         .alert("Could Not Share Budget", isPresented: sharingErrorIsPresented) {
         } message: {

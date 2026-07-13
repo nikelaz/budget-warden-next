@@ -22,6 +22,7 @@ struct BWBudgetListView: View {
     @State private var preparedShare: BWPreparedCloudShare?
     @State private var sharingError: String?
     @State private var isPreparingShare = false
+    @State private var googleDriveShareBudget: BWBudget?
 
     var body: some View {
         List {
@@ -33,7 +34,17 @@ struct BWBudgetListView: View {
                 budgetSection(
                     title: "iCloud",
                     budgets: store.iCloudBudgets,
-                    canShare: true
+                    canShareWithICloud: true,
+                    canShareWithGoogleDrive: false
+                )
+            }
+
+            if !store.googleDriveBudgets.isEmpty {
+                budgetSection(
+                    title: "Google Drive",
+                    budgets: store.googleDriveBudgets,
+                    canShareWithICloud: false,
+                    canShareWithGoogleDrive: true
                 )
             }
 
@@ -41,7 +52,8 @@ struct BWBudgetListView: View {
                 budgetSection(
                     title: "Local",
                     budgets: store.localBudgets,
-                    canShare: false
+                    canShareWithICloud: false,
+                    canShareWithGoogleDrive: false
                 )
             }
         }
@@ -75,6 +87,11 @@ struct BWBudgetListView: View {
         }
         .sheet(item: $preparedShare) { prepared in
             BWCloudSharingView(share: prepared.share)
+        }
+        .sheet(item: $googleDriveShareBudget) { budget in
+            BWGoogleDriveSharingView(budget: budget) { email in
+                await store.shareGoogleDriveBudget(budget, with: email)
+            }
         }
         .overlay {
             if isPreparingShare {
@@ -116,7 +133,8 @@ struct BWBudgetListView: View {
     private func budgetSection(
         title: String,
         budgets: [BWBudget],
-        canShare: Bool
+        canShareWithICloud: Bool,
+        canShareWithGoogleDrive: Bool
     ) -> some View {
         Section(title) {
             ForEach(budgets) { budget in
@@ -126,7 +144,8 @@ struct BWBudgetListView: View {
                             .font(.headline)
                             .matchedTransitionSource(id: budget.id, in: navigationTransitionNamespace)
 
-                        if canShare && store.sharedBudgetIDs.contains(budget.id) {
+                        if (canShareWithICloud && store.sharedBudgetIDs.contains(budget.id))
+                            || (canShareWithGoogleDrive && store.googleDriveSharedBudgetIDs.contains(budget.id)) {
                             Text("Shared")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -135,12 +154,19 @@ struct BWBudgetListView: View {
                 }
                 .accessibilityIdentifier("budgetRow_\(budget.title)")
                 .contextMenu {
-                    if canShare {
+                    if canShareWithICloud {
                         Button(
                             store.sharedBudgetIDs.contains(budget.id) ? "Manage Sharing" : "Share with iCloud",
                             systemImage: "person.crop.circle.badge.plus"
                         ) {
                             prepareShare(for: budget)
+                        }
+                    }
+
+
+                    if canShareWithGoogleDrive {
+                        Button("Share with Google Drive", systemImage: "person.crop.circle.badge.plus") {
+                            googleDriveShareBudget = budget
                         }
                     }
 

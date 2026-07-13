@@ -15,7 +15,7 @@ struct ConfigureVaultView: View {
                     .font(.title2)
                     .fontWeight(.semibold)
                 
-                Text("Local files are always available. Enable iCloud to sync additional budgets across your Apple devices.")
+                Text("Local files are always available. Enable iCloud or connect Google Drive to sync additional budgets.")
                     .foregroundStyle(.secondary)
             }
 
@@ -41,6 +41,10 @@ struct ConfigureVaultView: View {
                     .disabled(isEnablingICloud)
                 }
             }
+
+            Divider()
+
+            GoogleDriveSettings(store: store, windowStore: windowStore)
 
             Divider()
 
@@ -76,6 +80,44 @@ struct ConfigureVaultView: View {
         .padding()
         .task {
             vaultUrl = await store.vault.currentURL()
+        }
+    }
+}
+
+private struct GoogleDriveSettings: View {
+    let store: BWStore
+    let windowStore: BWWindowStore
+    @ObservedObject private var session: BWGoogleDriveSession
+
+    init(store: BWStore, windowStore: BWWindowStore) {
+        self.store = store
+        self.windowStore = windowStore
+        _session = ObservedObject(wrappedValue: store.googleDriveSession)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Google Drive")
+                .font(.headline)
+
+            Text(session.accountEmail ?? (session.isConnected ? "Connected" : "Not connected"))
+                .foregroundStyle(.secondary)
+
+            if session.isConnected {
+                Button("Disconnect Google Drive") {
+                    store.disconnectGoogleDrive()
+                }
+            }
+            else {
+                Button(session.isConnecting ? "Connecting…" : "Connect Google Drive") {
+                    Task {
+                        if let error = await store.connectGoogleDrive() {
+                            windowStore.setError(error)
+                        }
+                    }
+                }
+                .disabled(session.isConnecting)
+            }
         }
     }
 }

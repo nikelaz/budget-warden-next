@@ -59,6 +59,29 @@ struct BWVaultSettingsSections: View {
                 }
             }
 
+            Section("Google Drive") {
+                LabeledContent(
+                    "Account",
+                    value: store.googleDriveSession.accountEmail
+                        ?? (store.googleDriveSession.isConnected ? "Connected" : "Not Connected")
+                )
+
+                if store.googleDriveSession.isConnected {
+                    Button("Disconnect Google Drive", systemImage: "rectangle.portrait.and.arrow.right") {
+                        store.disconnectGoogleDrive()
+                    }
+                }
+                else {
+                    Button(
+                        store.googleDriveSession.isConnecting ? "Connecting…" : "Connect Google Drive",
+                        systemImage: "externaldrive.connected.to.line.below"
+                    ) {
+                        Task { _ = await store.connectGoogleDrive() }
+                    }
+                    .disabled(store.googleDriveSession.isConnecting)
+                }
+            }
+
             Section("Local Folder") {
                 LabeledContent("Current") {
                     Text(store.vaultURL?.lastPathComponent ?? "Unavailable")

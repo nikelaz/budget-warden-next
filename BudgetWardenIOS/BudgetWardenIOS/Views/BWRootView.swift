@@ -10,6 +10,7 @@
 
 import BudgetWardenAppleCore
 import CloudKit
+import GoogleSignIn
 import SwiftUI
 
 struct BWRootView: View {
@@ -61,6 +62,7 @@ struct BWRootView: View {
             store.selectBudget(withID: budgetID)
         }
         .onOpenURL { url in
+            guard !GIDSignIn.sharedInstance.handle(url) else { return }
             Task {
                 await store.openBudget(at: url)
             }

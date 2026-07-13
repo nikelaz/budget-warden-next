@@ -11,6 +11,7 @@
 import SwiftUI
 import BudgetWardenAppleCore
 import CloudKit
+import GoogleSignIn
 
 struct BWWindowMain: Scene {
     @EnvironmentObject var store: BWStore
@@ -99,6 +100,7 @@ struct BWWindowMain: Scene {
                 .frame(minWidth: 420)
             }
             .onOpenURL { url in
+                guard !GIDSignIn.sharedInstance.handle(url) else { return }
                 Task(priority: .userInitiated) {
                     if await store.openBudget(at: url, windowStore: windowStore) {
                         openWindow(id: "window-main")

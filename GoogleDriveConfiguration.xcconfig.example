@@ -1,0 +1,5 @@
+// Copy these values into user-defined build settings (or a private xcconfig)
+// for both Apple application targets. Do not commit OAuth client secrets.
+// Google Sign-In installed-app clients have no client secret in the app.
+GOOGLE_CLIENT_ID = 000000000000-example.apps.googleusercontent.com
+GOOGLE_REVERSED_CLIENT_ID = com.googleusercontent.apps.000000000000-example

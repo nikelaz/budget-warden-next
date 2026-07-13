@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		B10000010000000000000001 /* BudgetWardenAppleCore in Frameworks */ = {isa = PBXBuildFile; productRef = B10000030000000000000003 /* BudgetWardenAppleCore */; };
+		B10001010000000000000001 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = B10001030000000000000003 /* GoogleSignIn */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -25,9 +26,22 @@
 		B20000020000000000000002 /* BudgetWardenIOSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BudgetWardenIOSUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		B10001040000000000000004 /* Exceptions for "BudgetWardenIOS" folder in "BudgetWardenIOS" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = B10000090000000000000009 /* BudgetWardenIOS */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		B10000050000000000000005 /* BudgetWardenIOS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B10001040000000000000004 /* Exceptions for "BudgetWardenIOS" folder in "BudgetWardenIOS" target */,
+			);
 			path = BudgetWardenIOS;
 			sourceTree = "<group>";
 		};
@@ -44,6 +58,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B10000010000000000000001 /* BudgetWardenAppleCore in Frameworks */,
+				B10001010000000000000001 /* GoogleSignIn in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -96,6 +111,7 @@
 			name = BudgetWardenIOS;
 			packageProductDependencies = (
 				B10000030000000000000003 /* BudgetWardenAppleCore */,
+				B10001030000000000000003 /* GoogleSignIn */,
 			);
 			productName = BudgetWardenIOS;
 			productReference = B10000040000000000000004 /* BudgetWardenIOS.app */;
@@ -154,6 +170,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				B10000020000000000000002 /* XCLocalSwiftPackageReference "../BudgetWardenAppleCore" */,
+				B10001020000000000000002 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B10000080000000000000008 /* Products */;
@@ -262,6 +279,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				GOOGLE_CLIENT_ID = "1012163901484-it19vp6ohp660laat181jhq0sjqek2eq.apps.googleusercontent.com";
+				GOOGLE_REVERSED_CLIENT_ID = "com.googleusercontent.apps.1012163901484-it19vp6ohp660laat181jhq0sjqek2eq";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
@@ -321,6 +340,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				GOOGLE_CLIENT_ID = "1012163901484-it19vp6ohp660laat181jhq0sjqek2eq.apps.googleusercontent.com";
+				GOOGLE_REVERSED_CLIENT_ID = "com.googleusercontent.apps.1012163901484-it19vp6ohp660laat181jhq0sjqek2eq";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
@@ -338,21 +359,13 @@
 				CODE_SIGN_ENTITLEMENTS = BudgetWardenIOS/BudgetWardenIOS.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 21;
+				CURRENT_PROJECT_VERSION = 24;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Budget Warden";
-				INFOPLIST_KEY_CFBundleDocumentTypes = "{\n    CFBundleTypeExtensions =     (\n        budget\n    );\n    CFBundleTypeName = \"Budget Warden Budget\";\n    CFBundleTypeRole = Editor;\n    LSHandlerRank = Owner;\n    LSItemContentTypes =     (\n        \"com.lazarovco.budgetwarden.budget\"\n    );\n}";
-				INFOPLIST_KEY_CKSharingSupported = YES;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
-				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_UTExportedTypeDeclarations = "{\n    UTTypeConformsTo =     (\n        \"public.json\"\n    );\n    UTTypeDescription = \"Budget Warden Budget\";\n    UTTypeIdentifier = \"com.lazarovco.budgetwarden.budget\";\n    UTTypeTagSpecification =     {\n        \"public.filename-extension\" =         (\n            budget\n        );\n        \"public.mime-type\" = \"application/vnd.lazarovco.budgetwarden.budget\";\n    };\n}";
+				GENERATE_INFOPLIST_FILE = NO;
+				GOOGLE_CLIENT_ID = "1012163901484-it19vp6ohp660laat181jhq0sjqek2eq.apps.googleusercontent.com";
+				GOOGLE_REVERSED_CLIENT_ID = "com.googleusercontent.apps.1012163901484-it19vp6ohp660laat181jhq0sjqek2eq";
+				INFOPLIST_FILE = BudgetWardenIOS/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -382,21 +395,13 @@
 				CODE_SIGN_ENTITLEMENTS = BudgetWardenIOS/BudgetWardenIOS.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 21;
+				CURRENT_PROJECT_VERSION = 24;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Budget Warden";
-				INFOPLIST_KEY_CFBundleDocumentTypes = "{\n    CFBundleTypeExtensions =     (\n        budget\n    );\n    CFBundleTypeName = \"Budget Warden Budget\";\n    CFBundleTypeRole = Editor;\n    LSHandlerRank = Owner;\n    LSItemContentTypes =     (\n        \"com.lazarovco.budgetwarden.budget\"\n    );\n}";
-				INFOPLIST_KEY_CKSharingSupported = YES;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
-				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_UTExportedTypeDeclarations = "{\n    UTTypeConformsTo =     (\n        \"public.json\"\n    );\n    UTTypeDescription = \"Budget Warden Budget\";\n    UTTypeIdentifier = \"com.lazarovco.budgetwarden.budget\";\n    UTTypeTagSpecification =     {\n        \"public.filename-extension\" =         (\n            budget\n        );\n        \"public.mime-type\" = \"application/vnd.lazarovco.budgetwarden.budget\";\n    };\n}";
+				GENERATE_INFOPLIST_FILE = NO;
+				GOOGLE_CLIENT_ID = "1012163901484-it19vp6ohp660laat181jhq0sjqek2eq.apps.googleusercontent.com";
+				GOOGLE_REVERSED_CLIENT_ID = "com.googleusercontent.apps.1012163901484-it19vp6ohp660laat181jhq0sjqek2eq";
+				INFOPLIST_FILE = BudgetWardenIOS/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -496,11 +501,27 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		B10001020000000000000002 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.2.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		B10000030000000000000003 /* BudgetWardenAppleCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = B10000020000000000000002 /* XCLocalSwiftPackageReference "../BudgetWardenAppleCore" */;
 			productName = BudgetWardenAppleCore;
+		};
+		B10001030000000000000003 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B10001020000000000000002 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

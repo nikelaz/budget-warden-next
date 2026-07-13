@@ -12,6 +12,7 @@ import Foundation
 
 public enum BWVaultLocation: String, CaseIterable, Identifiable, Sendable {
     case iCloud
+    case googleDrive
     case local
 
     public var id: String {
@@ -24,6 +25,8 @@ public enum BWVaultLocation: String, CaseIterable, Identifiable, Sendable {
                 return "Local Folder"
             case .iCloud:
                 return "iCloud"
+            case .googleDrive:
+                return "Google Drive"
         }
     }
 }
@@ -36,6 +39,7 @@ public struct BWVaultConfiguration: Sendable {
     public var defaultVaultFolderName: String
     public var localVaultFolderName: String
     public var cloudKitCacheFolderName: String
+    public var googleDriveCacheFolderName: String
     public var defaultLocation: BWVaultLocation
     public var iCloudContainerIdentifier: String?
     public var allowsICloudDriveFallback: Bool
@@ -52,6 +56,7 @@ public struct BWVaultConfiguration: Sendable {
         defaultVaultFolderName: String,
         localVaultFolderName: String? = nil,
         cloudKitCacheFolderName: String = "CloudKit Cache",
+        googleDriveCacheFolderName: String = "Google Drive Cache",
         defaultLocation: BWVaultLocation,
         iCloudContainerIdentifier: String?,
         allowsICloudDriveFallback: Bool = false,
@@ -67,6 +72,7 @@ public struct BWVaultConfiguration: Sendable {
         self.defaultVaultFolderName = defaultVaultFolderName
         self.localVaultFolderName = localVaultFolderName ?? defaultVaultFolderName
         self.cloudKitCacheFolderName = cloudKitCacheFolderName
+        self.googleDriveCacheFolderName = googleDriveCacheFolderName
         self.defaultLocation = defaultLocation
         self.iCloudContainerIdentifier = iCloudContainerIdentifier
         self.allowsICloudDriveFallback = allowsICloudDriveFallback
@@ -602,6 +608,8 @@ public actor BWVault: Sendable {
                     url = try defaultLocalVaultURL(configuration: configuration)
                 case .iCloud:
                     url = try defaultCloudKitCacheURL(configuration: configuration)
+                case .googleDrive:
+                    url = try defaultGoogleDriveCacheURL(configuration: configuration)
             }
 
             try FileManager.default.createDirectory(
@@ -617,6 +625,8 @@ public actor BWVault: Sendable {
                     return .failure(.vaultNotSet(underlying: error))
                 case .iCloud:
                     return .failure(.iCloudUnavailable(underlying: error))
+                case .googleDrive:
+                    return .failure(.googleDrive(underlying: error))
             }
         }
     }
@@ -663,6 +673,8 @@ public actor BWVault: Sendable {
                 key = iCloudVaultBookmarkKey
                 fallbackKey = nil
                 resolutionOptions = configuration.iCloudBookmarkResolutionOptions
+            case .googleDrive:
+                return nil
         }
 
         let bookmark = UserDefaults.standard.data(forKey: key)
@@ -707,6 +719,8 @@ public actor BWVault: Sendable {
                 return try? url.bookmarkData(options: configuration.localBookmarkCreationOptions)
             case .iCloud:
                 return try? url.bookmarkData()
+            case .googleDrive:
+                return nil
         }
     }
 
@@ -721,6 +735,19 @@ public actor BWVault: Sendable {
         return applicationSupportURL
             .appendingPathComponent("Budget Warden")
             .appendingPathComponent(configuration.cloudKitCacheFolderName)
+    }
+
+    public static func defaultGoogleDriveCacheURL(configuration: BWVaultConfiguration) throws -> URL {
+        let applicationSupportURL = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+
+        return applicationSupportURL
+            .appendingPathComponent("Budget Warden")
+            .appendingPathComponent(configuration.googleDriveCacheFolderName)
     }
 
     private static func defaultLegacyICloudVaultURL(configuration: BWVaultConfiguration) throws -> URL {
