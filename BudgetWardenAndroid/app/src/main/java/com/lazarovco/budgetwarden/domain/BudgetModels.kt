@@ -53,6 +53,7 @@ data class Budget(
     val title: String,
     val categories: List<Category> = emptyList(),
     val fileName: String? = null,
+    val crdt: BudgetCrdtState? = null,
 ) {
     fun orderedCategories(type: CategoryType? = null): List<Category> =
         categories

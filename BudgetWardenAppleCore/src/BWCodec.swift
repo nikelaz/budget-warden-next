@@ -13,7 +13,7 @@ import Foundation
 nonisolated public final class BWCodec {
     private static func makeEncoder() -> JSONEncoder {
         let encoder = JSONEncoder()
-        encoder.outputFormatting = .prettyPrinted
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
         return encoder
     }
@@ -58,12 +58,19 @@ nonisolated public final class BWCodec {
         var decodedBudget = budget
         decodedBudget.url = url
 
-        if decodedBudget.schemaVersion == nil {
-            decodedBudget.schemaVersion = 1;
-        }
-
         if decodedBudget.revision == nil {
             decodedBudget.revision = 1;
+        }
+
+        if decodedBudget.schemaVersion == nil || decodedBudget.schemaVersion == 1 {
+            decodedBudget = BWCRDT.migrateLegacy(decodedBudget)
+            decodedBudget.url = url
+        } else if decodedBudget.schemaVersion == BWCRDT.schemaVersion,
+                  decodedBudget.crdt != nil {
+            decodedBudget = BWCRDT.materialize(decodedBudget)
+            decodedBudget.url = url
+        } else {
+            return .failure(.decodingJson())
         }
 
         return .success(decodedBudget)

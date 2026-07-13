@@ -12,6 +12,7 @@ import SwiftUI
 
 @main
 struct BWApp: App {
+    @NSApplicationDelegateAdaptor(BWAppDelegate.self) private var appDelegate
     @StateObject private var store = BWStore()
 
     var body: some Scene {

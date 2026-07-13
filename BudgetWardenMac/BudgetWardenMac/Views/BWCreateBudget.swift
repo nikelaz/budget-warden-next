@@ -21,6 +21,7 @@ struct CreateBudgetView: View {
 
     @State private var title: Swift.String
     @State private var selectedTemplate: BWTemplateSelection = .basic
+    @State private var selectedLocation: BWVaultLocation = .local
 
     let onCreateSuccess: () -> Void
 
@@ -43,6 +44,11 @@ struct CreateBudgetView: View {
                 TextField("Title", text: $title)
                     .padding(.bottom, 10)
                     .accessibilityIdentifier("titleTextField")
+
+                Picker("Storage", selection: $selectedLocation) {
+                    Text("iCloud").tag(BWVaultLocation.iCloud)
+                    Text("Local File").tag(BWVaultLocation.local)
+                }
 
                 Picker(selection: $selectedTemplate, content: {
                     Text("Templates")
@@ -81,6 +87,7 @@ struct CreateBudgetView: View {
                         if await store.createBudget(
                             title: title,
                             template: selectedTemplate,
+                            location: selectedLocation,
                             windowStore: windowStore
                         ) {
                             windowStore.closeBudgetDialog()
@@ -93,6 +100,9 @@ struct CreateBudgetView: View {
             }
         }
         .padding(20)
+        .task {
+            selectedLocation = store.preferredBudgetLocation
+        }
     }
 
     private static func currentMonthTitle(calendar: Calendar = .current, now: Date = Date()) -> Swift.String {

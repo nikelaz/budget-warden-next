@@ -23,7 +23,7 @@ public enum BWVaultLocation: String, CaseIterable, Identifiable, Sendable {
             case .local:
                 return "Local Folder"
             case .iCloud:
-                return "iCloud Drive"
+                return "iCloud"
         }
     }
 }
@@ -35,6 +35,7 @@ public struct BWVaultConfiguration: Sendable {
     public var legacyLocalVaultBookmarkKey: String?
     public var defaultVaultFolderName: String
     public var localVaultFolderName: String
+    public var cloudKitCacheFolderName: String
     public var defaultLocation: BWVaultLocation
     public var iCloudContainerIdentifier: String?
     public var allowsICloudDriveFallback: Bool
@@ -50,6 +51,7 @@ public struct BWVaultConfiguration: Sendable {
         legacyLocalVaultBookmarkKey: String? = nil,
         defaultVaultFolderName: String,
         localVaultFolderName: String? = nil,
+        cloudKitCacheFolderName: String = "CloudKit Cache",
         defaultLocation: BWVaultLocation,
         iCloudContainerIdentifier: String?,
         allowsICloudDriveFallback: Bool = false,
@@ -64,6 +66,7 @@ public struct BWVaultConfiguration: Sendable {
         self.legacyLocalVaultBookmarkKey = legacyLocalVaultBookmarkKey
         self.defaultVaultFolderName = defaultVaultFolderName
         self.localVaultFolderName = localVaultFolderName ?? defaultVaultFolderName
+        self.cloudKitCacheFolderName = cloudKitCacheFolderName
         self.defaultLocation = defaultLocation
         self.iCloudContainerIdentifier = iCloudContainerIdentifier
         self.allowsICloudDriveFallback = allowsICloudDriveFallback
@@ -79,12 +82,15 @@ public actor BWVault: Sendable {
     private var url: URL?
     private var location: BWVaultLocation
 
-    public init(configuration: BWVaultConfiguration) {
+    public init(
+        configuration: BWVaultConfiguration,
+        location requestedLocation: BWVaultLocation? = nil
+    ) {
         self.configuration = configuration
 
         let savedLocation = UserDefaults.standard.string(forKey: configuration.vaultLocationKey)
             .flatMap(BWVaultLocation.init(rawValue:))
-        let initialLocation = savedLocation ?? configuration.defaultLocation
+        let initialLocation = requestedLocation ?? savedLocation ?? configuration.defaultLocation
 
         (self.location, self.url) = Self.resolveInitialVault(
             location: initialLocation,
@@ -98,6 +104,60 @@ public actor BWVault: Sendable {
 
     public func currentURL() -> URL? {
         url
+    }
+
+    /// Reads the former iCloud Drive vault without making it the active working vault.
+    /// This exists only for the one-time CloudKit migration.
+    public func readLegacyICloudBudgets() async -> Result<BWBudgetDirectoryReadResult, BWError> {
+        let configuration = self.configuration
+
+        return await Task.detached(priority: .utility) {
+            var candidateURLs: [URL] = []
+
+            if let bookmarkedURL = Self.resolveBookmarkedVaultURL(
+                location: .iCloud,
+                configuration: configuration
+            ) {
+                candidateURLs.append(bookmarkedURL)
+            }
+
+            if let defaultURL = try? Self.defaultLegacyICloudVaultURL(configuration: configuration) {
+                candidateURLs.append(defaultURL)
+            }
+
+            var budgetsByID: [UUID: BWBudget] = [:]
+            var skippedFiles: [String] = []
+            let uniqueCandidateURLs = candidateURLs.reduce(into: [URL](), { urls, candidate in
+                let standardized = candidate.standardizedFileURL
+                if !urls.contains(where: { $0.standardizedFileURL == standardized }) {
+                    urls.append(standardized)
+                }
+            })
+
+            for candidateURL in uniqueCandidateURLs
+                where FileManager.default.fileExists(atPath: candidateURL.path) {
+                switch Self.readBudgetsFromDirectory(url: candidateURL, configuration: configuration) {
+                    case .failure:
+                        continue
+                    case .success(let result):
+                        skippedFiles.append(contentsOf: result.skippedFiles)
+
+                        for budget in result.budgets {
+                            let existingRevision = budgetsByID[budget.id]?.revision ?? 0
+                            if (budget.revision ?? 1) >= existingRevision {
+                                budgetsByID[budget.id] = budget
+                            }
+                        }
+                }
+            }
+
+            return .success(BWBudgetDirectoryReadResult(
+                budgets: budgetsByID.values.sorted {
+                    $0.title.localizedStandardCompare($1.title) == .orderedAscending
+                },
+                skippedFiles: skippedFiles
+            ))
+        }.value
     }
 
     public func setLocation(_ location: BWVaultLocation) async -> Result<Void, BWError> {
@@ -246,6 +306,62 @@ public actor BWVault: Sendable {
 
             return BWFiles.saveFile(url: budgetURL.standardizedFileURL, contents: contents)
         }.value
+    }
+
+    /// Writes a CloudKit budget into the file cache used by the existing Apple UI.
+    /// Existing files keep their URL so open views and file coordination remain valid.
+    public func cacheCloudBudget(_ budget: BWBudget) async -> Result<BWBudget, BWError> {
+        let currentBudgets: [BWBudget]
+
+        switch await readBudgetsFromVault() {
+            case .failure(let error):
+                return .failure(error)
+            case .success(let result):
+                currentBudgets = result.budgets
+        }
+
+        if let existing = currentBudgets.first(where: { $0.id == budget.id }),
+           let existingURL = existing.url {
+            let merged: BWBudget
+            switch BWCRDT.merge(existing, budget) {
+                case .failure(let error):
+                    return .failure(error)
+                case .success(let result):
+                    merged = result
+            }
+
+            guard case .success(let json) = BWCodec.encodeBudget(budget: merged) else {
+                return .failure(.encodingJson())
+            }
+
+            switch await saveBudgetFile(url: existingURL, contents: json) {
+                case .failure(let error):
+                    return .failure(error)
+                case .success:
+                    var cached = merged
+                    cached.url = existingURL
+                    return .success(cached)
+            }
+        }
+
+        guard case .success(let json) = BWCodec.encodeBudget(budget: budget) else {
+            return .failure(.encodingJson())
+        }
+
+        let fileName = BWFiles.normalizedFileName(from: budget.title)
+
+        switch await saveNewBudgetInVault(
+            fileName: fileName,
+            fileExtension: BWFiles.budgetFileExtension,
+            contents: json
+        ) {
+            case .failure(let error):
+                return .failure(error)
+            case .success(let url):
+                var cached = budget
+                cached.url = url
+                return .success(cached)
+        }
     }
 
     public func readBudgetFile(url budgetURL: URL) async -> Result<BWBudget, BWError> {
@@ -442,7 +558,8 @@ public actor BWVault: Sendable {
         location: BWVaultLocation,
         configuration: BWVaultConfiguration
     ) -> Result<URL, BWError> {
-        if let bookmarkedURL = resolveBookmarkedVaultURL(
+        if location == .local,
+           let bookmarkedURL = resolveBookmarkedVaultURL(
             location: location,
             configuration: configuration
         ) {
@@ -456,7 +573,7 @@ public actor BWVault: Sendable {
                 case .local:
                     url = try defaultLocalVaultURL(configuration: configuration)
                 case .iCloud:
-                    url = try defaultICloudVaultURL(configuration: configuration)
+                    url = try defaultCloudKitCacheURL(configuration: configuration)
             }
 
             try FileManager.default.createDirectory(
@@ -565,7 +682,20 @@ public actor BWVault: Sendable {
         }
     }
 
-    private static func defaultICloudVaultURL(configuration: BWVaultConfiguration) throws -> URL {
+    public static func defaultCloudKitCacheURL(configuration: BWVaultConfiguration) throws -> URL {
+        let applicationSupportURL = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+
+        return applicationSupportURL
+            .appendingPathComponent("Budget Warden")
+            .appendingPathComponent(configuration.cloudKitCacheFolderName)
+    }
+
+    private static func defaultLegacyICloudVaultURL(configuration: BWVaultConfiguration) throws -> URL {
         if let containerURL = FileManager.default.url(
             forUbiquityContainerIdentifier: configuration.iCloudContainerIdentifier
         ) {

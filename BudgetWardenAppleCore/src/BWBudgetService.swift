@@ -143,20 +143,22 @@ public enum BWBudgetService {
         budgetsInVault: [BWBudget],
         vault: BWVault
     ) async -> Result<BWBudget, BWError> {
-        let budget: BWBudget
+        let draftBudget: BWBudget
 
         switch template {
             case .basic:
-                budget = BWTemplate.basicBudget(title: title)
+                draftBudget = BWTemplate.basicBudget(title: title)
             case .blank:
-                budget = BWBudget(title: title)
+                draftBudget = BWBudget(title: title)
             case .previous(let url):
                 guard let previousBudget = budgetsInVault.first(where: { $0.url == url }) else {
                     return .failure(.findPreviousBudget())
                 }
 
-                budget = previousBudget.cloneAsTemplate(newTitle: title)
+                draftBudget = previousBudget.cloneAsTemplate(newTitle: title)
         }
+
+        let budget = await BWCRDT.prepareNew(draftBudget)
 
         let json: String
 
@@ -202,12 +204,13 @@ public enum BWBudgetService {
     public static func saveBudget(
         _ budget: BWBudget,
         vault: BWVault,
-        operation: BWRebaseOperation
+        operation _: BWRebaseOperation
     ) async -> Result<BWBudget, BWError> {
         guard let budgetURL = budget.url else {
             return .failure(.saveFailed())
         }
 
+        let originalBudget = BWCRDT.materialize(budget)
         var normalizedBudget: BWBudget
 
         switch normalizeActualAmounts(in: budget) {
@@ -217,56 +220,21 @@ public enum BWBudgetService {
                 normalizedBudget = budget
         }
 
-        switch BWRebase.rebase(budgetInMemory: normalizedBudget, operation: operation) {
-            case .failure(let error):
-                return .failure(error)
-            case .success(let budget):
-                switch normalizeActualAmounts(in: budget) {
-                    case .failure(let error):
-                        return .failure(error)
-                    case .success(let budget):
-                        normalizedBudget = budget
-                }
-        }
-
-        if normalizedBudget.revision == nil {
-            normalizedBudget.revision = 1;
-        }
-
-        if normalizedBudget.revision == Int64.max {
-            normalizedBudget.revision = 1;
-        }
-        else {
-            normalizedBudget.revision! += 1;
-        }
-
-        let json: String
-
-        switch BWCodec.encodeBudget(budget: normalizedBudget) {
-            case .failure(let error):
-                return .failure(.saveFailed(underlying: error))
-            case .success(let result):
-                json = result
-        }
+        normalizedBudget = await BWCRDT.applyingChanges(
+            from: originalBudget,
+            to: normalizedBudget
+        )
+        normalizedBudget.url = budgetURL
 
         guard BWFiles.isBudgetFile(budgetURL) else {
             return .failure(.saveFailed())
         }
 
-        let saveResult: Result<Void, BWError>
-
-        if await vault.containsBudgetFile(url: budgetURL) {
-            saveResult = await vault.saveBudgetFile(url: budgetURL, contents: json)
-        }
-        else {
-            saveResult = BWFiles.saveFile(url: budgetURL, contents: json)
-        }
-
-        switch saveResult {
+        switch BWFiles.mergeAndSaveBudgetFile(url: budgetURL, incoming: normalizedBudget) {
             case .failure(let error):
                 return .failure(.saveFailed(underlying: error))
-            case .success:
-                return .success(normalizedBudget)
+            case .success(let saved):
+                return .success(saved)
         }
     }
 

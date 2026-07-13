@@ -9,6 +9,7 @@
  */
 
 import BudgetWardenAppleCore
+import CloudKit
 import Foundation
 import Observation
 
@@ -19,8 +20,12 @@ final class BWStore {
     private let currencyKey = "BWI_CURRENCY"
     private static let iCloudContainerIdentifier = "iCloud.com.lazarovco.BudgetWarden"
     private static let defaultVaultFolderName = "Budget Warden Vaults"
+    private static let iCloudEnabledKey = "BWI_ICLOUD_SYNC_ENABLED"
+    private static let cloudSyncInterval: TimeInterval = 10
 
-    let vault = BWVault(configuration: BWStore.vaultConfiguration)
+    let vault = BWVault(configuration: BWStore.vaultConfiguration, location: .local)
+    let cloudVault = BWVault(configuration: BWStore.vaultConfiguration, location: .iCloud)
+    let cloudRepository = BWCloudBudgetRepository()
 
     private static var vaultConfiguration: BWVaultConfiguration {
         BWVaultConfiguration(
@@ -36,16 +41,48 @@ final class BWStore {
         )
     }
 
-    private(set) var budgets: [BWBudget] = []
-    private(set) var vaultLocation: BWVaultLocation = .iCloud
+    private static var initialICloudEnabled: Bool {
+        let defaults = UserDefaults.standard
+
+        if defaults.object(forKey: iCloudEnabledKey) != nil {
+            return defaults.bool(forKey: iCloudEnabledKey)
+        }
+
+        if defaults.string(forKey: "BWI_VAULT_LOCATION") == BWVaultLocation.iCloud.rawValue {
+            return true
+        }
+
+        guard let cacheURL = try? BWVault.defaultCloudKitCacheURL(configuration: vaultConfiguration),
+              let files = try? FileManager.default.contentsOfDirectory(
+                at: cacheURL,
+                includingPropertiesForKeys: nil
+              )
+        else {
+            return false
+        }
+
+        return files.contains { BWFiles.isBudgetFile($0) }
+    }
+
+    private(set) var localBudgets: [BWBudget] = []
+    private(set) var iCloudBudgets: [BWBudget] = []
     private(set) var vaultURL: URL?
     private(set) var skippedFiles: [String] = []
+    private(set) var sharedBudgetIDs: Set<UUID> = []
+    private(set) var isICloudEnabled: Bool
+
+    var budgets: [BWBudget] {
+        iCloudBudgets + localBudgets
+    }
 
     @ObservationIgnored private var autoRefreshTask: Task<Void, Never>?
     @ObservationIgnored private var autoRefreshSnapshot: BWBudgetFileSnapshot?
     @ObservationIgnored private var autoRefreshBlockers: Set<String> = []
     @ObservationIgnored private var autoRefreshMutationCount = 0
     @ObservationIgnored private var isRefreshingFromDisk = false
+    @ObservationIgnored private var lastCloudSyncDate: Date?
+    @ObservationIgnored private var isCloudSyncing = false
+    @ObservationIgnored private var cloudUploadTask: Task<Void, Never>?
 
     var selectedBudgetID: UUID?
     var errorMessage: String?
@@ -61,20 +98,60 @@ final class BWStore {
             .flatMap(BWCurrency.init(rawValue:))
 
         selectedCurrency = savedCurrency ?? .defaultCurrency
+        isICloudEnabled = Self.initialICloudEnabled
     }
 
     deinit {
         autoRefreshTask?.cancel()
     }
 
+    var preferredBudgetLocation: BWVaultLocation {
+        isICloudEnabled ? .iCloud : .local
+    }
+
+    func isICloudBudget(_ budget: BWBudget) -> Bool {
+        guard let budgetURL = budget.url?.standardizedFileURL else {
+            return false
+        }
+
+        return iCloudBudgets.contains {
+            $0.url?.standardizedFileURL == budgetURL
+        }
+    }
+
+    private func storageVault(for budget: BWBudget) -> BWVault {
+        isICloudBudget(budget) ? cloudVault : vault
+    }
+
+    @discardableResult
+    func enableICloud() async -> Bool {
+        guard await cloudRepository.accountIsAvailable() else {
+            errorMessage = BWError.iCloudUnavailable().localizedDescription
+            return false
+        }
+
+        isICloudEnabled = true
+        errorMessage = nil
+        UserDefaults.standard.set(true, forKey: Self.iCloudEnabledKey)
+        await synchronizeCloudBudgets()
+        await updateAutoRefreshSnapshot()
+        return true
+    }
+
     static func resetUITestVaultState() {
         BWVault.resetStoredState(configuration: vaultConfiguration)
+        UserDefaults.standard.removeObject(forKey: iCloudEnabledKey)
 
         do {
             let testVaultURL = try BWVault.defaultLocalVaultURL(configuration: vaultConfiguration)
+            let cloudKitCacheURL = try BWVault.defaultCloudKitCacheURL(configuration: vaultConfiguration)
 
             if FileManager.default.fileExists(atPath: testVaultURL.path) {
                 try FileManager.default.removeItem(at: testVaultURL)
+            }
+
+            if FileManager.default.fileExists(atPath: cloudKitCacheURL.path) {
+                try FileManager.default.removeItem(at: cloudKitCacheURL)
             }
         }
         catch {
@@ -160,6 +237,11 @@ final class BWStore {
             isRefreshingFromDisk = false
         }
 
+        if isICloudEnabled,
+           lastCloudSyncDate.map({ Date().timeIntervalSince($0) >= Self.cloudSyncInterval }) ?? true {
+            await synchronizeCloudBudgets()
+        }
+
         switch await BWBudgetService.refreshSnapshot(for: budgets, vault: vault) {
             case .failure:
                 return
@@ -184,26 +266,21 @@ final class BWStore {
             in: budgets,
             vaultSnapshot: snapshot.vault
         )
-        var refreshedBudgets: [BWBudget]
 
-        switch await BWBudgetService.loadBudgets(vault: vault) {
-            case .failure:
-                return
-            case .success(let result):
-                refreshedBudgets = result.budgets
-                skippedFiles = result.skippedFiles
+        guard await reloadStoredBudgets() else {
+            return
         }
 
-        for url in externalURLs {
+        let storedPaths = Set(budgets.compactMap { $0.url?.standardizedFileURL.path })
+
+        for url in externalURLs where !storedPaths.contains(url.standardizedFileURL.path) {
             switch await BWBudgetService.openBudget(at: url, vault: vault) {
                 case .failure:
                     continue
                 case .success(let result):
-                    upsertBudget(result.budget, in: &refreshedBudgets)
+                    upsertBudget(result.budget, location: .local)
             }
         }
-
-        budgets = refreshedBudgets
 
         if let previousSelectedBudgetID,
            budget(withID: previousSelectedBudgetID) != nil {
@@ -212,6 +289,35 @@ final class BWStore {
         else {
             restoreSelection()
         }
+    }
+
+    @discardableResult
+    private func reloadStoredBudgets() async -> Bool {
+        let localResult = await BWBudgetService.loadBudgets(vault: vault)
+        let cloudResult = await BWBudgetService.loadBudgets(vault: cloudVault)
+        var loadedSkippedFiles: [String] = []
+        var didLoadStorage = false
+
+        switch localResult {
+            case .failure:
+                localBudgets = []
+            case .success(let result):
+                localBudgets = result.budgets
+                loadedSkippedFiles.append(contentsOf: result.skippedFiles)
+                didLoadStorage = true
+        }
+
+        switch cloudResult {
+            case .failure:
+                iCloudBudgets = []
+            case .success(let result):
+                iCloudBudgets = result.budgets
+                loadedSkippedFiles.append(contentsOf: result.skippedFiles)
+                didLoadStorage = true
+        }
+
+        skippedFiles = loadedSkippedFiles
+        return didLoadStorage
     }
 
     var selectedBudget: BWBudget? {
@@ -242,7 +348,7 @@ final class BWStore {
                 title: title,
                 plannedAmount: plannedAmount,
                 categoryType: categoryType,
-                vault: vault
+                vault: storageVault(for: budget)
             )
 
             return await handleBudgetMutation(result)
@@ -258,7 +364,7 @@ final class BWStore {
             let result = await BWBudgetService.updateBudgetTitle(
                 in: budget,
                 title: title,
-                vault: vault
+                vault: storageVault(for: budget)
             )
 
             return await handleBudgetMutation(result)
@@ -274,7 +380,7 @@ final class BWStore {
             let result = await BWBudgetService.updateCategory(
                 in: budget,
                 category: updatedCategory,
-                vault: vault
+                vault: storageVault(for: budget)
             )
 
             return await handleBudgetMutation(result)
@@ -286,11 +392,11 @@ final class BWStore {
             return
         }
 
-        await withAutoRefreshPaused {
+        return await withAutoRefreshPaused {
             let result = await BWBudgetService.deleteCategory(
                 in: budget,
                 categoryID: category.id,
-                vault: vault
+                vault: storageVault(for: budget)
             )
 
             _ = await handleBudgetMutation(result)
@@ -313,7 +419,7 @@ final class BWStore {
                 for: categoryType,
                 fromOffsets: sourceOffsets,
                 toOffset: destination,
-                vault: vault
+                vault: storageVault(for: budget)
             )
 
             return await handleBudgetMutation(result)
@@ -340,7 +446,7 @@ final class BWStore {
                 description: description,
                 date: date,
                 amount: amount,
-                vault: vault
+                vault: storageVault(for: budget)
             )
 
             return await handleBudgetMutation(result)
@@ -363,7 +469,7 @@ final class BWStore {
                 transaction: transaction,
                 from: sourceCategoryID,
                 to: destinationCategoryID,
-                vault: vault
+                vault: storageVault(for: budget)
             )
 
             return await handleBudgetMutation(result)
@@ -384,7 +490,7 @@ final class BWStore {
                 in: budget,
                 transactionID: transaction.id,
                 from: categoryID,
-                vault: vault
+                vault: storageVault(for: budget)
             )
 
             _ = await handleBudgetMutation(result)
@@ -392,7 +498,6 @@ final class BWStore {
     }
 
     func refreshVaultState() async {
-        vaultLocation = await vault.currentLocation()
         vaultURL = await vault.currentURL()
     }
 
@@ -404,17 +509,15 @@ final class BWStore {
 
         await refreshVaultState()
 
-        switch await BWBudgetService.loadBudgets(vault: vault) {
-            case .failure(let error):
-                budgets = []
-                selectedBudgetID = nil
-                errorMessage = error.localizedDescription
-            case .success(let result):
-                budgets = result.budgets
-                skippedFiles = result.skippedFiles
-                restoreSelection()
-                await updateAutoRefreshSnapshot()
+        guard await reloadStoredBudgets() else {
+            selectedBudgetID = nil
+            errorMessage = BWError.vaultNotSet().localizedDescription
+            return
         }
+
+        restoreSelection()
+        await updateAutoRefreshSnapshot()
+        scheduleCloudSynchronization()
     }
 
     func selectBudget(withID budgetID: UUID) {
@@ -426,49 +529,75 @@ final class BWStore {
         UserDefaults.standard.set(budgetID.uuidString, forKey: lastOpenedBudgetIDKey)
     }
 
-    func open(_ budget: BWBudget) {
-        if let index = budgets.firstIndex(where: { $0.id == budget.id }) {
-            budgets[index] = budget
-        }
-        else {
-            budgets.insert(budget, at: 0)
-        }
-
+    func open(_ budget: BWBudget, location: BWVaultLocation? = nil) {
+        upsertBudget(budget, location: location)
         selectBudget(withID: budget.id)
     }
 
     func openBudget(at url: URL) async {
         await withAutoRefreshPaused {
-            switch await BWBudgetService.openBudget(at: url, vault: vault) {
+            let location: BWVaultLocation?
+            let sourceVault: BWVault
+
+            if await cloudVault.containsBudgetFile(url: url) {
+                location = .iCloud
+                sourceVault = cloudVault
+            }
+            else if await vault.containsBudgetFile(url: url) {
+                location = .local
+                sourceVault = vault
+            }
+            else {
+                location = nil
+                sourceVault = vault
+            }
+
+            switch await BWBudgetService.openBudget(at: url, vault: sourceVault) {
                 case .failure(let error):
                     errorMessage = error.localizedDescription
                 case .success(let result):
-                    if let vaultReadResult = result.vaultReadResult {
-                        budgets = vaultReadResult.budgets
+                    if let vaultReadResult = result.vaultReadResult,
+                       let location {
+                        switch location {
+                            case .iCloud:
+                                iCloudBudgets = vaultReadResult.budgets
+                            case .local:
+                                localBudgets = vaultReadResult.budgets
+                        }
                         skippedFiles = vaultReadResult.skippedFiles
                     }
 
-                    open(result.budget)
+                    open(result.budget, location: location ?? .local)
                     await updateAutoRefreshSnapshot()
             }
         }
     }
 
-    func createBudget(title: String, template: BWTemplateSelection) async -> Bool {
-        await withAutoRefreshPaused {
+    func createBudget(
+        title: String,
+        template: BWTemplateSelection,
+        location: BWVaultLocation
+    ) async -> Bool {
+        if location == .iCloud, !isICloudEnabled,
+           !(await enableICloud()) {
+            return false
+        }
+
+        let destinationVault = location == .iCloud ? cloudVault : vault
+
+        return await withAutoRefreshPaused {
             switch await BWBudgetService.createBudget(
                 title: title,
                 template: template,
                 budgetsInVault: budgets,
-                vault: vault
+                vault: destinationVault
             ) {
                 case .failure(let error):
                     errorMessage = error.localizedDescription
                     return false
                 case .success(let budget):
-                    open(budget)
-                    await loadBudgets()
-                    selectBudget(withID: budget.id)
+                    open(budget, location: location)
+                    scheduleCloudSave(budget)
                     await updateAutoRefreshSnapshot()
                     return true
             }
@@ -477,11 +606,25 @@ final class BWStore {
 
     func deleteBudget(_ budget: BWBudget) async {
         await withAutoRefreshPaused {
-            switch await BWBudgetService.deleteBudget(budget, vault: vault) {
+            let isCloudBudget = isICloudBudget(budget)
+            let sourceVault = isCloudBudget ? cloudVault : vault
+
+            if isCloudBudget,
+               case .failure(let error) = await cloudRepository.delete(budget.id) {
+                errorMessage = error.localizedDescription
+                return
+            }
+
+            switch await BWBudgetService.deleteBudget(budget, vault: sourceVault) {
                 case .failure(let error):
                     errorMessage = error.localizedDescription
                 case .success:
-                    budgets.removeAll { $0.id == budget.id }
+                    if isCloudBudget {
+                        iCloudBudgets.removeAll { $0.id == budget.id }
+                    }
+                    else {
+                        localBudgets.removeAll { $0.id == budget.id }
+                    }
                     clearSelectionIfNeeded(deletedBudgetID: budget.id)
                     await updateAutoRefreshSnapshot()
             }
@@ -495,19 +638,6 @@ final class BWStore {
 
         for budget in budgetsToDelete {
             await deleteBudget(budget)
-        }
-    }
-
-    func setVaultLocation(_ location: BWVaultLocation) async {
-        await withAutoRefreshPaused {
-            switch await vault.setLocation(location) {
-                case .failure(let error):
-                    errorMessage = error.localizedDescription
-                case .success:
-                    await loadBudgets()
-            }
-
-            await refreshVaultState()
         }
     }
 
@@ -553,13 +683,129 @@ final class BWStore {
                 return false
             case .success(let budget):
                 upsertBudget(budget)
+                scheduleCloudSave(budget)
                 await updateAutoRefreshSnapshot()
                 return true
         }
     }
 
-    private func upsertBudget(_ budget: BWBudget) {
-        upsertBudget(budget, in: &budgets)
+    private func synchronizeCloudBudgets() async {
+        guard isICloudEnabled else {
+            sharedBudgetIDs = []
+            return
+        }
+
+        guard !isCloudSyncing else {
+            return
+        }
+
+        isCloudSyncing = true
+
+        defer {
+            isCloudSyncing = false
+        }
+
+        if !(await cloudRepository.legacyICloudDriveMigrationIsComplete()) {
+            switch await vault.readLegacyICloudBudgets() {
+                case .failure:
+                    return
+                case .success(let legacyResult):
+                    if case .failure = await cloudRepository.migrateLegacyICloudBudgets(
+                        legacyResult.budgets
+                    ) {
+                        return
+                    }
+            }
+        }
+
+        switch await cloudRepository.synchronize(localBudgets: iCloudBudgets, vault: cloudVault) {
+            case .failure:
+                // The local CloudKit cache remains usable while offline.
+                return
+            case .success(let cloudBudgets):
+                lastCloudSyncDate = Date()
+                sharedBudgetIDs = Set(cloudBudgets.lazy
+                    .filter(\.isSharedWithCurrentUser)
+                    .map { $0.budget.id })
+
+                if case .success(let result) = await BWBudgetService.loadBudgets(vault: cloudVault) {
+                    iCloudBudgets = result.budgets
+                    skippedFiles = result.skippedFiles
+                }
+        }
+    }
+
+    private func scheduleCloudSynchronization() {
+        Task { [weak self] in
+            guard let self else {
+                return
+            }
+
+            await self.synchronizeCloudBudgets()
+            await self.updateAutoRefreshSnapshot()
+        }
+    }
+
+    func openAcceptedCloudShare(recordID: CKRecord.ID) async -> Bool {
+        guard isICloudEnabled else {
+            errorMessage = "Enable iCloud in Storage settings, then open the sharing link again."
+            return false
+        }
+
+        for attempt in 0..<10 {
+            if case .success(let cloudBudget) = await cloudRepository.fetchSharedBudget(
+                recordID: recordID
+            ),
+            case .success(let cachedBudget) = await cloudVault.cacheCloudBudget(cloudBudget.budget) {
+                sharedBudgetIDs.insert(cachedBudget.id)
+                open(cachedBudget, location: .iCloud)
+                errorMessage = nil
+                await updateAutoRefreshSnapshot()
+                scheduleCloudSynchronization()
+                return true
+            }
+
+            if attempt < 9 {
+                let retryDelay = min(250 * (attempt + 1), 1_000)
+                try? await Task.sleep(for: .milliseconds(retryDelay))
+            }
+        }
+
+        errorMessage = "The shared budget was accepted, but it could not be downloaded from iCloud yet. Make sure both apps use the same CloudKit environment, then open the sharing link again."
+        return false
+    }
+
+    private func scheduleCloudSave(_ budget: BWBudget) {
+        let previousUpload = cloudUploadTask
+
+        cloudUploadTask = Task { [weak self] in
+            await previousUpload?.value
+
+            guard let self,
+                  self.isICloudEnabled,
+                  self.isICloudBudget(budget)
+            else {
+                return
+            }
+
+            if case .failure(let error) = await self.cloudRepository.save(budget) {
+                self.errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func upsertBudget(
+        _ budget: BWBudget,
+        location: BWVaultLocation? = nil
+    ) {
+        let location = location ?? (isICloudBudget(budget) ? .iCloud : .local)
+
+        switch location {
+            case .iCloud:
+                upsertBudget(budget, in: &iCloudBudgets)
+            case .local:
+                upsertBudget(budget, in: &localBudgets)
+        }
     }
 
     private func upsertBudget(_ budget: BWBudget, in budgets: inout [BWBudget]) {
@@ -568,6 +814,10 @@ final class BWStore {
         }
         else {
             budgets.append(budget)
+        }
+
+        budgets.sort {
+            $0.title.localizedStandardCompare($1.title) == .orderedAscending
         }
     }
 

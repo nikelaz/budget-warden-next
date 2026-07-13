@@ -10,6 +10,7 @@
 
 import SwiftUI
 import BudgetWardenAppleCore
+import CloudKit
 
 private let WINDOW_WIDTH: CGFloat = 760
 private let WINDOW_HEIGHT: CGFloat = 420
@@ -25,6 +26,7 @@ struct BWWindowWelcome: Scene {
 
     @State private var isDeleteBudgetDialogPresented: Bool = false
     @State private var budgetPendingRemoval: BWBudget? = nil
+    @State private var isPreparingShare = false
 
     var body: some Scene {
         Window("Welcome Window", id: "window-welcome") {
@@ -40,10 +42,28 @@ struct BWWindowWelcome: Scene {
                 idealHeight: WINDOW_HEIGHT,
                 maxHeight: WINDOW_HEIGHT
             )
+            .overlay {
+                if isPreparingShare {
+                    BWPreparingCloudShareView()
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .budgetWardenAcceptedCloudShare)) { notification in
+                guard let recordID = notification.object as? CKRecord.ID else {
+                    return
+                }
+
+                Task {
+                    await openAcceptedCloudShare(recordID: recordID)
+                }
+            }
             .containerBackground(.regularMaterial, for: .window)
             .task {
                 await store.loadBudgetsFromVault()
                 store.setAutoRefreshActive(scenePhase == .active)
+
+                if let recordID = BWPendingCloudShare.recordID {
+                    await openAcceptedCloudShare(recordID: recordID)
+                }
             }
             .onOpenURL { url in
                 Task(priority: .userInitiated) {
@@ -157,6 +177,7 @@ struct BWWindowWelcome: Scene {
             || windowStore.isPreferencesDialogOpen
             || windowStore.isErrorState
             || isDeleteBudgetDialogPresented
+            || isPreparingShare
     }
 
     private func updateAutoRefreshDialogBlocker() {
@@ -213,38 +234,82 @@ struct BWWindowWelcome: Scene {
 
     var budgetsScrollView: some View {
         ScrollView {
-             VStack(spacing: 5) {
-                 ForEach(store.budgetsInVault) { budget in
-                     Button {
-                         store.selectBudget(budget)
-                         openWindow(id: "window-main")
-                         dismissWindow(id: "window-welcome")
-                     } label: {
-                         BudgetRowView(budget: budget)
-                             .frame(maxWidth: .infinity, alignment: .leading)
-                     }
-                     .contextMenu {
-                         Button {
-                             guard let budgetUrl = budget.url else {
-                                 return
-                             }
+            VStack(alignment: .leading, spacing: 14) {
+                if !store.iCloudBudgets.isEmpty {
+                    budgetSection(
+                        title: "iCloud",
+                        budgets: store.iCloudBudgets,
+                        canShare: true
+                    )
+                }
 
-                             NSWorkspace.shared.activateFileViewerSelecting([budgetUrl])
-                         } label: {
-                             Label("Show in Finder", systemImage: "folder")
-                         }
+                if !store.localBudgets.isEmpty {
+                    budgetSection(
+                        title: "Local",
+                        budgets: store.localBudgets,
+                        canShare: false
+                    )
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
 
-                         Button(role: .destructive) {
-                             budgetPendingRemoval = budget
-                             isDeleteBudgetDialogPresented = true
-                         } label: {
-                             Label("Remove from Vault", systemImage: "trash")
-                         }
-                     }
-                     .accessibilityLabel("Button_\(budget.title)")
-                 }
-             }
-         }
+    @ViewBuilder
+    private func budgetSection(
+        title: String,
+        budgets: [BWBudget],
+        canShare: Bool
+    ) -> some View {
+        Text(title)
+            .font(.headline)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+        VStack(spacing: 5) {
+            ForEach(budgets) { budget in
+                Button {
+                    store.selectBudget(budget)
+                    openWindow(id: "window-main")
+                    dismissWindow(id: "window-welcome")
+                } label: {
+                    BudgetRowView(
+                        budget: budget,
+                        isShared: canShare && store.sharedBudgetIDs.contains(budget.id)
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .contextMenu {
+                    if canShare {
+                        Button {
+                            shareBudget(budget)
+                        } label: {
+                            Label(
+                                store.sharedBudgetIDs.contains(budget.id) ? "Manage Sharing" : "Share with iCloud",
+                                systemImage: "person.crop.circle.badge.plus"
+                            )
+                        }
+                    }
+
+                    Button {
+                        guard let budgetUrl = budget.url else {
+                            return
+                        }
+
+                        NSWorkspace.shared.activateFileViewerSelecting([budgetUrl])
+                    } label: {
+                        Label("Show in Finder", systemImage: "folder")
+                    }
+
+                    Button(role: .destructive) {
+                        budgetPendingRemoval = budget
+                        isDeleteBudgetDialogPresented = true
+                    } label: {
+                        Label("Remove from Vault", systemImage: "trash")
+                    }
+                }
+                .accessibilityLabel("Button_\(budget.title)")
+            }
+        }
     }
 
     var rightColumn: some View {
@@ -286,15 +351,57 @@ struct BWWindowWelcome: Scene {
             openWindow(id: "window-main")
         }
     }
+
+    private func shareBudget(_ budget: BWBudget) {
+        guard !isPreparingShare else {
+            return
+        }
+
+        guard store.isICloudEnabled else {
+            windowStore.setError(.iCloudUnavailable())
+            return
+        }
+
+        isPreparingShare = true
+
+        Task {
+            let result = await store.cloudRepository.prepareShare(for: budget)
+            isPreparingShare = false
+
+            switch result {
+                case .failure(let error):
+                    windowStore.setError(error)
+                case .success(let share):
+                    BWMacCloudSharing.shared.present(share)
+            }
+        }
+    }
+
+    private func openAcceptedCloudShare(recordID: CKRecord.ID) async {
+        guard await store.openAcceptedCloudShare(recordID: recordID) else {
+            return
+        }
+
+        BWPendingCloudShare.clear(recordID: recordID)
+        openWindow(id: "window-main")
+        dismissWindow(id: "window-welcome")
+    }
 }
 
 struct BudgetRowView: View {
     let budget: BWBudget
+    let isShared: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(budget.title)
                 .font(.headline)
+
+            if isShared {
+                Text("Shared")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             if let budgetUrl = budget.url {
                 Text(budgetUrl.lastPathComponent)
