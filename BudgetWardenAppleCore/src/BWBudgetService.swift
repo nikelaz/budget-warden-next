@@ -158,11 +158,11 @@ public enum BWBudgetService {
                 draftBudget = previousBudget.cloneAsTemplate(newTitle: title)
         }
 
-        let budget = await BWCRDT.prepareNew(draftBudget)
+        let budgetToSave = await BWCRDT.prepareNew(draftBudget)
 
         let json: String
 
-        switch BWCodec.encodeBudget(budget: budget) {
+        switch BWCodec.encodeBudget(budget: budgetToSave) {
             case .failure(let error):
                 return .failure(.creatingBudget(underlying: error))
             case .success(let result):
@@ -180,7 +180,7 @@ public enum BWBudgetService {
             case .failure(let error):
                 return .failure(.creatingBudget(underlying: error))
             case .success(let fileURL):
-                var savedBudget = budget
+                var savedBudget = budgetToSave
                 savedBudget.url = fileURL
                 return .success(savedBudget)
         }

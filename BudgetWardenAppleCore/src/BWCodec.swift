@@ -59,7 +59,7 @@ nonisolated public final class BWCodec {
         decodedBudget.url = url
 
         if decodedBudget.revision == nil {
-            decodedBudget.revision = 1;
+            decodedBudget.revision = 0
         }
 
         if decodedBudget.schemaVersion == nil || decodedBudget.schemaVersion == 1 {

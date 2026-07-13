@@ -15,6 +15,31 @@ import CloudKit
 import UniformTypeIdentifiers
 import BudgetWardenAppleCore
 
+private actor BWBudgetMutationGate {
+    private var isRunning = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func wait() async {
+        if !isRunning {
+            isRunning = true
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+        }
+    }
+
+    func signal() {
+        guard !waiters.isEmpty else {
+            isRunning = false
+            return
+        }
+
+        waiters.removeFirst().resume()
+    }
+}
+
 @MainActor
 class BWStore: ObservableObject {
     private let currencyKey = "BW_CURRENCY"
@@ -38,7 +63,7 @@ class BWStore: ObservableObject {
 
     let cloudRepository = BWCloudBudgetRepository()
 
-    private var autoRefreshTask: Task<Void, Never>?
+    private var autoRefreshMonitor: BWBudgetFileChangeMonitor?
     private var autoRefreshSnapshot: BWBudgetFileSnapshot?
     private var autoRefreshBlockers: Set<String> = []
     private var autoRefreshMutationCount = 0
@@ -46,6 +71,8 @@ class BWStore: ObservableObject {
     private var lastCloudSyncDate: Date?
     private var isCloudSyncing = false
     private var cloudUploadTask: Task<Void, Never>?
+    private var hasPendingAutoRefresh = false
+    private let budgetMutationGate = BWBudgetMutationGate()
 
     // Currency
     @Published var selectedCurrency: BWCurrency {
@@ -107,7 +134,7 @@ class BWStore: ObservableObject {
     }
 
     deinit {
-        autoRefreshTask?.cancel()
+        autoRefreshMonitor?.stop()
     }
 
     var preferredBudgetLocation: BWVaultLocation {
@@ -157,42 +184,57 @@ class BWStore: ObservableObject {
         else {
             autoRefreshBlockers.remove(reason)
         }
-    }
 
-    private func startAutoRefreshLoop() {
-        guard autoRefreshTask == nil else {
-            return
-        }
-
-        autoRefreshTask = Task { [weak self] in
-            await self?.refreshFromDiskIfIdle()
-
-            while !Task.isCancelled {
-                do {
-                    try await Task.sleep(for: .seconds(3))
-                }
-                catch {
-                    break
-                }
-
-                await self?.refreshFromDiskIfIdle()
+        if autoRefreshBlockers.isEmpty {
+            Task { [weak self] in
+                await self?.drainPendingAutoRefreshIfNeeded()
             }
         }
     }
 
+    private func startAutoRefreshLoop() {
+        guard autoRefreshMonitor == nil else {
+            return
+        }
+
+        autoRefreshMonitor = BWBudgetFileChangeMonitor { [weak self] in
+            Task { @MainActor in
+                await self?.handleAutoRefreshChange()
+            }
+        }
+
+        Task { [weak self] in
+            await self?.refreshFromDiskIfIdle()
+            await self?.updateAutoRefreshPresentedItems()
+        }
+    }
+
     private func stopAutoRefreshLoop() {
-        autoRefreshTask?.cancel()
-        autoRefreshTask = nil
+        autoRefreshMonitor?.stop()
+        autoRefreshMonitor = nil
+        hasPendingAutoRefresh = false
     }
 
     private func withAutoRefreshPaused<T>(_ operation: () async -> T) async -> T {
         autoRefreshMutationCount += 1
 
-        defer {
-            autoRefreshMutationCount -= 1
+        let result = await operation()
+
+        autoRefreshMutationCount -= 1
+        await drainPendingAutoRefreshIfNeeded()
+
+        return result
+    }
+
+    private func withBudgetMutation<T>(_ operation: () async -> T) async -> T {
+        await budgetMutationGate.wait()
+
+        let result = await withAutoRefreshPaused {
+            await operation()
         }
 
-        return await operation()
+        await budgetMutationGate.signal()
+        return result
     }
 
     private func trackedBudgetsForAutoRefresh() -> [BWBudget] {
@@ -215,15 +257,49 @@ class BWStore: ObservableObject {
             case .success(let snapshot):
                 autoRefreshSnapshot = snapshot.openFiles
         }
+
+        await updateAutoRefreshPresentedItems()
     }
 
-    private func refreshFromDiskIfIdle() async {
+    private func updateAutoRefreshPresentedItems() async {
+        guard let autoRefreshMonitor else {
+            return
+        }
+
+        let vaultURL = await vault.currentURL()
+        let budgetURLs = trackedBudgetsForAutoRefresh().compactMap { $0.url }
+
+        autoRefreshMonitor.updatePresentedItems(
+            vaultURL: vaultURL,
+            budgetURLs: budgetURLs
+        )
+    }
+
+    private func handleAutoRefreshChange() async {
+        hasPendingAutoRefresh = true
+        await drainPendingAutoRefreshIfNeeded()
+    }
+
+    private func drainPendingAutoRefreshIfNeeded() async {
+        guard hasPendingAutoRefresh else {
+            return
+        }
+
+        guard await refreshFromDiskIfIdle() else {
+            return
+        }
+
+        hasPendingAutoRefresh = false
+    }
+
+    @discardableResult
+    private func refreshFromDiskIfIdle() async -> Bool {
         guard budgetsInVaultLoaded,
               autoRefreshMutationCount == 0,
               autoRefreshBlockers.isEmpty,
               !isRefreshingFromDisk
         else {
-            return
+            return false
         }
 
         isRefreshingFromDisk = true
@@ -242,19 +318,23 @@ class BWStore: ObservableObject {
             vault: vault
         ) {
             case .failure:
-                return
+                return true
             case .success(let snapshot):
                 guard let autoRefreshSnapshot else {
                     self.autoRefreshSnapshot = snapshot.openFiles
-                    return
+                    await updateAutoRefreshPresentedItems()
+                    return true
                 }
 
                 guard autoRefreshSnapshot != snapshot.openFiles else {
-                    return
+                    await updateAutoRefreshPresentedItems()
+                    return true
                 }
 
                 await reloadBudgetsForAutoRefresh(snapshot: snapshot)
                 self.autoRefreshSnapshot = snapshot.openFiles
+                await updateAutoRefreshPresentedItems()
+                return true
         }
     }
 
@@ -436,7 +516,7 @@ class BWStore: ObservableObject {
             await selectVaultFolder()
         }
 
-        return await withAutoRefreshPaused {
+        return await withBudgetMutation {
             let budgetCreationRes = await BWBudgetService.createBudget(
                 title: title,
                 template: template,
@@ -470,11 +550,11 @@ class BWStore: ObservableObject {
         categoryType: BWCategoryType,
         windowStore: BWWindowStore
     ) async -> Bool {
-        guard let budget = currentBudget else {
-            return false
-        }
+        return await withBudgetMutation {
+            guard let budget = currentBudget else {
+                return false
+            }
 
-        return await withAutoRefreshPaused {
             let result = await BWBudgetService.createCategory(
                 in: budget,
                 title: title,
@@ -491,11 +571,11 @@ class BWStore: ObservableObject {
     }
 
     func updateCategory(_ updatedCategory: BWCategory, windowStore: BWWindowStore) async -> Bool {
-        guard let budget = currentBudget else {
-            return false
-        }
+        return await withBudgetMutation {
+            guard let budget = currentBudget else {
+                return false
+            }
 
-        return await withAutoRefreshPaused {
             let result = await BWBudgetService.updateCategory(
                 in: budget,
                 category: updatedCategory,
@@ -518,11 +598,11 @@ class BWStore: ObservableObject {
     }
 
     func moveCategory(_ category: BWCategory, by offset: Int, windowStore: BWWindowStore) async -> Bool {
-        guard let budget = currentBudget else {
-            return false
-        }
+        return await withBudgetMutation {
+            guard let budget = currentBudget else {
+                return false
+            }
 
-        return await withAutoRefreshPaused {
             let result = await BWBudgetService.moveCategory(
                 category,
                 in: budget,
@@ -538,11 +618,11 @@ class BWStore: ObservableObject {
     }
 
     func deleteCategory(_ category: BWCategory, windowStore: BWWindowStore) async {
-        guard let budget = currentBudget else {
-            return
-        }
+        await withBudgetMutation {
+            guard let budget = currentBudget else {
+                return
+            }
 
-        await withAutoRefreshPaused {
             let result = await BWBudgetService.deleteCategory(
                 in: budget,
                 categoryID: category.id,
@@ -564,11 +644,11 @@ class BWStore: ObservableObject {
         amount: UInt64,
         windowStore: BWWindowStore
     ) async -> Bool {
-        guard let budget = currentBudget else {
-            return false
-        }
+        return await withBudgetMutation {
+            guard let budget = currentBudget else {
+                return false
+            }
 
-        return await withAutoRefreshPaused {
             let result = await BWBudgetService.createTransaction(
                 in: budget,
                 categoryID: categoryID,
@@ -591,11 +671,11 @@ class BWStore: ObservableObject {
         transaction: BWTransaction,
         windowStore: BWWindowStore
     ) async -> Bool {
-        guard let budget = currentBudget else {
-            return false
-        }
+        return await withBudgetMutation {
+            guard let budget = currentBudget else {
+                return false
+            }
 
-        return await withAutoRefreshPaused {
             let result = await BWBudgetService.updateTransaction(
                 in: budget,
                 transaction: transaction,
@@ -616,11 +696,11 @@ class BWStore: ObservableObject {
         transactionID: UUID,
         windowStore: BWWindowStore
     ) async {
-        guard let budget = currentBudget else {
-            return
-        }
+        await withBudgetMutation {
+            guard let budget = currentBudget else {
+                return
+            }
 
-        await withAutoRefreshPaused {
             let result = await BWBudgetService.deleteTransaction(
                 in: budget,
                 transactionID: transactionID,
@@ -645,14 +725,14 @@ class BWStore: ObservableObject {
             return true
         }
 
-        guard let budget = currentBudget,
-              let sourceCategory = budget.categories.first(where: { $0.id == sourceCategoryID }),
-              let transaction = sourceCategory.transactions.first(where: { $0.id == transactionID })
-        else {
-            return false
-        }
+        return await withBudgetMutation {
+            guard let budget = currentBudget,
+                  let sourceCategory = budget.categories.first(where: { $0.id == sourceCategoryID }),
+                  let transaction = sourceCategory.transactions.first(where: { $0.id == transactionID })
+            else {
+                return false
+            }
 
-        return await withAutoRefreshPaused {
             let result = await BWBudgetService.updateTransaction(
                 in: budget,
                 transaction: transaction,
@@ -856,7 +936,7 @@ class BWStore: ObservableObject {
 
         let isCloudBudget = isICloudBudget(budget)
         let sourceVault = isCloudBudget ? cloudVault : vault
-        let removeBudgetRes = await withAutoRefreshPaused {
+        let removeBudgetRes = await withBudgetMutation {
             if isCloudBudget,
                case .failure(let error) = await cloudRepository.delete(budget.id) {
                 return Result<Void, BWError>.failure(error)

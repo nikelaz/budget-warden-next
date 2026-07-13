@@ -41,12 +41,20 @@ public enum BWRebase {
                 budgetOnDisk = budget
         }
 
-        if budgetInMemory.revision == budgetOnDisk.revision {
+        if let revisionIdInMemory = budgetInMemory.revisionId,
+           let revisionIdOnDisk = budgetOnDisk.revisionId,
+           revisionIdInMemory == revisionIdOnDisk
+        {
             // exit case one - budgets are identical
             return .success(budgetInMemory)
         }
 
-        // @TODO: Better exception handling
+        if (budgetInMemory.revisionId == nil || budgetOnDisk.revisionId == nil) &&
+            budgetInMemory.revision == budgetOnDisk.revision {
+            // exit case one - budgets are identical
+            return .success(budgetInMemory)
+        }
+
         switch operation {
             case .BudgetCreate:
                 return .success(budgetInMemory)
@@ -84,8 +92,19 @@ public enum BWRebase {
                     rebasedBudget.categories.append(updatedCategory)
                     return .success(rebasedBudget)
                 }
-                
-                rebasedBudget.categories[categoryIndex!] = updatedCategory
+
+                var rebasedCategory = rebasedBudget.categories[categoryIndex!]
+
+                // @TODO: More sophisticated/granular logic here
+                // The granularity here means that a hypothetical change could be overriden
+                // because if the conflict is within the category we update all fields with last one wins
+                rebasedCategory.title = updatedCategory.title
+                rebasedCategory.amountPlanned = updatedCategory.amountPlanned
+                rebasedCategory.amountAccumulated = updatedCategory.amountAccumulated
+                rebasedCategory.categoryType = updatedCategory.categoryType
+                rebasedCategory.ordinal = updatedCategory.ordinal
+
+                rebasedBudget.categories[categoryIndex!] = rebasedCategory
 
                 return .success(rebasedBudget)
             case .CategoryDelete(let categoryId):
@@ -192,12 +211,12 @@ public enum BWRebase {
                         continue
                     }
 
-                    rebasedBudget.categories[categoryIndex] = updatedCategory
+                    rebasedBudget.categories[categoryIndex].ordinal = updatedCategory.ordinal
                 }
 
                 return .success(rebasedBudget)
             case .Other:
-                return .success(budgetInMemory)
+                return .failure(.rebaseFailed())
         }
     }
 }

@@ -73,8 +73,9 @@ class BudgetRepository(private val context: Context) {
     }
 
     fun saveBudget(budget: Budget, storage: VaultType, _operation: BudgetRebaseOperation): Budget {
-        val fileName = budget.fileName ?: uniqueFileName(budget.title, storage)
-        val file = File(directoryFor(storage), fileName)
+        val file = budget.fileName?.let { resolveBudgetFile(budget, storage) }
+            ?: File(directoryFor(storage), uniqueFileName(budget.title, storage))
+        val fileName = file.name
         return BudgetFileLocks.withLock(file) {
             val original = BudgetCrdt.materialize(budget)
             val normalizedInMemory = normalizeActualAmounts(budget)
@@ -90,7 +91,7 @@ class BudgetRepository(private val context: Context) {
     }
 
     fun deleteBudget(budget: Budget, storage: VaultType) {
-        budget.fileName?.let { File(directoryFor(storage), it).delete() }
+        budget.fileName?.let { resolveBudgetFile(budget, storage).delete() }
         if (storage == VaultType.GOOGLE_DRIVE) {
             writeScope.launch {
                 val dao = application.vaultDatabase.vaultFiles()
@@ -157,6 +158,17 @@ class BudgetRepository(private val context: Context) {
         return candidate
     }
 
+    private fun resolveBudgetFile(budget: Budget, storage: VaultType): File {
+        val expected = File(directoryFor(storage), budget.fileName!!)
+        if (expected.exists() || storage != VaultType.GOOGLE_DRIVE) return expected
+        return directoryFor(storage)
+            .listFiles { file -> file.isFile && file.extension.equals("budget", ignoreCase = true) }
+            .orEmpty()
+            .firstOrNull { file ->
+                runCatching { JSONObject(file.readText()).optString("id") == budget.id }.getOrDefault(false)
+            }
+            ?: expected
+    }
     internal fun normalizeActualAmounts(budget: Budget): Budget =
         budget.copy(
             categories = budget.categories.map { category ->

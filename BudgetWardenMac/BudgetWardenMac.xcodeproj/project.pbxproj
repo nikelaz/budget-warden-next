@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		AB0000010000000000000001 /* BudgetWardenAppleCore in Frameworks */ = {isa = PBXBuildFile; productRef = AB0000030000000000000003 /* BudgetWardenAppleCore */; };
+		D054AFEB2FFAB1920075958D /* MacTestPlan.xctestplan in Resources */ = {isa = PBXBuildFile; fileRef = D054AFEA2FFAB1920075958D /* MacTestPlan.xctestplan */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -23,6 +24,7 @@
 /* Begin PBXFileReference section */
 		5A87E6702FB1961B0029A3E7 /* Budget Warden.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Budget Warden.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5A87E6802FB2E0010029A3E7 /* BudgetWardenMacUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BudgetWardenMacUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D054AFEA2FFAB1920075958D /* MacTestPlan.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; name = MacTestPlan.xctestplan; path = ../MacTestPlan.xctestplan; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -60,6 +62,7 @@
 		5A87E6672FB1961B0029A3E7 = {
 			isa = PBXGroup;
 			children = (
+				D054AFEA2FFAB1920075958D /* MacTestPlan.xctestplan */,
 				5A87E6722FB1961B0029A3E7 /* BudgetWardenMac */,
 				5A87E6812FB2E0010029A3E7 /* BudgetWardenMacUITests */,
 				5A87E6712FB1961B0029A3E7 /* Products */,
@@ -171,6 +174,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D054AFEB2FFAB1920075958D /* MacTestPlan.xctestplan in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

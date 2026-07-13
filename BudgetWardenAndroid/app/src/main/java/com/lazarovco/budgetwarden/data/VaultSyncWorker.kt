@@ -25,14 +25,21 @@ class VaultSyncEngine(private val context: Context) {
         val remoteFiles = drive.listVaultFiles(token, folderId)
         remoteFiles.forEach { remote ->
             val known = dao.byDriveId(remote.id)
-            val destination = File(localDirectory, safeName(remote.name))
+            val destination = cacheFile(remote.id)
             if (known?.syncState == "PENDING_UPLOAD") {
-                if (remote.version > (known.driveVersion ?: 0) && destination.exists()) {
-                    rebasePendingFile(token, remote, known, destination)
+                val pendingFile = File(known.localPath)
+                if (pendingFile != destination && pendingFile.exists()) {
+                    pendingFile.moveTo(destination)
+                }
+                val pending = known.copy(name = remote.name, localPath = destination.absolutePath)
+                dao.upsert(listOf(pending))
+                if (remote.version > (pending.driveVersion ?: 0) && destination.exists()) {
+                    rebasePendingFile(token, remote, pending, destination)
                 }
                 return@forEach
             }
-            if (known == null || remote.version > (known.driveVersion ?: 0) || !destination.exists()) {
+            val previousFile = known?.let { File(it.localPath) }
+            if (known == null || remote.version > (known.driveVersion ?: 0) || !destination.exists() || previousFile != destination) {
                 drive.download(token, remote.id, destination)
             }
             val budgetId = runCatching { JSONObject(destination.readText()).getString("id") }.getOrElse { remote.id }
@@ -40,9 +47,12 @@ class VaultSyncEngine(private val context: Context) {
                 budgetId, remote.id, remote.name, destination.absolutePath, remote.ownerEmail, remote.sharedWithMe,
                 remote.modifiedTime, remote.version, "SYNCED", null,
             )))
+            if (previousFile != null && previousFile != destination) {
+                check(!previousFile.exists() || previousFile.delete()) { "Could not remove the old local Drive cache file." }
+            }
         }
+        removeMissingRemoteFiles(remoteFiles.mapTo(mutableSetOf(), DriveFile::id))
         uploadPending(token, folderId)
-        if (remoteFiles.isNotEmpty()) dao.deleteRemoteFilesExcept(remoteFiles.map(DriveFile::id))
     }
 
     private suspend fun rebasePendingFile(token: String, remote: DriveFile, cached: VaultFileEntity, localFile: File) {
@@ -74,7 +84,6 @@ class VaultSyncEngine(private val context: Context) {
     }
 
     private suspend fun cacheUntrackedLocalFiles() {
-        val repository = BudgetRepository(context)
         localDirectory.listFiles { file -> file.isFile && file.extension.equals("budget", true) }.orEmpty().forEach { file ->
             val budgetId = runCatching { JSONObject(file.readText()).getString("id") }.getOrNull() ?: return@forEach
             if (dao.byBudgetId(budgetId) == null) {
@@ -83,6 +92,16 @@ class VaultSyncEngine(private val context: Context) {
                     file.lastModified(), null, "PENDING_UPLOAD", null,
                 )))
             }
+        }
+    }
+
+    private suspend fun removeMissingRemoteFiles(remoteIds: Set<String>) {
+        dao.all().filter { cached ->
+            cached.driveFileId != null && cached.driveFileId !in remoteIds
+        }.forEach { cached ->
+            val file = File(cached.localPath)
+            check(!file.exists() || file.delete()) { "Could not remove deleted Drive budget from the local cache." }
+            dao.delete(cached.budgetId)
         }
     }
 
@@ -97,13 +116,24 @@ class VaultSyncEngine(private val context: Context) {
         }.forEach { cached ->
             val file = File(cached.localPath)
             if (file.exists()) {
-                val remote = drive.upload(token, folderId, file, cached.driveFileId)
+                val remote = drive.upload(token, folderId, file, cached.driveFileId, cached.name)
+                val destination = cacheFile(remote.id)
+                if (file != destination) file.moveTo(destination)
                 dao.upsert(listOf(cached.copy(
-                    driveFileId = remote.id, modifiedTime = remote.modifiedTime, driveVersion = remote.version,
-                    syncState = "SYNCED", pendingOperation = null,
+                    driveFileId = remote.id, name = remote.name, localPath = destination.absolutePath,
+                    modifiedTime = remote.modifiedTime, driveVersion = remote.version, syncState = "SYNCED",
+                    pendingOperation = null,
                 )))
             }
         }
+    }
+
+    private fun cacheFile(driveFileId: String): File = File(localDirectory, "${safeName(driveFileId)}.budget")
+
+    private fun File.moveTo(destination: File) {
+        destination.parentFile?.mkdirs()
+        check(!destination.exists() || destination.delete()) { "Could not replace the local Drive cache file." }
+        check(renameTo(destination)) { "Could not move Drive budget into its local cache location." }
     }
 
     private fun safeName(name: String): String = name.replace(Regex("""[/\\?%*|\"<>:\p{Cntrl}]"""), "-")
