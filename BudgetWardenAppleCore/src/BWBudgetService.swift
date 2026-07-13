@@ -230,7 +230,7 @@ public enum BWBudgetService {
             return .failure(.saveFailed())
         }
 
-        switch BWFiles.mergeAndSaveBudgetFile(url: budgetURL, incoming: normalizedBudget) {
+        switch await vault.mergeAndSaveBudgetFile(url: budgetURL, incoming: normalizedBudget) {
             case .failure(let error):
                 return .failure(.saveFailed(underlying: error))
             case .success(let saved):

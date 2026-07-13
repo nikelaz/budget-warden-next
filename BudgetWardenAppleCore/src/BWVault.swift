@@ -308,6 +308,34 @@ public actor BWVault: Sendable {
         }.value
     }
 
+    public func mergeAndSaveBudgetFile(
+        url budgetURL: URL,
+        incoming budget: BWBudget
+    ) async -> Result<BWBudget, BWError> {
+        guard let url else {
+            return .failure(.vaultNotSet())
+        }
+
+        return await Task.detached(priority: .userInitiated) {
+            let didStartAccessing = url.startAccessingSecurityScopedResource()
+
+            defer {
+                if didStartAccessing {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+
+            guard BWFiles.isBudgetFile(budgetURL, in: url) else {
+                return .failure(.savingFile())
+            }
+
+            return BWFiles.mergeAndSaveBudgetFile(
+                url: budgetURL.standardizedFileURL,
+                incoming: budget
+            )
+        }.value
+    }
+
     /// Writes a CloudKit budget into the file cache used by the existing Apple UI.
     /// Existing files keep their URL so open views and file coordination remain valid.
     public func cacheCloudBudget(_ budget: BWBudget) async -> Result<BWBudget, BWError> {
