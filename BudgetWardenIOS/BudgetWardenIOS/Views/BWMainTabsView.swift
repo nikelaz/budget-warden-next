@@ -289,7 +289,7 @@ struct BWMainTabsView: View {
                 category.amountPlanned = draft.plannedAmount
                 category.categoryType = draft.categoryType
 
-                return await store.updateCategory(category, in: budgetID)
+                return store.updateCategory(category, in: budgetID)
         }
     }
 

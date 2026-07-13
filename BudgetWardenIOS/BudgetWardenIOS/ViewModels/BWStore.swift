@@ -120,6 +120,8 @@ final class BWStore {
     @ObservationIgnored private var isCloudSyncing = false
     @ObservationIgnored private var cloudUploadTask: Task<Void, Never>?
     @ObservationIgnored private var googleDriveUploadTask: Task<Void, Never>?
+    @ObservationIgnored private var categoryUpdatePersistenceTask: Task<Void, Never>?
+    @ObservationIgnored private var categoryUpdateGenerations: [UUID: Int] = [:]
     @ObservationIgnored private var googleDrivePollingTask: Task<Void, Never>?
     @ObservationIgnored private var isGoogleDriveSyncing = false
     @ObservationIgnored private var hasPendingAutoRefresh = false
@@ -557,19 +559,81 @@ final class BWStore {
         }
     }
 
-    func updateCategory(_ updatedCategory: BWCategory, in budgetID: UUID) async -> Bool {
-        return await withBudgetMutation {
-            guard let budget = budget(withID: budgetID) else {
+    func updateCategory(_ updatedCategory: BWCategory, in budgetID: UUID) -> Bool {
+        guard let budget = budget(withID: budgetID) else {
+            return false
+        }
+
+        switch BWBudgetService.prepareCategoryUpdate(in: budget, category: updatedCategory) {
+            case .failure(.validation):
                 return false
+            case .failure(let error):
+                errorMessage = error.localizedDescription
+                return false
+            case .success(let updatedBudget):
+                let location: BWVaultLocation = if isGoogleDriveBudget(budget) {
+                    .googleDrive
+                }
+                else if isICloudBudget(budget) {
+                    .iCloud
+                }
+                else {
+                    .local
+                }
+                let generation = categoryUpdateGenerations[budgetID, default: 0] + 1
+                categoryUpdateGenerations[budgetID] = generation
+
+                upsertBudget(updatedBudget, location: location)
+                scheduleCategoryUpdatePersistence(
+                    updatedBudget,
+                    categoryID: updatedCategory.id,
+                    location: location,
+                    generation: generation
+                )
+                return true
+        }
+    }
+
+    private func scheduleCategoryUpdatePersistence(
+        _ budget: BWBudget,
+        categoryID: UUID,
+        location: BWVaultLocation,
+        generation: Int
+    ) {
+        let previousPersistence = categoryUpdatePersistenceTask
+
+        categoryUpdatePersistenceTask = Task { [weak self] in
+            await previousPersistence?.value
+            guard let self else { return }
+
+            await self.withBudgetMutation {
+                let storageVault = switch location {
+                    case .iCloud: self.cloudVault
+                    case .googleDrive: self.googleDriveVault
+                    case .local: self.vault
+                }
+                let result = await BWBudgetService.saveBudget(
+                    budget,
+                    vault: storageVault,
+                    operation: .CategoryUpdate(categoryId: categoryID)
+                )
+
+                switch result {
+                    case .failure(let error):
+                        if self.categoryUpdateGenerations[budget.id] == generation {
+                            self.errorMessage = error.localizedDescription
+                        }
+                    case .success(let savedBudget):
+                        guard self.categoryUpdateGenerations[budget.id] == generation else {
+                            return
+                        }
+
+                        self.upsertBudget(savedBudget, location: location)
+                        self.scheduleCloudSave(savedBudget)
+                        self.scheduleGoogleDriveSave(savedBudget)
+                        await self.updateAutoRefreshSnapshot()
+                }
             }
-
-            let result = await BWBudgetService.updateCategory(
-                in: budget,
-                category: updatedCategory,
-                vault: storageVault(for: budget)
-            )
-
-            return await handleBudgetMutation(result)
         }
     }
 

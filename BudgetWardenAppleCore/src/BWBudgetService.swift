@@ -290,6 +290,22 @@ public enum BWBudgetService {
         category: BWCategory,
         vault: BWVault
     ) async -> Result<BWBudget, BWError> {
+        switch prepareCategoryUpdate(in: budget, category: category) {
+            case .failure(let error):
+                return .failure(error)
+            case .success(let budget):
+                return await saveBudget(
+                    budget,
+                    vault: vault,
+                    operation: .CategoryUpdate(categoryId: category.id)
+                )
+        }
+    }
+
+    public static func prepareCategoryUpdate(
+        in budget: BWBudget,
+        category: BWCategory
+    ) -> Result<BWBudget, BWError> {
         let trimmedTitle = category.title.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !trimmedTitle.isEmpty else {
@@ -321,7 +337,7 @@ public enum BWBudgetService {
             case .failure(let error):
                 return .failure(error)
             case .success(let budget):
-                return await saveBudget(budget, vault: vault, operation: .CategoryUpdate(categoryId: category.id))
+                return .success(budget)
         }
     }
 
