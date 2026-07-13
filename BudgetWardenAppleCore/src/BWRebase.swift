@@ -92,9 +92,9 @@ public enum BWRebase {
                     rebasedBudget.categories.append(updatedCategory)
                     return .success(rebasedBudget)
                 }
-                
+
                 var rebasedCategory = rebasedBudget.categories[categoryIndex!]
-                
+
                 // @TODO: More sophisticated/granular logic here
                 // The granularity here means that a hypothetical change could be overriden
                 // because if the conflict is within the category we update all fields with last one wins
@@ -103,7 +103,7 @@ public enum BWRebase {
                 rebasedCategory.amountAccumulated = updatedCategory.amountAccumulated
                 rebasedCategory.categoryType = updatedCategory.categoryType
                 rebasedCategory.ordinal = updatedCategory.ordinal
-                
+
                 rebasedBudget.categories[categoryIndex!] = rebasedCategory
 
                 return .success(rebasedBudget)

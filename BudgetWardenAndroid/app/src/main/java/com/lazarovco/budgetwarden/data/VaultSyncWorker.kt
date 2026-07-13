@@ -7,8 +7,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.lazarovco.budgetwarden.BudgetWardenApplication
-import com.lazarovco.budgetwarden.domain.BudgetRebase
-import com.lazarovco.budgetwarden.domain.BudgetRebaseOperation
+import com.lazarovco.budgetwarden.domain.BudgetCrdt
 import org.json.JSONObject
 import java.io.File
 
@@ -61,16 +60,16 @@ class VaultSyncEngine(private val context: Context) {
         try {
             drive.download(token, remote.id, remoteFile)
             val repository = BudgetRepository(context)
-            val inMemory = repository.decodeBudget(localFile.readText(), localFile.name)
-            val onDisk = repository.decodeBudget(remoteFile.readText(), localFile.name)
-            val operation = BudgetRebaseOperation.decode(cached.pendingOperation)
-            val rebased = BudgetRebase.rebase(inMemory, onDisk, operation)
-            val normalized = repository.normalizeActualAmounts(rebased).copy(revision = repository.nextRevision(rebased))
-            localFile.writeText(repository.encodeBudget(normalized))
+            BudgetFileLocks.withLock(localFile) {
+                val inMemory = repository.decodeBudget(localFile.readText(), localFile.name)
+                val onDisk = repository.decodeBudget(remoteFile.readText(), localFile.name)
+                val normalized = repository.normalizeActualAmounts(BudgetCrdt.merge(inMemory, onDisk))
+                localFile.writeText(repository.encodeBudget(normalized))
+            }
             dao.upsert(listOf(cached.copy(
                 modifiedTime = localFile.lastModified(),
                 driveVersion = remote.version,
-                pendingOperation = cached.pendingOperation,
+                pendingOperation = null,
             )))
         } finally {
             remoteFile.delete()
@@ -90,7 +89,7 @@ class VaultSyncEngine(private val context: Context) {
             if (dao.byBudgetId(budgetId) == null) {
                 dao.upsert(listOf(VaultFileEntity(
                     budgetId, null, file.name, file.absolutePath, preferences.accountEmail, false,
-                    file.lastModified(), null, "PENDING_UPLOAD", BudgetRebaseOperation.Other.encode(),
+                    file.lastModified(), null, "PENDING_UPLOAD", null,
                 )))
             }
         }

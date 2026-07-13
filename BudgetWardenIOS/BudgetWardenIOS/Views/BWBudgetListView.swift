@@ -9,6 +9,7 @@
  */
 
 import BudgetWardenAppleCore
+import CloudKit
 import SwiftUI
 
 struct BWBudgetListView: View {
@@ -18,6 +19,9 @@ struct BWBudgetListView: View {
     let navigationTransitionNamespace: Namespace.ID
 
     @State private var budgetsPendingDeletion: [BWBudget] = []
+    @State private var preparedShare: BWPreparedCloudShare?
+    @State private var sharingError: String?
+    @State private var isPreparingShare = false
 
     var body: some View {
         List {
@@ -25,21 +29,20 @@ struct BWBudgetListView: View {
                 ProgressView()
             }
 
-            ForEach(store.budgets) { budget in
-                NavigationLink(value: budget.id) {
-                    Text(budget.title)
-                        .font(.headline)
-                        .matchedTransitionSource(id: budget.id, in: navigationTransitionNamespace)
-                }
-                .accessibilityIdentifier("budgetRow_\(budget.title)")
-                .contextMenu {
-                    Button("Delete", systemImage: "trash", role: .destructive) {
-                        confirmDeletion(of: [budget])
-                    }
-                }
+            if !store.iCloudBudgets.isEmpty {
+                budgetSection(
+                    title: "iCloud",
+                    budgets: store.iCloudBudgets,
+                    canShare: true
+                )
             }
-            .onDelete { offsets in
-                deleteBudgets(at: offsets)
+
+            if !store.localBudgets.isEmpty {
+                budgetSection(
+                    title: "Local",
+                    budgets: store.localBudgets,
+                    canShare: false
+                )
             }
         }
         .alert(
@@ -66,8 +69,18 @@ struct BWBudgetListView: View {
                 Text(deleteConfirmationMessage)
             }
         )
+        .alert("Could Not Share Budget", isPresented: sharingErrorIsPresented) {
+        } message: {
+            Text(sharingError ?? "")
+        }
+        .sheet(item: $preparedShare) { prepared in
+            BWCloudSharingView(share: prepared.share)
+        }
         .overlay {
-            if !store.isLoadingBudgets && store.budgets.isEmpty {
+            if isPreparingShare {
+                BWPreparingCloudShareView()
+            }
+            else if !store.isLoadingBudgets && store.budgets.isEmpty {
                 ContentUnavailableView(
                     "No Budgets",
                     systemImage: "folder",
@@ -84,7 +97,7 @@ struct BWBudgetListView: View {
             }
 
             ToolbarItem(placement: .topBarLeading) {
-                Button("Vault", systemImage: "folder.badge.gearshape", action: configureVault)
+                Button("Storage", systemImage: "folder.badge.gearshape", action: configureVault)
                     .accessibilityIdentifier("vaultButton")
             }
         }
@@ -96,6 +109,49 @@ struct BWBudgetListView: View {
         }
         .onChange(of: budgetsPendingDeletion.map(\.id)) { _, _ in
             updateAutoRefreshDeleteBlocker()
+        }
+    }
+
+    @ViewBuilder
+    private func budgetSection(
+        title: String,
+        budgets: [BWBudget],
+        canShare: Bool
+    ) -> some View {
+        Section(title) {
+            ForEach(budgets) { budget in
+                NavigationLink(value: budget.id) {
+                    HStack {
+                        Text(budget.title)
+                            .font(.headline)
+                            .matchedTransitionSource(id: budget.id, in: navigationTransitionNamespace)
+
+                        if canShare && store.sharedBudgetIDs.contains(budget.id) {
+                            Text("Shared")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .accessibilityIdentifier("budgetRow_\(budget.title)")
+                .contextMenu {
+                    if canShare {
+                        Button(
+                            store.sharedBudgetIDs.contains(budget.id) ? "Manage Sharing" : "Share with iCloud",
+                            systemImage: "person.crop.circle.badge.plus"
+                        ) {
+                            prepareShare(for: budget)
+                        }
+                    }
+
+                    Button("Delete", systemImage: "trash", role: .destructive) {
+                        confirmDeletion(of: [budget])
+                    }
+                }
+            }
+            .onDelete { offsets in
+                deleteBudgets(at: offsets, in: budgets)
+            }
         }
     }
 
@@ -122,9 +178,9 @@ struct BWBudgetListView: View {
         return "\(budgetsPendingDeletion.count) budgets will be removed from your vault."
     }
 
-    private func deleteBudgets(at offsets: IndexSet) {
+    private func deleteBudgets(at offsets: IndexSet, in source: [BWBudget]) {
         let budgets = offsets.compactMap { index in
-            store.budgets.indices.contains(index) ? store.budgets[index] : nil
+            source.indices.contains(index) ? source[index] : nil
         }
 
         Task {
@@ -147,5 +203,41 @@ struct BWBudgetListView: View {
                 await store.deleteBudget(budget)
             }
         }
+    }
+
+    private func prepareShare(for budget: BWBudget) {
+        guard !isPreparingShare else {
+            return
+        }
+
+        guard store.isICloudEnabled else {
+            sharingError = "Enable iCloud in Storage settings before sharing a budget."
+            return
+        }
+
+        isPreparingShare = true
+
+        Task {
+            let result = await store.cloudRepository.prepareShare(for: budget)
+            isPreparingShare = false
+
+            switch result {
+                case .failure(let error):
+                    sharingError = error.localizedDescription
+                case .success(let share):
+                    preparedShare = BWPreparedCloudShare(share: share)
+            }
+        }
+    }
+
+    private var sharingErrorIsPresented: Binding<Bool> {
+        Binding(
+            get: { sharingError != nil },
+            set: { isPresented in
+                if !isPresented {
+                    sharingError = nil
+                }
+            }
+        )
     }
 }

@@ -6,55 +6,59 @@ struct ConfigureVaultView: View {
     @EnvironmentObject var windowStore: BWWindowStore
 
     @State private var vaultUrl: URL? = nil
-    @State private var selectedLocation: BWVaultLocation = .iCloud
+    @State private var isEnablingICloud = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Choose Budget Vault")
+                Text("Budget Storage")
                     .font(.title2)
                     .fontWeight(.semibold)
                 
-                Text("Budget Warden stores budgets as files in the vault folder.")
+                Text("Local files are always available. Enable iCloud to sync additional budgets across your Apple devices.")
                     .foregroundStyle(.secondary)
             }
 
-            Picker("Location", selection: $selectedLocation) {
-                ForEach(BWVaultLocation.allCases) { location in
-                    Text(location.title).tag(location)
-                }
-            }
-            .pickerStyle(.radioGroup)
-            .onChange(of: selectedLocation) { _, newLocation in
-                Task(priority: .userInitiated) {
-                    if let error = await store.setVaultLocation(newLocation) {
-                        windowStore.setError(error)
-                    }
+            VStack(alignment: .leading, spacing: 10) {
+                Text("iCloud")
+                    .font(.headline)
 
-                    vaultUrl = await store.vault.currentURL()
-                    selectedLocation = await store.vault.currentLocation()
-                }
-            }
+                Text(store.isICloudEnabled ? "Enabled" : "Not enabled")
+                    .foregroundStyle(.secondary)
 
-            if selectedLocation == .local {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Location")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                if !store.isICloudEnabled {
+                    Button(isEnablingICloud ? "Enabling…" : "Enable iCloud") {
+                        isEnablingICloud = true
 
-                    Text(vaultUrl != nil ? vaultUrl!.path : "Loading Vault URL...")
-                        .foregroundStyle(vaultUrl != nil ? .primary : .secondary)
-                        .textSelection(.enabled)
-
-                    Button("Choose Local Folder") {
-                        Task(priority: .userInitiated) {
-                            if let error = await store.selectVaultFolder() {
+                        Task {
+                            if let error = await store.enableICloud() {
                                 windowStore.setError(error)
                             }
 
-                            vaultUrl = await store.vault.currentURL()
-                            selectedLocation = await store.vault.currentLocation()
+                            isEnablingICloud = false
                         }
+                    }
+                    .disabled(isEnablingICloud)
+                }
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Local Folder")
+                    .font(.headline)
+
+                Text(vaultUrl != nil ? vaultUrl!.path : "Loading Local Folder…")
+                    .foregroundStyle(vaultUrl != nil ? .primary : .secondary)
+                    .textSelection(.enabled)
+
+                Button("Choose Local Folder") {
+                    Task(priority: .userInitiated) {
+                        if let error = await store.selectVaultFolder() {
+                            windowStore.setError(error)
+                        }
+
+                        vaultUrl = await store.vault.currentURL()
                     }
                 }
             }
@@ -71,7 +75,6 @@ struct ConfigureVaultView: View {
         }
         .padding()
         .task {
-            selectedLocation = await store.vault.currentLocation()
             vaultUrl = await store.vault.currentURL()
         }
     }

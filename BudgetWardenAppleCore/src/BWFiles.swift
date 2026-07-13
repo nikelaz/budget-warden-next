@@ -124,6 +124,80 @@ public enum BWFiles {
             return .failure(.readingFile(underlying: coordinationError))
         }
 
+        if case .success(var budget) = result, budget.requiresCRDTWriteback {
+            switch mergeAndSaveBudgetFile(url: url, incoming: budget) {
+                case .failure(let error):
+                    return .failure(error)
+                case .success(let saved):
+                    budget = saved
+                    result = .success(budget)
+            }
+        }
+
+        return result
+    }
+
+    public static func mergeAndSaveBudgetFile(
+        url: URL,
+        incoming: BWBudget
+    ) -> Result<BWBudget, BWError> {
+        guard isBudgetFile(url) else {
+            return .failure(.savingFile())
+        }
+
+        let didStartAccessing = url.startAccessingSecurityScopedResource()
+        defer {
+            if didStartAccessing { url.stopAccessingSecurityScopedResource() }
+        }
+
+        let coordinator = NSFileCoordinator(filePresenter: nil)
+        var coordinationError: NSError?
+        var result: Result<BWBudget, BWError> = .failure(.savingFile())
+
+        coordinator.coordinate(
+            writingItemAt: url,
+            options: .forReplacing,
+            error: &coordinationError
+        ) { coordinatedURL in
+            do {
+                let existingJSON = try String(contentsOf: coordinatedURL, encoding: .utf8)
+                let existing: BWBudget
+                switch BWCodec.decodeBudget(json: existingJSON, url: url) {
+                    case .failure(let error):
+                        result = .failure(error)
+                        return
+                    case .success(let budget):
+                        existing = budget
+                }
+
+                let merged: BWBudget
+                switch BWCRDT.merge(incoming, existing) {
+                    case .failure(let error):
+                        result = .failure(error)
+                        return
+                    case .success(let budget):
+                        merged = budget
+                }
+
+                switch BWCodec.encodeBudget(budget: merged) {
+                    case .failure(let error):
+                        result = .failure(error)
+                    case .success(let json):
+                        try json.write(to: coordinatedURL, atomically: true, encoding: .utf8)
+                        var saved = merged
+                        saved.url = url
+                        saved.requiresCRDTWriteback = false
+                        result = .success(saved)
+                }
+            }
+            catch {
+                result = .failure(.savingFile(underlying: error))
+            }
+        }
+
+        if let coordinationError {
+            return .failure(.savingFile(underlying: coordinationError))
+        }
         return result
     }
 }

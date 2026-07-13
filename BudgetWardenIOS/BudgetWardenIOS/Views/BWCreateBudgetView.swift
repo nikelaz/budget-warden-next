@@ -18,10 +18,12 @@ struct BWCreateBudgetView: View {
 
     @State private var title: String
     @State private var selectedTemplate: BWTemplateSelection = .basic
+    @State private var selectedLocation: BWVaultLocation
 
     init(store: BWStore) {
         self.store = store
         _title = State(initialValue: Self.currentMonthTitle())
+        _selectedLocation = State(initialValue: store.preferredBudgetLocation)
     }
 
     private var isValid: Bool {
@@ -34,6 +36,15 @@ struct BWCreateBudgetView: View {
                 Section("Budget") {
                     TextField("Title", text: $title)
                         .accessibilityIdentifier("createBudgetTitleTextField")
+                }
+
+                Section("Storage") {
+                    Picker("Storage", selection: $selectedLocation) {
+                        Text("iCloud").tag(BWVaultLocation.iCloud)
+                        Text("Local File").tag(BWVaultLocation.local)
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("createBudgetStoragePicker")
                 }
 
                 Section("Start From") {
@@ -70,7 +81,11 @@ struct BWCreateBudgetView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Create") {
                         Task {
-                            if await store.createBudget(title: title, template: selectedTemplate) {
+                            if await store.createBudget(
+                                title: title,
+                                template: selectedTemplate,
+                                location: selectedLocation
+                            ) {
                                 dismiss()
                             }
                         }

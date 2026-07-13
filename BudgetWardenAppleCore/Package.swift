@@ -18,6 +18,11 @@ let package = Package(
         .target(
             name: "BudgetWardenAppleCore",
             path: "src"
+        ),
+        .testTarget(
+            name: "BudgetWardenAppleCoreTests",
+            dependencies: ["BudgetWardenAppleCore"],
+            path: "Tests"
         )
     ],
     swiftLanguageModes: [.v6]

@@ -22,7 +22,7 @@ struct BWConfigureVaultView: View {
             Form {
                 BWVaultSettingsSections(store: store)
             }
-            .navigationTitle("Budget Vault")
+            .navigationTitle("Budget Storage")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -38,48 +38,46 @@ struct BWConfigureVaultView: View {
 struct BWVaultSettingsSections: View {
     let store: BWStore
 
-    @State private var selectedLocation: BWVaultLocation = .iCloud
     @State private var isFolderImporterPresented = false
+    @State private var isEnablingICloud = false
 
     var body: some View {
         Group {
-            Section("Vault Location") {
-                Picker("Storage", selection: $selectedLocation) {
-                    ForEach(BWVaultLocation.allCases) { location in
-                        Text(location.title).tag(location)
+            Section("iCloud") {
+                LabeledContent("Sync", value: store.isICloudEnabled ? "Enabled" : "Not Enabled")
+
+                if !store.isICloudEnabled {
+                    Button(isEnablingICloud ? "Enabling…" : "Enable iCloud", systemImage: "icloud") {
+                        isEnablingICloud = true
+
+                        Task {
+                            _ = await store.enableICloud()
+                            isEnablingICloud = false
+                        }
                     }
-                }
-                .pickerStyle(.segmented)
-                .onChange(of: selectedLocation) { _, newLocation in
-                    Task {
-                        await store.setVaultLocation(newLocation)
-                        selectedLocation = store.vaultLocation
-                    }
+                    .disabled(isEnablingICloud)
                 }
             }
 
-            if selectedLocation == .local {
-                Section("Vault Folder") {
-                    LabeledContent("Current") {
-                        Text(store.vaultURL?.lastPathComponent ?? "Unavailable")
-                            .foregroundStyle(store.vaultURL == nil ? .secondary : .primary)
-                    }
+            Section("Local Folder") {
+                LabeledContent("Current") {
+                    Text(store.vaultURL?.lastPathComponent ?? "Unavailable")
+                        .foregroundStyle(store.vaultURL == nil ? .secondary : .primary)
+                }
 
-                    if let vaultURL = store.vaultURL {
-                        Text(vaultURL.path)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
+                if let vaultURL = store.vaultURL {
+                    Text(vaultURL.path)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
 
-                    Button("Choose Local Folder", systemImage: "folder") {
-                        isFolderImporterPresented = true
-                    }
+                Button("Choose Local Folder", systemImage: "folder") {
+                    isFolderImporterPresented = true
                 }
             }
         }
         .task {
             await store.refreshVaultState()
-            selectedLocation = store.vaultLocation
         }
         .fileImporter(
             isPresented: $isFolderImporterPresented,
@@ -96,7 +94,6 @@ struct BWVaultSettingsSections: View {
                         }
 
                         await store.setLocalVaultFolder(url)
-                        selectedLocation = store.vaultLocation
                 }
             }
         }

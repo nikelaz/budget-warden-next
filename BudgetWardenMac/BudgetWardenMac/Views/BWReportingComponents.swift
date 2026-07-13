@@ -182,7 +182,10 @@ struct BWIncomeVsAllocationChart: View {
                         AxisTick()
 
                         if let amount = value.as(Double.self) {
-                            AxisValueLabel(formattedChartAmount(amount))
+                            AxisValueLabel(
+                                formattedChartAmount(amount),
+                                anchor: .center
+                            )
                         }
                     }
                 }

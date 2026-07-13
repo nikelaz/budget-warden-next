@@ -9,6 +9,7 @@
  */
 
 import BudgetWardenAppleCore
+import CloudKit
 import SwiftUI
 
 struct BWSettingsView: View {
@@ -17,6 +18,9 @@ struct BWSettingsView: View {
 
     @State private var title: String
     @State private var isCurrencyPickerPresented = false
+    @State private var preparedShare: BWPreparedCloudShare?
+    @State private var sharingError: String?
+    @State private var isPreparingShare = false
     @FocusState private var focusedField: Field?
 
     init(store: BWStore, budget: BWBudget) {
@@ -58,10 +62,35 @@ struct BWSettingsView: View {
                 .buttonStyle(.plain)
             }
 
+            if store.isICloudBudget(budget) {
+                Section("Collaboration") {
+                    Button {
+                        prepareShare()
+                    } label: {
+                        Label(
+                            store.sharedBudgetIDs.contains(budget.id) ? "Manage Sharing" : "Share with iCloud",
+                            systemImage: "person.crop.circle.badge.plus"
+                        )
+                    }
+                }
+            }
+
             BWVaultSettingsSections(store: store)
         }
         .sheet(isPresented: $isCurrencyPickerPresented) {
             CurrencySelectionView(selectedCurrency: $store.selectedCurrency)
+        }
+        .sheet(item: $preparedShare) { prepared in
+            BWCloudSharingView(share: prepared.share)
+        }
+        .alert("Could Not Share Budget", isPresented: sharingErrorIsPresented) {
+        } message: {
+            Text(sharingError ?? "")
+        }
+        .overlay {
+            if isPreparingShare {
+                BWPreparingCloudShareView()
+            }
         }
         .onChange(of: budget.id) {
             title = budget.title
@@ -121,6 +150,42 @@ struct BWSettingsView: View {
 
     private func title(for currency: BWCurrency) -> String {
         "\(currency.rawValue) - \(currency.displayName)"
+    }
+
+    private func prepareShare() {
+        guard !isPreparingShare else {
+            return
+        }
+
+        guard store.isICloudEnabled else {
+            sharingError = "Enable iCloud in Storage settings before sharing this budget."
+            return
+        }
+
+        isPreparingShare = true
+
+        Task {
+            let result = await store.cloudRepository.prepareShare(for: budget)
+            isPreparingShare = false
+
+            switch result {
+                case .failure(let error):
+                    sharingError = error.localizedDescription
+                case .success(let share):
+                    preparedShare = BWPreparedCloudShare(share: share)
+            }
+        }
+    }
+
+    private var sharingErrorIsPresented: Binding<Bool> {
+        Binding(
+            get: { sharingError != nil },
+            set: { isPresented in
+                if !isPresented {
+                    sharingError = nil
+                }
+            }
+        )
     }
 
     private enum Field {

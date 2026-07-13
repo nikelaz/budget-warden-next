@@ -143,24 +143,22 @@ public enum BWBudgetService {
         budgetsInVault: [BWBudget],
         vault: BWVault
     ) async -> Result<BWBudget, BWError> {
-        let budget: BWBudget
+        let draftBudget: BWBudget
 
         switch template {
             case .basic:
-                budget = BWTemplate.basicBudget(title: title)
+                draftBudget = BWTemplate.basicBudget(title: title)
             case .blank:
-                budget = BWBudget(title: title)
+                draftBudget = BWBudget(title: title)
             case .previous(let url):
                 guard let previousBudget = budgetsInVault.first(where: { $0.url == url }) else {
                     return .failure(.findPreviousBudget())
                 }
 
-                budget = previousBudget.cloneAsTemplate(newTitle: title)
+                draftBudget = previousBudget.cloneAsTemplate(newTitle: title)
         }
 
-        var budgetToSave = budget
-        budgetToSave.revision = 1
-        budgetToSave.revisionId = UUID()
+        let budgetToSave = await BWCRDT.prepareNew(draftBudget)
 
         let json: String
 
@@ -206,106 +204,38 @@ public enum BWBudgetService {
     public static func saveBudget(
         _ budget: BWBudget,
         vault: BWVault,
-        operation: BWRebaseOperation
+        operation _: BWRebaseOperation
     ) async -> Result<BWBudget, BWError> {
-        for attempt in 0..<2 {
-            guard let budgetURL = budget.url else {
-                return .failure(.saveFailed())
-            }
-
-            var normalizedBudget: BWBudget
-
-            switch normalizeActualAmounts(in: budget) {
-                case .failure(let error):
-                    return .failure(error)
-                case .success(let budget):
-                    normalizedBudget = budget
-            }
-            
-            switch BWRebase.rebase(budgetInMemory: normalizedBudget, operation: operation) {
-                case .failure(let error):
-                    print(error)
-                    return .failure(error)
-                case .success(let budget):
-                    switch normalizeActualAmounts(in: budget) {
-                        case .failure(let error):
-                            return .failure(error)
-                        case .success(let budget):
-                            normalizedBudget = budget
-                    }
-            }
-            
-            let rebasedRevision = normalizedBudget.revision
-            let rebasedRevisionId = normalizedBudget.revisionId
-            let incrementedRevision = (normalizedBudget.revision ?? 0).addingReportingOverflow(1)
-
-            guard !incrementedRevision.overflow else {
-                return .failure(.saveFailed())
-            }
-
-            normalizedBudget.revision = incrementedRevision.partialValue
-            normalizedBudget.revisionId = UUID()
-
-            let json: String
-
-            switch BWCodec.encodeBudget(budget: normalizedBudget) {
-                case .failure(let error):
-                    return .failure(.saveFailed(underlying: error))
-                case .success(let result):
-                    json = result
-            }
-
-            guard BWFiles.isBudgetFile(budgetURL) else {
-                return .failure(.saveFailed())
-            }
-
-            switch BWFiles.readBudgetFile(url: budgetURL) {
-                case .failure(let error):
-                    return .failure(.saveFailed(underlying: error))
-                case .success(let budgetOnDisk):
-                    var isSameRevision: Bool = false
-                    
-                    let revisionIdOnDisk: UUID? = budgetOnDisk.revisionId
-                    let revisionOnDisk: Int64? = budgetOnDisk.revision
-                    
-                    if revisionIdOnDisk == nil && revisionOnDisk == nil {
-                        return .failure(.rebaseFailed())
-                    }
-                    
-                    if revisionIdOnDisk != nil {
-                        isSameRevision = revisionIdOnDisk! == rebasedRevisionId!
-                    }
-                    else if revisionOnDisk != nil {
-                        isSameRevision = revisionOnDisk! == rebasedRevision!
-                    }
-
-                    if !isSameRevision {
-                        if attempt == 0 {
-                            continue
-                        }
-
-                        return .failure(.rebaseFailed())
-                    }
-            }
-
-            let saveResult: Result<Void, BWError>
-
-            if await vault.containsBudgetFile(url: budgetURL) {
-                saveResult = await vault.saveBudgetFile(url: budgetURL, contents: json)
-            }
-            else {
-                saveResult = BWFiles.saveFile(url: budgetURL, contents: json)
-            }
-
-            switch saveResult {
-                case .failure(let error):
-                    return .failure(.saveFailed(underlying: error))
-                case .success:
-                    return .success(normalizedBudget)
-            }
+        guard let budgetURL = budget.url else {
+            return .failure(.saveFailed())
         }
 
-        return .failure(.rebaseFailed())
+        let originalBudget = BWCRDT.materialize(budget)
+        var normalizedBudget: BWBudget
+
+        switch normalizeActualAmounts(in: budget) {
+            case .failure(let error):
+                return .failure(error)
+            case .success(let budget):
+                normalizedBudget = budget
+        }
+
+        normalizedBudget = await BWCRDT.applyingChanges(
+            from: originalBudget,
+            to: normalizedBudget
+        )
+        normalizedBudget.url = budgetURL
+
+        guard BWFiles.isBudgetFile(budgetURL) else {
+            return .failure(.saveFailed())
+        }
+
+        switch await vault.mergeAndSaveBudgetFile(url: budgetURL, incoming: normalizedBudget) {
+            case .failure(let error):
+                return .failure(.saveFailed(underlying: error))
+            case .success(let saved):
+                return .success(saved)
+        }
     }
 
     public static func createCategory(

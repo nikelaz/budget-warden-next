@@ -18,9 +18,11 @@ nonisolated public struct BWBudget: Codable, Sendable, Identifiable {
     public var schemaVersion: Int?
     public var title: String
     public var categories: [BWCategory]
+    public var crdt: BWCRDTState?
 
     // Runtime-only
     public var url: URL?
+    public var requiresCRDTWriteback: Bool = false
 
     // The list below is of the keys that should be encoded/decoded
     // Basically makes "url" a runtime-only key - not JSON encoded 
@@ -31,6 +33,7 @@ nonisolated public struct BWBudget: Codable, Sendable, Identifiable {
         case schemaVersion
         case title
         case categories
+        case crdt
     }
 
     public init(
@@ -48,6 +51,7 @@ nonisolated public struct BWBudget: Codable, Sendable, Identifiable {
         self.schemaVersion = schemaVersion
         self.title = title
         self.categories = categories
+        self.crdt = nil
         self.url = url
     }
 

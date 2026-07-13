@@ -5,8 +5,10 @@ import android.net.Uri
 import com.lazarovco.budgetwarden.domain.Budget
 import com.lazarovco.budgetwarden.domain.BudgetDates
 import com.lazarovco.budgetwarden.domain.BudgetTemplates
-import com.lazarovco.budgetwarden.domain.BudgetRebase
 import com.lazarovco.budgetwarden.domain.BudgetRebaseOperation
+import com.lazarovco.budgetwarden.domain.BudgetCrdt
+import com.lazarovco.budgetwarden.domain.BudgetCrdtClock
+import com.lazarovco.budgetwarden.domain.BudgetCrdtJson
 import com.lazarovco.budgetwarden.domain.Category
 import com.lazarovco.budgetwarden.domain.CategoryType
 import com.lazarovco.budgetwarden.domain.TemplateSelection
@@ -14,6 +16,7 @@ import com.lazarovco.budgetwarden.domain.Transaction
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.util.UUID
 import com.lazarovco.budgetwarden.BudgetWardenApplication
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +28,7 @@ class BudgetRepository(private val context: Context) {
     private val writeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val localVaultDirectory = File(context.filesDir, "Budget Warden Vaults").apply { mkdirs() }
     private val driveCacheDirectory = File(context.filesDir, "Google Drive Vault Cache").apply { mkdirs() }
+    private val crdtClock = BudgetCrdtClock(context)
     data class StoredBudget(val budget: Budget, val storage: VaultType)
 
     private fun directoryFor(storage: VaultType): File = when (storage) {
@@ -39,7 +43,17 @@ class BudgetRepository(private val context: Context) {
         directoryFor(storage)
             .listFiles { file -> file.isFile && file.extension.equals("budget", ignoreCase = true) }
             .orEmpty()
-            .mapNotNull { file -> runCatching { decodeBudget(file.readText(), file.name) }.getOrNull() }
+            .mapNotNull { file ->
+                runCatching {
+                    BudgetFileLocks.withLock(file) {
+                        val json = file.readText()
+                        val wasLegacy = JSONObject(json).optInt("schemaVersion", 1) < BudgetCrdt.SCHEMA_VERSION
+                        val budget = decodeBudget(json, file.name)
+                        if (wasLegacy) atomicWrite(file, encodeBudget(budget))
+                        budget
+                    }
+                }.getOrNull()
+            }
             .sortedBy { it.title.lowercase() }
 
     fun loadStoredBudgets(): List<StoredBudget> =
@@ -55,22 +69,25 @@ class BudgetRepository(private val context: Context) {
             TemplateSelection.PREVIOUS -> previousBudget?.cloneAsTemplate(trimmedTitle) ?: BudgetTemplates.basicBudget(trimmedTitle)
         }
 
-        return saveNewBudget(budget, storage)
+        return saveNewBudget(BudgetCrdt.prepareNew(budget, crdtClock), storage)
     }
 
-    fun saveBudget(budget: Budget, storage: VaultType, operation: BudgetRebaseOperation): Budget {
+    fun saveBudget(budget: Budget, storage: VaultType, _operation: BudgetRebaseOperation): Budget {
         val file = budget.fileName?.let { resolveBudgetFile(budget, storage) }
             ?: File(directoryFor(storage), uniqueFileName(budget.title, storage))
         val fileName = file.name
-        val normalizedInMemory = normalizeActualAmounts(budget)
-        check(file.exists()) { "Rebase failed: budget file does not exist." }
-        val onDisk = decodeBudget(file.readText(), fileName)
-        val rebased = BudgetRebase.rebase(normalizedInMemory, onDisk, operation)
-        val normalized = normalizeActualAmounts(rebased).copy(revision = nextRevision(rebased))
-        file.writeText(encodeBudget(normalized))
-        val saved = normalized.copy(fileName = fileName)
-        cacheForUpload(saved, file, storage, operation)
-        return saved
+        return BudgetFileLocks.withLock(file) {
+            val original = BudgetCrdt.materialize(budget)
+            val normalizedInMemory = normalizeActualAmounts(budget)
+            check(file.exists()) { "Merge failed: budget file does not exist." }
+            val changed = BudgetCrdt.applyChanges(original, normalizedInMemory, crdtClock)
+            val onDisk = decodeBudget(file.readText(), fileName)
+            val normalized = normalizeActualAmounts(BudgetCrdt.merge(changed, onDisk))
+            atomicWrite(file, encodeBudget(normalized))
+            val saved = normalized.copy(fileName = fileName)
+            cacheForUpload(saved, file, storage)
+            saved
+        }
     }
 
     fun deleteBudget(budget: Budget, storage: VaultType) {
@@ -111,20 +128,20 @@ class BudgetRepository(private val context: Context) {
     private fun saveNewBudget(budget: Budget, storage: VaultType): Budget {
         val normalized = normalizeActualAmounts(budget)
         val fileName = uniqueFileName(normalized.title, storage)
-        File(directoryFor(storage), fileName).writeText(encodeBudget(normalized))
+        atomicWrite(File(directoryFor(storage), fileName), encodeBudget(normalized))
         val saved = normalized.copy(fileName = fileName)
-        cacheForUpload(saved, File(directoryFor(storage), fileName), storage, BudgetRebaseOperation.BudgetCreate)
+        cacheForUpload(saved, File(directoryFor(storage), fileName), storage)
         return saved
     }
 
-    private fun cacheForUpload(budget: Budget, file: File, storage: VaultType, operation: BudgetRebaseOperation) {
+    private fun cacheForUpload(budget: Budget, file: File, storage: VaultType) {
         if (storage != VaultType.GOOGLE_DRIVE) return
         writeScope.launch {
             val dao = application.vaultDatabase.vaultFiles()
             val existing = dao.byBudgetId(budget.id)
             dao.upsert(listOf(VaultFileEntity(
                 budget.id, existing?.driveFileId, file.name, file.absolutePath, existing?.ownerEmail, false,
-                file.lastModified(), existing?.driveVersion, "PENDING_UPLOAD", operation.encode(),
+                file.lastModified(), existing?.driveVersion, "PENDING_UPLOAD", null,
             )))
             VaultSyncWorker.enqueue(context)
         }
@@ -152,10 +169,6 @@ class BudgetRepository(private val context: Context) {
             }
             ?: expected
     }
-
-    internal fun nextRevision(budget: Budget): Long =
-        if (budget.revision == Long.MAX_VALUE) 1L else budget.revision + 1L
-
     internal fun normalizeActualAmounts(budget: Budget): Budget =
         budget.copy(
             categories = budget.categories.map { category ->
@@ -192,19 +205,27 @@ class BudgetRepository(private val context: Context) {
                 }
             })
 
+        budget.crdt?.let { root.put("crdt", BudgetCrdtJson.encode(it)) }
+
         return root.toString(2)
     }
 
     internal fun decodeBudget(json: String, fileName: String?): Budget {
         val root = JSONObject(json)
-        return Budget(
-            id = root.optString("id").ifBlank { java.util.UUID.randomUUID().toString() },
+        val decoded = Budget(
+            id = root.optString("id").ifBlank { java.util.UUID.randomUUID().toString() }.lowercase(),
             revision = root.optLong("revision", 1L),
             schemaVersion = root.optInt("schemaVersion", 1),
             title = root.optString("title", "Untitled Budget"),
             categories = root.optJSONArray("categories").toCategories(),
             fileName = fileName,
+            crdt = root.optJSONObject("crdt")?.let(BudgetCrdtJson::decode),
         )
+        return when {
+            decoded.schemaVersion < BudgetCrdt.SCHEMA_VERSION -> BudgetCrdt.migrateLegacy(decoded)
+            decoded.schemaVersion == BudgetCrdt.SCHEMA_VERSION && decoded.crdt != null -> BudgetCrdt.materialize(decoded)
+            else -> error("Unsupported or invalid budget schema ${decoded.schemaVersion}.")
+        }
     }
 
     private fun JSONArray?.toCategories(): List<Category> {
@@ -212,7 +233,7 @@ class BudgetRepository(private val context: Context) {
         return List(length()) { index ->
             val item = getJSONObject(index)
             Category(
-                id = item.optString("id").ifBlank { java.util.UUID.randomUUID().toString() },
+                id = item.optString("id").ifBlank { java.util.UUID.randomUUID().toString() }.lowercase(),
                 ordinal = item.optInt("ordinal", index),
                 title = item.optString("title", "Untitled Category"),
                 amountPlanned = item.optLong("amountPlanned", 0L),
@@ -229,12 +250,19 @@ class BudgetRepository(private val context: Context) {
         return List(length()) { index ->
             val item = getJSONObject(index)
             Transaction(
-                id = item.optString("id").ifBlank { java.util.UUID.randomUUID().toString() },
+                id = item.optString("id").ifBlank { java.util.UUID.randomUUID().toString() }.lowercase(),
                 title = item.optString("title", "Untitled Transaction"),
                 description = item.optString("description", ""),
                 date = BudgetDates.decode(item.optString("date")),
                 amount = item.optLong("amount", 0L),
             )
         }
+    }
+
+    private fun atomicWrite(file: File, contents: String) {
+        file.parentFile?.mkdirs()
+        val temporary = File(file.parentFile, ".${file.name}.${UUID.randomUUID()}.tmp")
+        temporary.writeText(contents)
+        check(temporary.renameTo(file)) { "Could not atomically replace ${file.name}." }
     }
 }

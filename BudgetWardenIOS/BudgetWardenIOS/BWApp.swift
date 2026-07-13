@@ -9,9 +9,12 @@
  */
 
 import SwiftUI
+import UIKit
 
 @main
 struct BWApp: App {
+    @UIApplicationDelegateAdaptor(BWAppDelegate.self) private var appDelegate
+
     var body: some Scene {
         WindowGroup {
             BWRootView()

@@ -9,6 +9,7 @@
  */
 
 import BudgetWardenAppleCore
+import CloudKit
 import SwiftUI
 
 struct BWRootView: View {
@@ -31,6 +32,11 @@ struct BWRootView: View {
         }
         .task {
             await store.loadBudgets()
+
+            if let recordID = BWPendingCloudShare.recordID {
+                await openAcceptedCloudShare(recordID: recordID)
+            }
+
             openInitialBudget()
             updateAutoRefreshActivity(for: scenePhase)
         }
@@ -57,6 +63,15 @@ struct BWRootView: View {
         .onOpenURL { url in
             Task {
                 await store.openBudget(at: url)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .budgetWardenAcceptedCloudShare)) { notification in
+            guard let recordID = notification.object as? CKRecord.ID else {
+                return
+            }
+
+            Task {
+                await openAcceptedCloudShare(recordID: recordID)
             }
         }
         .sheet(item: $activeSheet) { sheet in
@@ -103,6 +118,14 @@ struct BWRootView: View {
     private func updateAutoRefreshActivity(for phase: ScenePhase) {
         let isActive = phase == .active
         store.setAutoRefreshActive(isActive)
+    }
+
+    private func openAcceptedCloudShare(recordID: CKRecord.ID) async {
+        guard await store.openAcceptedCloudShare(recordID: recordID) else {
+            return
+        }
+
+        BWPendingCloudShare.clear(recordID: recordID)
     }
 
     private func showCreateBudget() {

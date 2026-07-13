@@ -10,6 +10,7 @@
 
 import SwiftUI
 import BudgetWardenAppleCore
+import CloudKit
 
 struct BWWindowMain: Scene {
     @EnvironmentObject var store: BWStore
@@ -104,6 +105,20 @@ struct BWWindowMain: Scene {
                     }
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .budgetWardenAcceptedCloudShare)) { notification in
+                guard let recordID = notification.object as? CKRecord.ID else {
+                    return
+                }
+
+                Task {
+                    await openAcceptedCloudShare(recordID: recordID)
+                }
+            }
+            .task {
+                if let recordID = BWPendingCloudShare.recordID {
+                    await openAcceptedCloudShare(recordID: recordID)
+                }
+            }
             .onAppear {
                 store.setAutoRefreshActive(scenePhase == .active)
                 updateAutoRefreshDialogBlocker()
@@ -138,5 +153,14 @@ struct BWWindowMain: Scene {
             hasAutoRefreshBlockingDialog,
             reason: "mainWindowDialog"
         )
+    }
+
+    private func openAcceptedCloudShare(recordID: CKRecord.ID) async {
+        guard await store.openAcceptedCloudShare(recordID: recordID) else {
+            return
+        }
+
+        BWPendingCloudShare.clear(recordID: recordID)
+        openWindow(id: "window-main")
     }
 }

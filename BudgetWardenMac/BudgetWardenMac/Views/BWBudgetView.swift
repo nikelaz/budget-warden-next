@@ -39,6 +39,7 @@ struct BudgetView: View {
     @State var isInspectorPresented: Bool = true
     @State private var inspectorPanel: BWBudgetInspectorPanel = .reporting
     @State private var categoryPendingDeletion: BWCategory?
+    @State private var isPreparingShare = false
 
     private func openCreateCategoryDialog() {
         isCreatingCategoryDialogOpen = true
@@ -365,6 +366,11 @@ struct BudgetView: View {
             }
         }
         .tableStyle(.inset(alternatesRowBackgrounds: true))
+        .overlay {
+            if isPreparingShare {
+                BWPreparingCloudShareView()
+            }
+        }
         .navigationTitle("Budget")
         .toolbar {
             ToolbarItemGroup(placement: .principal) {
@@ -422,6 +428,18 @@ struct BudgetView: View {
             }
           
             ToolbarItemGroup(placement: .primaryAction) {
+                if let currentBudget = store.currentBudget,
+                   store.isICloudBudget(currentBudget) {
+                    Button {
+                        shareCurrentBudget()
+                    } label: {
+                        Image(systemName: "person.crop.circle.badge.plus")
+                    }
+                    .disabled(!store.isICloudEnabled)
+                    .accessibilityLabel("Share with iCloud")
+                    .help("Share with iCloud")
+                }
+
                 Button {
                     isInspectorPresented = !isInspectorPresented
                 } label: {
@@ -551,6 +569,26 @@ struct BudgetView: View {
         }
         .onChange(of: categoryPendingDeletion?.id) { _, _ in
             updateAutoRefreshEditorBlocker()
+        }
+    }
+
+    private func shareCurrentBudget() {
+        guard let budget = store.currentBudget, !isPreparingShare else {
+            return
+        }
+
+        isPreparingShare = true
+
+        Task {
+            let result = await store.cloudRepository.prepareShare(for: budget)
+            isPreparingShare = false
+
+            switch result {
+                case .failure(let error):
+                    windowStore.setError(error)
+                case .success(let share):
+                    BWMacCloudSharing.shared.present(share)
+            }
         }
     }
 }
