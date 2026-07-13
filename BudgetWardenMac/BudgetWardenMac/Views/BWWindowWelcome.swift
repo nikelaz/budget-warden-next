@@ -11,6 +11,7 @@
 import SwiftUI
 import BudgetWardenAppleCore
 import CloudKit
+import GoogleSignIn
 
 private let WINDOW_WIDTH: CGFloat = 760
 private let WINDOW_HEIGHT: CGFloat = 420
@@ -27,6 +28,7 @@ struct BWWindowWelcome: Scene {
     @State private var isDeleteBudgetDialogPresented: Bool = false
     @State private var budgetPendingRemoval: BWBudget? = nil
     @State private var isPreparingShare = false
+    @State private var googleDriveShareBudget: BWBudget?
 
     var body: some Scene {
         Window("Welcome Window", id: "window-welcome") {
@@ -66,6 +68,7 @@ struct BWWindowWelcome: Scene {
                 }
             }
             .onOpenURL { url in
+                guard !GIDSignIn.sharedInstance.handle(url) else { return }
                 Task(priority: .userInitiated) {
                     if await store.openBudget(at: url, windowStore: windowStore) {
                         openWindow(id: "window-main")
@@ -144,6 +147,11 @@ struct BWWindowWelcome: Scene {
                 )
                 .environmentObject(windowStore)
                 .frame(minWidth: 420)
+            }
+            .sheet(item: $googleDriveShareBudget) { budget in
+                BWGoogleDriveSharingView(budget: budget) { email in
+                    await store.shareGoogleDriveBudget(budget, with: email, windowStore: windowStore)
+                }
             }
             .sheet(isPresented: $windowStore.isVaultConfigDialogOpen) {
                 ConfigureVaultView() 
@@ -239,7 +247,17 @@ struct BWWindowWelcome: Scene {
                     budgetSection(
                         title: "iCloud",
                         budgets: store.iCloudBudgets,
-                        canShare: true
+                        canShareWithICloud: true,
+                        canShareWithGoogleDrive: false
+                    )
+                }
+
+                if !store.googleDriveBudgets.isEmpty {
+                    budgetSection(
+                        title: "Google Drive",
+                        budgets: store.googleDriveBudgets,
+                        canShareWithICloud: false,
+                        canShareWithGoogleDrive: true
                     )
                 }
 
@@ -247,7 +265,8 @@ struct BWWindowWelcome: Scene {
                     budgetSection(
                         title: "Local",
                         budgets: store.localBudgets,
-                        canShare: false
+                        canShareWithICloud: false,
+                        canShareWithGoogleDrive: false
                     )
                 }
             }
@@ -259,7 +278,8 @@ struct BWWindowWelcome: Scene {
     private func budgetSection(
         title: String,
         budgets: [BWBudget],
-        canShare: Bool
+        canShareWithICloud: Bool,
+        canShareWithGoogleDrive: Bool
     ) -> some View {
         Text(title)
             .font(.headline)
@@ -274,12 +294,13 @@ struct BWWindowWelcome: Scene {
                 } label: {
                     BudgetRowView(
                         budget: budget,
-                        isShared: canShare && store.sharedBudgetIDs.contains(budget.id)
+                        isShared: (canShareWithICloud && store.sharedBudgetIDs.contains(budget.id))
+                            || (canShareWithGoogleDrive && store.googleDriveSharedBudgetIDs.contains(budget.id))
                     )
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .contextMenu {
-                    if canShare {
+                    if canShareWithICloud {
                         Button {
                             shareBudget(budget)
                         } label: {
@@ -287,6 +308,15 @@ struct BWWindowWelcome: Scene {
                                 store.sharedBudgetIDs.contains(budget.id) ? "Manage Sharing" : "Share with iCloud",
                                 systemImage: "person.crop.circle.badge.plus"
                             )
+                        }
+                    }
+
+
+                    if canShareWithGoogleDrive {
+                        Button {
+                            googleDriveShareBudget = budget
+                        } label: {
+                            Label("Share with Google Drive", systemImage: "person.crop.circle.badge.plus")
                         }
                     }
 

@@ -47,10 +47,18 @@ final class BWStore {
     private static let defaultVaultFolderName = "Budget Warden Vaults"
     private static let iCloudEnabledKey = "BWI_ICLOUD_SYNC_ENABLED"
     private static let cloudSyncInterval: TimeInterval = 10
+    private static let googleDrivePollingInterval = Duration.seconds(5)
+    private static let googleDriveMetadataKey = "BWI_GOOGLE_DRIVE_METADATA_V1"
 
     let vault = BWVault(configuration: BWStore.vaultConfiguration, location: .local)
     let cloudVault = BWVault(configuration: BWStore.vaultConfiguration, location: .iCloud)
+    let googleDriveVault = BWVault(configuration: BWStore.vaultConfiguration, location: .googleDrive)
     let cloudRepository = BWCloudBudgetRepository()
+    let googleDriveSession = BWGoogleDriveSession()
+    @ObservationIgnored lazy var googleDriveRepository = BWGoogleDriveRepository(
+        vault: googleDriveVault,
+        metadataKey: Self.googleDriveMetadataKey
+    )
 
     private static var vaultConfiguration: BWVaultConfiguration {
         BWVaultConfiguration(
@@ -91,13 +99,15 @@ final class BWStore {
 
     private(set) var localBudgets: [BWBudget] = []
     private(set) var iCloudBudgets: [BWBudget] = []
+    private(set) var googleDriveBudgets: [BWBudget] = []
     private(set) var vaultURL: URL?
     private(set) var skippedFiles: [String] = []
     private(set) var sharedBudgetIDs: Set<UUID> = []
+    private(set) var googleDriveSharedBudgetIDs: Set<UUID> = []
     private(set) var isICloudEnabled: Bool
 
     var budgets: [BWBudget] {
-        iCloudBudgets + localBudgets
+        iCloudBudgets + googleDriveBudgets + localBudgets
     }
 
     @ObservationIgnored private var autoRefreshMonitor: BWBudgetFileChangeMonitor?
@@ -106,8 +116,12 @@ final class BWStore {
     @ObservationIgnored private var autoRefreshMutationCount = 0
     @ObservationIgnored private var isRefreshingFromDisk = false
     @ObservationIgnored private var lastCloudSyncDate: Date?
+    @ObservationIgnored private var lastGoogleDriveSyncDate: Date?
     @ObservationIgnored private var isCloudSyncing = false
     @ObservationIgnored private var cloudUploadTask: Task<Void, Never>?
+    @ObservationIgnored private var googleDriveUploadTask: Task<Void, Never>?
+    @ObservationIgnored private var googleDrivePollingTask: Task<Void, Never>?
+    @ObservationIgnored private var isGoogleDriveSyncing = false
     @ObservationIgnored private var hasPendingAutoRefresh = false
     @ObservationIgnored private let budgetMutationGate = BWBudgetMutationGate()
 
@@ -130,6 +144,7 @@ final class BWStore {
 
     deinit {
         autoRefreshMonitor?.stop()
+        googleDrivePollingTask?.cancel()
     }
 
     var preferredBudgetLocation: BWVaultLocation {
@@ -146,8 +161,42 @@ final class BWStore {
         }
     }
 
+    func isGoogleDriveBudget(_ budget: BWBudget) -> Bool {
+        guard let budgetURL = budget.url?.standardizedFileURL else {
+            return false
+        }
+
+        return googleDriveBudgets.contains {
+            $0.url?.standardizedFileURL == budgetURL
+        }
+    }
+
     private func storageVault(for budget: BWBudget) -> BWVault {
-        isICloudBudget(budget) ? cloudVault : vault
+        if isGoogleDriveBudget(budget) {
+            return googleDriveVault
+        }
+        return isICloudBudget(budget) ? cloudVault : vault
+    }
+
+    @discardableResult
+    func connectGoogleDrive() async -> Bool {
+        do {
+            try await googleDriveSession.connect()
+            await synchronizeGoogleDriveBudgets()
+            await updateAutoRefreshSnapshot()
+            return true
+        }
+        catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func disconnectGoogleDrive() {
+        googleDriveSession.disconnect()
+        googleDriveBudgets = []
+        googleDriveSharedBudgetIDs = []
+        restoreSelection()
     }
 
     @discardableResult
@@ -172,6 +221,7 @@ final class BWStore {
         do {
             let testVaultURL = try BWVault.defaultLocalVaultURL(configuration: vaultConfiguration)
             let cloudKitCacheURL = try BWVault.defaultCloudKitCacheURL(configuration: vaultConfiguration)
+            let googleDriveCacheURL = try BWVault.defaultGoogleDriveCacheURL(configuration: vaultConfiguration)
 
             if FileManager.default.fileExists(atPath: testVaultURL.path) {
                 try FileManager.default.removeItem(at: testVaultURL)
@@ -180,6 +230,12 @@ final class BWStore {
             if FileManager.default.fileExists(atPath: cloudKitCacheURL.path) {
                 try FileManager.default.removeItem(at: cloudKitCacheURL)
             }
+
+            if FileManager.default.fileExists(atPath: googleDriveCacheURL.path) {
+                try FileManager.default.removeItem(at: googleDriveCacheURL)
+            }
+
+            UserDefaults.standard.removeObject(forKey: googleDriveMetadataKey)
         }
         catch {
             // UI tests will surface vault setup failures during app launch.
@@ -220,6 +276,7 @@ final class BWStore {
                 await self?.handleAutoRefreshChange()
             }
         }
+        startGoogleDrivePolling()
 
         Task { [weak self] in
             await self?.refreshFromDiskIfIdle()
@@ -230,7 +287,41 @@ final class BWStore {
     private func stopAutoRefreshLoop() {
         autoRefreshMonitor?.stop()
         autoRefreshMonitor = nil
+        googleDrivePollingTask?.cancel()
+        googleDrivePollingTask = nil
         hasPendingAutoRefresh = false
+    }
+
+    private func startGoogleDrivePolling() {
+        guard googleDrivePollingTask == nil else { return }
+
+        googleDrivePollingTask = Task { [weak self] in
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: Self.googleDrivePollingInterval)
+                }
+                catch {
+                    return
+                }
+
+                guard let self else { return }
+                await self.pollGoogleDriveIfIdle()
+            }
+        }
+    }
+
+    private func pollGoogleDriveIfIdle() async {
+        guard googleDriveSession.isConnected,
+              !isLoadingBudgets,
+              autoRefreshMutationCount == 0,
+              autoRefreshBlockers.isEmpty,
+              !isRefreshingFromDisk
+        else {
+            return
+        }
+
+        await synchronizeGoogleDriveBudgets()
+        await updateAutoRefreshSnapshot()
     }
 
     private func withAutoRefreshPaused<T>(_ operation: () async -> T) async -> T {
@@ -318,6 +409,11 @@ final class BWStore {
             await synchronizeCloudBudgets()
         }
 
+        if googleDriveSession.isConnected,
+           lastGoogleDriveSyncDate.map({ Date().timeIntervalSince($0) >= Self.cloudSyncInterval }) ?? true {
+            await synchronizeGoogleDriveBudgets()
+        }
+
         switch await BWBudgetService.refreshSnapshot(for: budgets, vault: vault) {
             case .failure:
                 return true
@@ -375,6 +471,7 @@ final class BWStore {
     private func reloadStoredBudgets() async -> Bool {
         let localResult = await BWBudgetService.loadBudgets(vault: vault)
         let cloudResult = await BWBudgetService.loadBudgets(vault: cloudVault)
+        let googleDriveResult = await BWBudgetService.loadBudgets(vault: googleDriveVault)
         var loadedSkippedFiles: [String] = []
         var didLoadStorage = false
 
@@ -392,6 +489,15 @@ final class BWStore {
                 iCloudBudgets = []
             case .success(let result):
                 iCloudBudgets = result.budgets
+                loadedSkippedFiles.append(contentsOf: result.skippedFiles)
+                didLoadStorage = true
+        }
+
+        switch googleDriveResult {
+            case .failure:
+                googleDriveBudgets = []
+            case .success(let result):
+                googleDriveBudgets = result.budgets
                 loadedSkippedFiles.append(contentsOf: result.skippedFiles)
                 didLoadStorage = true
         }
@@ -598,6 +704,19 @@ final class BWStore {
         restoreSelection()
         await updateAutoRefreshSnapshot()
         scheduleCloudSynchronization()
+        Task { [weak self] in
+            guard let self else { return }
+            await self.googleDriveSession.restore()
+            if self.googleDriveSession.isConnected {
+                await self.synchronizeGoogleDriveBudgets()
+                await self.updateAutoRefreshSnapshot()
+            }
+            else {
+                self.googleDriveBudgets = []
+                self.googleDriveSharedBudgetIDs = []
+                self.restoreSelection()
+            }
+        }
     }
 
     func selectBudget(withID budgetID: UUID) {
@@ -623,6 +742,10 @@ final class BWStore {
                 location = .iCloud
                 sourceVault = cloudVault
             }
+            else if await googleDriveVault.containsBudgetFile(url: url) {
+                location = .googleDrive
+                sourceVault = googleDriveVault
+            }
             else if await vault.containsBudgetFile(url: url) {
                 location = .local
                 sourceVault = vault
@@ -641,6 +764,8 @@ final class BWStore {
                         switch location {
                             case .iCloud:
                                 iCloudBudgets = vaultReadResult.budgets
+                            case .googleDrive:
+                                googleDriveBudgets = vaultReadResult.budgets
                             case .local:
                                 localBudgets = vaultReadResult.budgets
                         }
@@ -663,7 +788,20 @@ final class BWStore {
             return false
         }
 
-        let destinationVault = location == .iCloud ? cloudVault : vault
+        if location == .googleDrive, !googleDriveSession.isConnected,
+           !(await connectGoogleDrive()) {
+            return false
+        }
+
+        let destinationVault: BWVault
+        switch location {
+            case .iCloud:
+                destinationVault = cloudVault
+            case .googleDrive:
+                destinationVault = googleDriveVault
+            case .local:
+                destinationVault = vault
+        }
 
         return await withBudgetMutation {
             switch await BWBudgetService.createBudget(
@@ -678,6 +816,7 @@ final class BWStore {
                 case .success(let budget):
                     open(budget, location: location)
                     scheduleCloudSave(budget)
+                    scheduleGoogleDriveSave(budget)
                     await updateAutoRefreshSnapshot()
                     return true
             }
@@ -687,12 +826,30 @@ final class BWStore {
     func deleteBudget(_ budget: BWBudget) async {
         await withBudgetMutation {
             let isCloudBudget = isICloudBudget(budget)
-            let sourceVault = isCloudBudget ? cloudVault : vault
+            let isDriveBudget = isGoogleDriveBudget(budget)
+            let sourceVault = isDriveBudget ? googleDriveVault : (isCloudBudget ? cloudVault : vault)
 
             if isCloudBudget,
                case .failure(let error) = await cloudRepository.delete(budget.id) {
                 errorMessage = error.localizedDescription
                 return
+            }
+
+            if isDriveBudget {
+                do {
+                    let token = try await googleDriveSession.accessToken()
+                    if case .failure(let error) = await googleDriveRepository.delete(
+                        budget,
+                        accessToken: token
+                    ) {
+                        errorMessage = error.localizedDescription
+                        return
+                    }
+                }
+                catch {
+                    errorMessage = error.localizedDescription
+                    return
+                }
             }
 
             switch await BWBudgetService.deleteBudget(budget, vault: sourceVault) {
@@ -701,6 +858,10 @@ final class BWStore {
                 case .success:
                     if isCloudBudget {
                         iCloudBudgets.removeAll { $0.id == budget.id }
+                    }
+                    else if isDriveBudget {
+                        googleDriveBudgets.removeAll { $0.id == budget.id }
+                        googleDriveSharedBudgetIDs.remove(budget.id)
                     }
                     else {
                         localBudgets.removeAll { $0.id == budget.id }
@@ -764,6 +925,7 @@ final class BWStore {
             case .success(let budget):
                 upsertBudget(budget)
                 scheduleCloudSave(budget)
+                scheduleGoogleDriveSave(budget)
                 await updateAutoRefreshSnapshot()
                 return true
         }
@@ -874,15 +1036,91 @@ final class BWStore {
         }
     }
 
+    private func synchronizeGoogleDriveBudgets() async {
+        guard googleDriveSession.isConnected, !isGoogleDriveSyncing else {
+            return
+        }
+
+        isGoogleDriveSyncing = true
+        defer { isGoogleDriveSyncing = false }
+
+        do {
+            let token = try await googleDriveSession.accessToken()
+            switch await googleDriveRepository.synchronize(accessToken: token) {
+                case .failure:
+                    // Keep the local Drive cache available while offline.
+                    return
+                case .success(let driveBudgets):
+                    lastGoogleDriveSyncDate = Date()
+                    googleDriveSharedBudgetIDs = Set(driveBudgets.lazy
+                        .filter(\.isSharedWithCurrentUser)
+                        .map { $0.budget.id })
+                    if case .success(let result) = await BWBudgetService.loadBudgets(
+                        vault: googleDriveVault
+                    ) {
+                        googleDriveBudgets = result.budgets
+                    }
+            }
+        }
+        catch {
+            // Token refresh and network failures leave the cache usable.
+        }
+    }
+
+    private func scheduleGoogleDriveSave(_ budget: BWBudget) {
+        guard isGoogleDriveBudget(budget) else { return }
+        let previousUpload = googleDriveUploadTask
+
+        googleDriveUploadTask = Task { [weak self] in
+            await previousUpload?.value
+            guard let self, self.googleDriveSession.isConnected else { return }
+
+            do {
+                let token = try await self.googleDriveSession.accessToken()
+                switch await self.googleDriveRepository.save(budget, accessToken: token) {
+                    case .failure(let error):
+                        self.errorMessage = error.localizedDescription
+                    case .success(let merged):
+                        self.upsertBudget(merged, location: .googleDrive)
+                }
+            }
+            catch {
+                self.errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func shareGoogleDriveBudget(_ budget: BWBudget, with email: String) async -> Bool {
+        guard isGoogleDriveBudget(budget) else { return false }
+
+        do {
+            let token = try await googleDriveSession.accessToken()
+            switch await googleDriveRepository.share(budget, with: email, accessToken: token) {
+                case .failure(let error):
+                    errorMessage = error.localizedDescription
+                    return false
+                case .success:
+                    return true
+            }
+        }
+        catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
     private func upsertBudget(
         _ budget: BWBudget,
         location: BWVaultLocation? = nil
     ) {
-        let location = location ?? (isICloudBudget(budget) ? .iCloud : .local)
+        let location = location
+            ?? (isGoogleDriveBudget(budget) ? .googleDrive : (isICloudBudget(budget) ? .iCloud : .local))
 
         switch location {
             case .iCloud:
                 upsertBudget(budget, in: &iCloudBudgets)
+            case .googleDrive:
+                upsertBudget(budget, in: &googleDriveBudgets)
             case .local:
                 upsertBudget(budget, in: &localBudgets)
         }

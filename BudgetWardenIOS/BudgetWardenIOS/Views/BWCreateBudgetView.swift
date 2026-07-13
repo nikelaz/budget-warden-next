@@ -41,6 +41,7 @@ struct BWCreateBudgetView: View {
                 Section("Storage") {
                     Picker("Storage", selection: $selectedLocation) {
                         Text("iCloud").tag(BWVaultLocation.iCloud)
+                        Text("Google Drive").tag(BWVaultLocation.googleDrive)
                         Text("Local File").tag(BWVaultLocation.local)
                     }
                     .pickerStyle(.segmented)

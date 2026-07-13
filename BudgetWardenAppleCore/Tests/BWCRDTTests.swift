@@ -3,6 +3,76 @@ import Testing
 @testable import BudgetWardenAppleCore
 
 struct BWCRDTTests {
+    @Test func decodedCRDTStateIsPreserved() throws {
+        let original = BWCRDT.migrateLegacy(makeBudget())
+        let json = try BWCodec.encodeBudget(budget: original).get()
+
+        let decoded = try BWCodec.decodeBudget(
+            json: json,
+            url: URL(fileURLWithPath: "/Decoded.budget")
+        ).get()
+
+        #expect(decoded.crdt == original.crdt)
+        #expect(decoded.title == original.title)
+    }
+
+    @Test func schemaTwoWithoutCRDTLoadsAsLegacySnapshot() throws {
+        var legacy = makeBudget()
+        legacy.schemaVersion = BWCRDT.schemaVersion
+        let json = try BWCodec.encodeBudget(budget: legacy).get()
+
+        let decoded = try BWCodec.decodeBudget(
+            json: json,
+            url: URL(fileURLWithPath: "/Legacy.budget")
+        ).get()
+
+        #expect(decoded.crdt != nil)
+        #expect(decoded.requiresCRDTWriteback)
+    }
+
+    @Test func CRDTDocumentWinsOverLegacySnapshot() throws {
+        let legacy = BWCRDT.migrateLegacy(makeBudget())
+        var edited = BWCRDT.migrateLegacy(makeBudget())
+        var state = try #require(edited.crdt)
+        state.title = .init(value: "CRDT title", stamp: stamp(actor: "apple", sequence: 1))
+        state.versionVector = ["apple": 1]
+        state.maximumStamp = stamp(actor: "apple", sequence: 1)
+        state.legacyBaseline = nil
+        edited.crdt = state
+        edited.requiresCRDTWriteback = false
+        edited = BWCRDT.materialize(edited)
+
+        let merged = try BWCRDT.merge(legacy, edited).get()
+
+        #expect(merged.title == "CRDT title")
+        #expect(merged.crdt == edited.crdt)
+    }
+
+    @Test func deletedCategoryDoesNotReappearAfterReloadAndMerge() async throws {
+        let original = await BWCRDT.prepareNew(makeBudget())
+        let categoryID = try #require(original.categories.first?.id)
+        let categoryKey = categoryID.uuidString.lowercased()
+        let originalJSON = try BWCodec.encodeBudget(budget: original).get()
+        let staleSnapshot = try BWCodec.decodeBudget(
+            json: originalJSON,
+            url: URL(fileURLWithPath: "/Stale.budget")
+        ).get()
+
+        var desired = staleSnapshot
+        desired.categories.removeAll(where: { $0.id == categoryID })
+        let deleted = await BWCRDT.applyingChanges(from: staleSnapshot, to: desired)
+        let deletedJSON = try BWCodec.encodeBudget(budget: deleted).get()
+        let reloadedDeletion = try BWCodec.decodeBudget(
+            json: deletedJSON,
+            url: URL(fileURLWithPath: "/Deleted.budget")
+        ).get()
+
+        let merged = try BWCRDT.merge(reloadedDeletion, staleSnapshot).get()
+
+        #expect(merged.categories.allSatisfy { $0.id != categoryID })
+        #expect(merged.crdt?.categories[categoryKey]?.presence.value == false)
+    }
+
     @Test func mergeIsCommutativeAndIdempotent() throws {
         let base = BWCRDT.migrateLegacy(makeBudget())
         var left = base

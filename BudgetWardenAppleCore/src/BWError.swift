@@ -20,6 +20,7 @@ public enum BWError: Error, Sendable {
     case vaultNotSet(underlying: Error? = nil)
     case iCloudUnavailable(underlying: Error? = nil)
     case cloudKit(underlying: Error? = nil)
+    case googleDrive(underlying: Error? = nil)
     case creatingBudget(underlying: Error? = nil)
     case saveFailed(underlying: Error? = nil)
     case saveCancelled(underlying: Error? = nil)
@@ -50,6 +51,9 @@ extension BWError: LocalizedError {
                 return "iCloud Drive is not available. Make sure iCloud Drive is enabled."
             case .cloudKit:
                 return "Could not synchronize the budget with iCloud."
+            case .googleDrive(let error):
+                return error?.localizedDescription
+                    ?? "Could not synchronize the budget with Google Drive."
             case .creatingBudget:
                 return "Could not create the budget."
             case .saveFailed:
@@ -78,6 +82,7 @@ extension BWError {
                  .savingFile(let error),
                  .iCloudUnavailable(let error),
                  .cloudKit(let error),
+                 .googleDrive(let error),
                  .creatingBudget(let error),
                  .saveFailed(let error),
                  .vaultNotSet(let error),

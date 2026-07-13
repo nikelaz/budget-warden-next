@@ -62,15 +62,11 @@ nonisolated public struct BWBudget: Codable, Sendable, Identifiable {
         schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion)
         title = try container.decode(String.self, forKey: .title)
         categories = try container.decode([BWCategory].self, forKey: .categories)
+        crdt = try container.decodeIfPresent(BWCRDTState.self, forKey: .crdt)
         url = nil
-        revision = nil
-        revisionId = try container.decodeIfPresent(UUID.self, forKey: .revisionId)
-
-        guard container.contains(.revision) else {
-            return
-        }
-
+        requiresCRDTWriteback = false
         revision = try container.decodeIfPresent(Int64.self, forKey: .revision)
+        revisionId = try container.decodeIfPresent(UUID.self, forKey: .revisionId)
     }
 }
 

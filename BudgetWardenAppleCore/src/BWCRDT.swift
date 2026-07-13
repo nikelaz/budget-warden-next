@@ -288,10 +288,29 @@ public enum BWCRDT {
         guard lhs.id == rhs.id else {
             return .failure(.rebaseFailed())
         }
+
+        let lhsHasPersistedCRDT = lhs.crdt != nil && !lhs.requiresCRDTWriteback
+        let rhsHasPersistedCRDT = rhs.crdt != nil && !rhs.requiresCRDTWriteback
+        if lhsHasPersistedCRDT != rhsHasPersistedCRDT {
+            var preferred = lhsHasPersistedCRDT ? lhs : rhs
+            preferred.url = lhs.url ?? rhs.url
+            preferred.requiresCRDTWriteback = false
+            return .success(materialize(preferred))
+        }
+
         let lhs = ensureState(lhs)
         let rhs = ensureState(rhs)
         guard let left = lhs.crdt, let right = rhs.crdt else {
             return .failure(.rebaseFailed())
+        }
+
+        // Also protect direct in-memory callers that construct CRDT states without
+        // going through the codec and its writeback marker.
+        if left.containsOnlyLegacyEvents != right.containsOnlyLegacyEvents {
+            var preferred = left.containsOnlyLegacyEvents ? rhs : lhs
+            preferred.url = lhs.url ?? rhs.url
+            preferred.requiresCRDTWriteback = false
+            return .success(materialize(preferred))
         }
 
         if left.containsOnlyLegacyEvents, right.containsOnlyLegacyEvents,

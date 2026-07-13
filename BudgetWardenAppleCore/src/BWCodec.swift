@@ -62,7 +62,12 @@ nonisolated public final class BWCodec {
             decodedBudget.revision = 0
         }
 
-        if decodedBudget.schemaVersion == nil || decodedBudget.schemaVersion == 1 {
+        if decodedBudget.crdt == nil,
+           (decodedBudget.schemaVersion == nil
+            || decodedBudget.schemaVersion == 1
+            || decodedBudget.schemaVersion == BWCRDT.schemaVersion) {
+            // Older clients can write schema-v2-shaped budgets without CRDT state.
+            // Treat those documents as legacy snapshots so they remain readable.
             decodedBudget = BWCRDT.migrateLegacy(decodedBudget)
             decodedBudget.url = url
         } else if decodedBudget.schemaVersion == BWCRDT.schemaVersion,

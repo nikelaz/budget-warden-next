@@ -40,6 +40,7 @@ struct BudgetView: View {
     @State private var inspectorPanel: BWBudgetInspectorPanel = .reporting
     @State private var categoryPendingDeletion: BWCategory?
     @State private var isPreparingShare = false
+    @State private var isGoogleDriveSharePresented = false
 
     private func openCreateCategoryDialog() {
         isCreatingCategoryDialogOpen = true
@@ -440,6 +441,18 @@ struct BudgetView: View {
                     .help("Share with iCloud")
                 }
 
+
+                if let currentBudget = store.currentBudget,
+                   store.isGoogleDriveBudget(currentBudget) {
+                    Button {
+                        isGoogleDriveSharePresented = true
+                    } label: {
+                        Image(systemName: "person.crop.circle.badge.plus")
+                    }
+                    .accessibilityLabel("Share with Google Drive")
+                    .help("Share with Google Drive")
+                }
+
                 Button {
                     isInspectorPresented = !isInspectorPresented
                 } label: {
@@ -514,6 +527,17 @@ struct BudgetView: View {
                 onClose: closeCreateTransactionDialog
             )
             .frame(minWidth: 360)
+        }
+        .sheet(isPresented: $isGoogleDriveSharePresented) {
+            if let budget = store.currentBudget {
+                BWGoogleDriveSharingView(budget: budget) { email in
+                    await store.shareGoogleDriveBudget(
+                        budget,
+                        with: email,
+                        windowStore: windowStore
+                    )
+                }
+            }
         }
         .confirmationDialog(
             "Delete \(categoryPendingDeletion?.title ?? "Category")?",
