@@ -122,6 +122,7 @@ final class BWStore {
     @ObservationIgnored private var googleDriveUploadTask: Task<Void, Never>?
     @ObservationIgnored private var googleDrivePollingTask: Task<Void, Never>?
     @ObservationIgnored private var isGoogleDriveSyncing = false
+    @ObservationIgnored private var pendingGoogleDriveSaveCount = 0
     @ObservationIgnored private var hasPendingAutoRefresh = false
     @ObservationIgnored private let budgetMutationGate = BWBudgetMutationGate()
 
@@ -314,6 +315,7 @@ final class BWStore {
         guard googleDriveSession.isConnected,
               !isLoadingBudgets,
               autoRefreshMutationCount == 0,
+              pendingGoogleDriveSaveCount == 0,
               autoRefreshBlockers.isEmpty,
               !isRefreshingFromDisk
         else {
@@ -392,6 +394,7 @@ final class BWStore {
     private func refreshFromDiskIfIdle() async -> Bool {
         guard !isLoadingBudgets,
               autoRefreshMutationCount == 0,
+              pendingGoogleDriveSaveCount == 0,
               autoRefreshBlockers.isEmpty,
               !isRefreshingFromDisk
         else {
@@ -1037,7 +1040,10 @@ final class BWStore {
     }
 
     private func synchronizeGoogleDriveBudgets() async {
-        guard googleDriveSession.isConnected, !isGoogleDriveSyncing else {
+        guard googleDriveSession.isConnected,
+              pendingGoogleDriveSaveCount == 0,
+              !isGoogleDriveSyncing
+        else {
             return
         }
 
@@ -1051,6 +1057,7 @@ final class BWStore {
                     // Keep the local Drive cache available while offline.
                     return
                 case .success(let driveBudgets):
+                    guard pendingGoogleDriveSaveCount == 0 else { return }
                     lastGoogleDriveSyncDate = Date()
                     googleDriveSharedBudgetIDs = Set(driveBudgets.lazy
                         .filter(\.isSharedWithCurrentUser)
@@ -1070,23 +1077,29 @@ final class BWStore {
     private func scheduleGoogleDriveSave(_ budget: BWBudget) {
         guard isGoogleDriveBudget(budget) else { return }
         let previousUpload = googleDriveUploadTask
+        pendingGoogleDriveSaveCount += 1
 
         googleDriveUploadTask = Task { [weak self] in
             await previousUpload?.value
-            guard let self, self.googleDriveSession.isConnected else { return }
+            guard let self else { return }
 
-            do {
-                let token = try await self.googleDriveSession.accessToken()
-                switch await self.googleDriveRepository.save(budget, accessToken: token) {
-                    case .failure(let error):
+            if self.googleDriveSession.isConnected {
+                do {
+                    let token = try await self.googleDriveSession.accessToken()
+                    if case .failure(let error) = await self.googleDriveRepository.save(
+                        budget,
+                        accessToken: token
+                    ) {
                         self.errorMessage = error.localizedDescription
-                    case .success(let merged):
-                        self.upsertBudget(merged, location: .googleDrive)
+                    }
+                }
+                catch {
+                    self.errorMessage = error.localizedDescription
                 }
             }
-            catch {
-                self.errorMessage = error.localizedDescription
-            }
+
+            self.pendingGoogleDriveSaveCount -= 1
+            await self.drainPendingAutoRefreshIfNeeded()
         }
     }
 
