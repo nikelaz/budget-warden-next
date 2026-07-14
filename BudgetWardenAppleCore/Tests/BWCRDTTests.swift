@@ -165,6 +165,48 @@ struct BWCRDTTests {
         #expect(merged.categories.first(where: { $0.id == firstCategoryID })?.title == "Remote title")
     }
 
+    @Test func repeatedCategoryMovesUpdateOrdinalsInMemory() throws {
+        var budget = makeOrderedBudget()
+        let movedCategory = try #require(budget.categories.last)
+
+        for _ in 0..<3 {
+            budget = try BWBudgetService.prepareCategoryMove(
+                movedCategory,
+                in: budget,
+                by: -1
+            ).get()
+        }
+
+        #expect(budget.orderedCategories(for: .expenses).map(\.id).first == movedCategory.id)
+        #expect(budget.orderedCategories(for: .expenses).map(\.ordinal) == [0, 1, 2, 3])
+    }
+
+    @Test func queuedCategoryReordersPersistTheFinalPosition() async throws {
+        let base = await BWCRDT.prepareNew(makeOrderedBudget())
+        let movedCategory = try #require(base.categories.last)
+        let categoryIDs = base.categories.map(\.id)
+        var optimisticBudget = base
+        var persistedBudget = base
+
+        for _ in 0..<3 {
+            optimisticBudget = try BWBudgetService.prepareCategoryMove(
+                movedCategory,
+                in: optimisticBudget,
+                by: -1
+            ).get()
+            let rebased = try BWRebase.rebase(
+                budgetInMemory: optimisticBudget,
+                onto: persistedBudget,
+                operation: .CategoriesBulkOrdinalUpdate(categoryIds: categoryIDs)
+            ).get()
+            let original = BWCRDT.materialize(rebased)
+            let saved = await BWCRDT.applyingChanges(from: original, to: rebased)
+            persistedBudget = try BWCRDT.merge(saved, persistedBudget).get()
+        }
+
+        #expect(persistedBudget.orderedCategories(for: .expenses).map(\.id).first == movedCategory.id)
+    }
+
     @Test func higherLegacyRevisionWinsWholeSnapshot() throws {
         let id = UUID()
         let older = BWCRDT.migrateLegacy(BWBudget(id: id, title: "Older"))

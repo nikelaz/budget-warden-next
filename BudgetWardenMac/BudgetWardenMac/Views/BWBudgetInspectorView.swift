@@ -75,14 +75,10 @@ struct BWBudgetInspectorView: View {
                 canMoveUp: store.canMoveCategory(category, by: -1),
                 canMoveDown: store.canMoveCategory(category, by: 1),
                 moveUp: {
-                    Task(priority: .userInitiated) {
-                        await store.moveCategory(category, by: -1, windowStore: windowStore)
-                    }
+                    _ = store.moveCategory(category, by: -1, windowStore: windowStore)
                 },
                 moveDown: {
-                    Task(priority: .userInitiated) {
-                        await store.moveCategory(category, by: 1, windowStore: windowStore)
-                    }
+                    _ = store.moveCategory(category, by: 1, windowStore: windowStore)
                 },
                 deleteCategory: {
                     deleteCategory(category)

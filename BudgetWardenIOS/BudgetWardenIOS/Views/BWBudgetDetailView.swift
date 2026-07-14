@@ -168,14 +168,12 @@ struct BWBudgetDetailView: View {
         toOffset destination: Int,
         in categoryType: BWCategoryType
     ) {
-        Task {
-            await store.moveCategories(
-                in: budget.id,
-                for: categoryType,
-                fromOffsets: sourceOffsets,
-                toOffset: destination
-            )
-        }
+        _ = store.moveCategories(
+            in: budget.id,
+            for: categoryType,
+            fromOffsets: sourceOffsets,
+            toOffset: destination
+        )
     }
 
     private func confirmDeletion(of categories: [BWCategory]) {

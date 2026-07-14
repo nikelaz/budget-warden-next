@@ -402,6 +402,26 @@ public enum BWBudgetService {
         by offset: Int,
         vault: BWVault
     ) async -> Result<BWBudget, BWError> {
+        switch prepareCategoryMove(category, in: budget, by: offset) {
+            case .failure(let error):
+                return .failure(error)
+            case .success(let budget):
+                let reorderedCategoryIDs = budget.categories
+                    .filter { $0.categoryType == category.categoryType }
+                    .map(\.id)
+                return await saveBudget(
+                    budget,
+                    vault: vault,
+                    operation: .CategoriesBulkOrdinalUpdate(categoryIds: reorderedCategoryIDs)
+                )
+        }
+    }
+
+    public static func prepareCategoryMove(
+        _ category: BWCategory,
+        in budget: BWBudget,
+        by offset: Int
+    ) -> Result<BWBudget, BWError> {
         guard abs(offset) == 1 else {
             return .failure(.validation())
         }
@@ -421,22 +441,11 @@ public enum BWBudgetService {
 
         categories.swapAt(index, targetIndex)
 
-        let reorderedCategoryIDs = categories.map(\.category.id)
-
         for (ordinal, categoryIndex) in categories.map(\.index).enumerated() {
             budget.categories[categoryIndex].ordinal = ordinal
         }
 
-        switch normalizeActualAmounts(in: budget) {
-            case .failure(let error):
-                return .failure(error)
-            case .success(let budget):
-                return await saveBudget(
-                    budget,
-                    vault: vault,
-                    operation: .CategoriesBulkOrdinalUpdate(categoryIds: reorderedCategoryIDs)
-                )
-        }
+        return .success(budget)
     }
 
     public static func moveCategories(
@@ -446,8 +455,34 @@ public enum BWBudgetService {
         toOffset destination: Int,
         vault: BWVault
     ) async -> Result<BWBudget, BWError> {
+        switch prepareCategoryMove(
+            in: budget,
+            for: categoryType,
+            fromOffsets: sourceOffsets,
+            toOffset: destination
+        ) {
+            case .failure(let error):
+                return .failure(error)
+            case .success(let budget):
+                let reorderedCategoryIDs = budget.categories
+                    .filter { $0.categoryType == categoryType }
+                    .map(\.id)
+                return await saveBudget(
+                    budget,
+                    vault: vault,
+                    operation: .CategoriesBulkOrdinalUpdate(categoryIds: reorderedCategoryIDs)
+                )
+        }
+    }
+
+    public static func prepareCategoryMove(
+        in budget: BWBudget,
+        for categoryType: BWCategoryType,
+        fromOffsets sourceOffsets: IndexSet,
+        toOffset destination: Int
+    ) -> Result<BWBudget, BWError> {
         guard !sourceOffsets.isEmpty else {
-            return await saveBudget(budget, vault: vault, operation: .Other)
+            return .success(budget)
         }
 
         var budget = budget
@@ -472,22 +507,12 @@ public enum BWBudgetService {
         }
 
         remainingCategories.insert(contentsOf: movedCategories, at: adjustedDestination)
-        let reorderedCategoryIDs = remainingCategories.map(\.category.id)
 
         for (ordinal, categoryIndex) in remainingCategories.map(\.index).enumerated() {
             budget.categories[categoryIndex].ordinal = ordinal
         }
 
-        switch normalizeActualAmounts(in: budget) {
-            case .failure(let error):
-                return .failure(error)
-            case .success(let budget):
-                return await saveBudget(
-                    budget,
-                    vault: vault,
-                    operation: .CategoriesBulkOrdinalUpdate(categoryIds: reorderedCategoryIDs)
-                )
-        }
+        return .success(budget)
     }
 
     public static func createTransaction(

@@ -77,10 +77,13 @@ class BWStore: ObservableObject {
     private var lastGoogleDriveSyncDate: Date?
     private var isCloudSyncing = false
     private var cloudUploadTask: Task<Void, Never>?
+    private var categoryReorderPersistenceTask: Task<Void, Never>?
     private var googleDriveUploadTask: Task<Void, Never>?
     private var googleDrivePollingTask: Task<Void, Never>?
     private var isGoogleDriveSyncing = false
     private var pendingGoogleDriveSaveCount = 0
+    private var pendingCategoryReorderCount = 0
+    private var categoryReorderGeneration = 0
     private var hasPendingAutoRefresh = false
     private let budgetMutationGate = BWBudgetMutationGate()
 
@@ -288,6 +291,7 @@ class BWStore: ObservableObject {
               budgetsInVaultLoaded,
               autoRefreshMutationCount == 0,
               pendingGoogleDriveSaveCount == 0,
+              pendingCategoryReorderCount == 0,
               autoRefreshBlockers.isEmpty,
               !isRefreshingFromDisk
         else {
@@ -380,12 +384,14 @@ class BWStore: ObservableObject {
         guard budgetsInVaultLoaded,
               autoRefreshMutationCount == 0,
               pendingGoogleDriveSaveCount == 0,
+              pendingCategoryReorderCount == 0,
               autoRefreshBlockers.isEmpty,
               !isRefreshingFromDisk
         else {
             return false
         }
 
+        let reorderGeneration = categoryReorderGeneration
         isRefreshingFromDisk = true
 
         defer {
@@ -402,6 +408,10 @@ class BWStore: ObservableObject {
             await synchronizeGoogleDriveBudgets()
         }
 
+        guard categoryReorderGeneration == reorderGeneration else {
+            return true
+        }
+
         switch await BWBudgetService.refreshSnapshot(
             for: trackedBudgetsForAutoRefresh(),
             vault: vault
@@ -409,6 +419,7 @@ class BWStore: ObservableObject {
             case .failure:
                 return true
             case .success(let snapshot):
+                guard categoryReorderGeneration == reorderGeneration else { return true }
                 guard let autoRefreshSnapshot else {
                     self.autoRefreshSnapshot = snapshot.openFiles
                     await updateAutoRefreshPresentedItems()
@@ -514,9 +525,11 @@ class BWStore: ObservableObject {
 
     @discardableResult
     private func reloadStoredBudgets() async -> Bool {
+        let reorderGeneration = categoryReorderGeneration
         let localResult = await BWBudgetService.loadBudgets(vault: vault)
         let cloudResult = await BWBudgetService.loadBudgets(vault: cloudVault)
         let googleDriveResult = await BWBudgetService.loadBudgets(vault: googleDriveVault)
+        guard categoryReorderGeneration == reorderGeneration else { return false }
         var skippedFiles: [String] = []
         var didLoadStorage = false
 
@@ -728,23 +741,64 @@ class BWStore: ObservableObject {
         return BWBudgetService.canMoveCategory(category, in: budget, by: offset)
     }
 
-    func moveCategory(_ category: BWCategory, by offset: Int, windowStore: BWWindowStore) async -> Bool {
-        return await withBudgetMutation {
-            guard let budget = currentBudget else {
+    func moveCategory(_ category: BWCategory, by offset: Int, windowStore: BWWindowStore) -> Bool {
+        guard let budget = currentBudget else {
+            return false
+        }
+
+        switch BWBudgetService.prepareCategoryMove(category, in: budget, by: offset) {
+            case .failure(.validation):
                 return false
+            case .failure(let error):
+                windowStore.setError(error)
+                return false
+            case .success(let updatedBudget):
+                categoryReorderGeneration += 1
+                currentBudget = updatedBudget
+                upsertBudgetInVaultList(updatedBudget)
+                scheduleCategoryReorderPersistence(
+                    updatedBudget,
+                    categoryType: category.categoryType,
+                    windowStore: windowStore
+                )
+                return true
+        }
+    }
+
+    private func scheduleCategoryReorderPersistence(
+        _ budget: BWBudget,
+        categoryType: BWCategoryType,
+        windowStore: BWWindowStore
+    ) {
+        let previousPersistence = categoryReorderPersistenceTask
+        let categoryIDs = budget.categories
+            .filter { $0.categoryType == categoryType }
+            .map(\.id)
+        pendingCategoryReorderCount += 1
+
+        categoryReorderPersistenceTask = Task { [weak self] in
+            await previousPersistence?.value
+            guard let self else { return }
+
+            await self.withBudgetMutation {
+                let result = await BWBudgetService.saveBudget(
+                    budget,
+                    vault: self.storageVault(for: budget),
+                    operation: .CategoriesBulkOrdinalUpdate(categoryIds: categoryIDs)
+                )
+
+                switch result {
+                    case .failure(let error):
+                        windowStore.setError(error)
+                    case .success(let savedBudget):
+                        self.scheduleCloudSave(savedBudget, windowStore: windowStore)
+                        self.scheduleGoogleDriveSave(savedBudget, windowStore: windowStore)
+                        await self.updateAutoRefreshSnapshot()
+                }
             }
 
-            let result = await BWBudgetService.moveCategory(
-                category,
-                in: budget,
-                by: offset,
-                vault: storageVault(for: budget)
-            )
-
-            return await handleBudgetMutation(
-                result,
-                windowStore: windowStore
-            )
+            self.pendingCategoryReorderCount -= 1
+            await self.drainPendingAutoRefreshIfNeeded()
         }
     }
 
@@ -935,6 +989,12 @@ class BWStore: ObservableObject {
             return
         }
 
+        guard pendingCategoryReorderCount == 0 else {
+            return
+        }
+
+        let reorderGeneration = categoryReorderGeneration
+
         if isCloudSyncing {
             while isCloudSyncing {
                 try? await Task.sleep(for: .milliseconds(50))
@@ -966,12 +1026,18 @@ class BWStore: ObservableObject {
                 // The local CloudKit cache remains usable while offline.
                 return
             case .success(let cloudBudgets):
+                guard pendingCategoryReorderCount == 0,
+                      categoryReorderGeneration == reorderGeneration
+                else {
+                    return
+                }
                 lastCloudSyncDate = Date()
                 sharedBudgetIDs = Set(cloudBudgets.lazy
                     .filter(\.isSharedWithCurrentUser)
                     .map { $0.budget.id })
 
                 if case .success(let result) = await BWBudgetService.loadBudgets(vault: cloudVault) {
+                    guard categoryReorderGeneration == reorderGeneration else { return }
                     iCloudBudgets = result.budgets
                     setVaultWarning(skippedFiles: result.skippedFiles)
 
@@ -1047,10 +1113,12 @@ class BWStore: ObservableObject {
     private func synchronizeGoogleDriveBudgets() async {
         guard googleDriveSession.isConnected,
               pendingGoogleDriveSaveCount == 0,
+              pendingCategoryReorderCount == 0,
               !isGoogleDriveSyncing
         else {
             return
         }
+        let reorderGeneration = categoryReorderGeneration
         isGoogleDriveSyncing = true
         defer { isGoogleDriveSyncing = false }
 
@@ -1059,13 +1127,19 @@ class BWStore: ObservableObject {
             guard case .success(let driveBudgets) = await googleDriveRepository.synchronize(
                 accessToken: token
             ) else { return }
-            guard pendingGoogleDriveSaveCount == 0 else { return }
+            guard pendingGoogleDriveSaveCount == 0,
+                  pendingCategoryReorderCount == 0,
+                  categoryReorderGeneration == reorderGeneration
+            else {
+                return
+            }
 
             lastGoogleDriveSyncDate = Date()
             googleDriveSharedBudgetIDs = Set(driveBudgets.lazy
                 .filter(\.isSharedWithCurrentUser)
                 .map { $0.budget.id })
             if case .success(let result) = await BWBudgetService.loadBudgets(vault: googleDriveVault) {
+                guard categoryReorderGeneration == reorderGeneration else { return }
                 googleDriveBudgets = result.budgets
                 if let currentBudget,
                    let refreshed = refreshedBudget(matching: currentBudget),
