@@ -133,6 +133,38 @@ struct BWCRDTTests {
         #expect(merged.crdt?.transactions[key]?.presence.value == false)
     }
 
+    @Test func categoryReorderRebasesOntoLatestCRDTState() async throws {
+        let base = await BWCRDT.prepareNew(makeOrderedBudget())
+        let firstCategoryID = try #require(base.categories.first?.id)
+        let movedCategoryID = try #require(base.categories.last?.id)
+
+        var remoteDesired = base
+        remoteDesired.categories[0].title = "Remote title"
+        let remote = await BWCRDT.applyingChanges(from: base, to: remoteDesired)
+
+        var staleReorder = base
+        staleReorder.categories[2].ordinal = 3
+        staleReorder.categories[3].ordinal = 2
+        let categoryIDs = staleReorder.categories.map(\.id)
+
+        let rebased = try BWRebase.rebase(
+            budgetInMemory: staleReorder,
+            onto: remote,
+            operation: .CategoriesBulkOrdinalUpdate(categoryIds: categoryIDs)
+        ).get()
+        let original = BWCRDT.materialize(rebased)
+        let saved = await BWCRDT.applyingChanges(from: original, to: rebased)
+        let merged = try BWCRDT.merge(saved, remote).get()
+
+        #expect(merged.categories.map(\.id) == [
+            base.categories[0].id,
+            base.categories[1].id,
+            movedCategoryID,
+            base.categories[2].id
+        ])
+        #expect(merged.categories.first(where: { $0.id == firstCategoryID })?.title == "Remote title")
+    }
+
     @Test func higherLegacyRevisionWinsWholeSnapshot() throws {
         let id = UUID()
         let older = BWCRDT.migrateLegacy(BWBudget(id: id, title: "Older"))
@@ -154,6 +186,20 @@ struct BWCRDTTests {
                 categoryType: .expenses,
                 transactions: [BWTransaction(title: "Payment", date: Date(timeIntervalSince1970: 1), amount: 80_000)]
             )]
+        )
+    }
+
+    private func makeOrderedBudget() -> BWBudget {
+        BWBudget(
+            title: "Budget",
+            categories: (0..<4).map { ordinal in
+                BWCategory(
+                    ordinal: ordinal,
+                    title: "Category \(ordinal)",
+                    amountPlanned: UInt64(ordinal + 1) * 1_000,
+                    categoryType: .expenses
+                )
+            }
         )
     }
 

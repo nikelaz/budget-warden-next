@@ -204,13 +204,12 @@ public enum BWBudgetService {
     public static func saveBudget(
         _ budget: BWBudget,
         vault: BWVault,
-        operation _: BWRebaseOperation
+        operation: BWRebaseOperation
     ) async -> Result<BWBudget, BWError> {
         guard let budgetURL = budget.url else {
             return .failure(.saveFailed())
         }
 
-        let originalBudget = BWCRDT.materialize(budget)
         var normalizedBudget: BWBudget
 
         switch normalizeActualAmounts(in: budget) {
@@ -219,6 +218,36 @@ public enum BWBudgetService {
             case .success(let budget):
                 normalizedBudget = budget
         }
+
+        if case .CategoriesBulkOrdinalUpdate = operation {
+            let budgetOnDisk: BWBudget
+            switch await vault.readBudgetFile(url: budgetURL) {
+                case .failure(let error):
+                    return .failure(.saveFailed(underlying: error))
+                case .success(let budget):
+                    budgetOnDisk = budget
+            }
+
+            switch BWRebase.rebase(
+                budgetInMemory: normalizedBudget,
+                onto: budgetOnDisk,
+                operation: operation
+            ) {
+                case .failure(let error):
+                    return .failure(.saveFailed(underlying: error))
+                case .success(let budget):
+                    normalizedBudget = budget
+            }
+
+            switch normalizeActualAmounts(in: normalizedBudget) {
+                case .failure(let error):
+                    return .failure(error)
+                case .success(let budget):
+                    normalizedBudget = budget
+            }
+        }
+
+        let originalBudget = BWCRDT.materialize(normalizedBudget)
 
         normalizedBudget = await BWCRDT.applyingChanges(
             from: originalBudget,
@@ -392,6 +421,8 @@ public enum BWBudgetService {
 
         categories.swapAt(index, targetIndex)
 
+        let reorderedCategoryIDs = categories.map(\.category.id)
+
         for (ordinal, categoryIndex) in categories.map(\.index).enumerated() {
             budget.categories[categoryIndex].ordinal = ordinal
         }
@@ -400,7 +431,11 @@ public enum BWBudgetService {
             case .failure(let error):
                 return .failure(error)
             case .success(let budget):
-                return await saveBudget(budget, vault: vault, operation: .CategoryUpdate(categoryId: category.id))
+                return await saveBudget(
+                    budget,
+                    vault: vault,
+                    operation: .CategoriesBulkOrdinalUpdate(categoryIds: reorderedCategoryIDs)
+                )
         }
     }
 
@@ -426,7 +461,6 @@ public enum BWBudgetService {
 
         let sortedSourceOffsets = sourceOffsets.sorted()
         let movedCategories = sortedSourceOffsets.map { categories[$0] }
-        let movedCategoryIds = movedCategories.map(\.category.id)
         var remainingCategories = categories.enumerated()
             .filter { !sourceOffsets.contains($0.offset) }
             .map(\.element)
@@ -438,6 +472,7 @@ public enum BWBudgetService {
         }
 
         remainingCategories.insert(contentsOf: movedCategories, at: adjustedDestination)
+        let reorderedCategoryIDs = remainingCategories.map(\.category.id)
 
         for (ordinal, categoryIndex) in remainingCategories.map(\.index).enumerated() {
             budget.categories[categoryIndex].ordinal = ordinal
@@ -450,7 +485,7 @@ public enum BWBudgetService {
                 return await saveBudget(
                     budget,
                     vault: vault,
-                    operation: .CategoriesBulkOrdinalUpdate(categoryIds: movedCategoryIds)
+                    operation: .CategoriesBulkOrdinalUpdate(categoryIds: reorderedCategoryIDs)
                 )
         }
     }

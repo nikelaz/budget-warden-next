@@ -24,34 +24,24 @@ public enum BWRebaseOperation {
 }
 
 public enum BWRebase {
-    static func rebase(budgetInMemory: BWBudget, operation: BWRebaseOperation) -> Result<BWBudget, BWError> {
-        guard let budgetURL = budgetInMemory.url else {
-            return .failure(.rebaseFailed())
+    static func rebase(
+        budgetInMemory: BWBudget,
+        onto budgetOnDisk: BWBudget,
+        operation: BWRebaseOperation
+    ) -> Result<BWBudget, BWError> {
+        if let stateInMemory = budgetInMemory.crdt,
+           let stateOnDisk = budgetOnDisk.crdt {
+            if stateInMemory == stateOnDisk {
+                return .success(budgetInMemory)
+            }
         }
-
-        let budgetOnDisk: BWBudget
-        let readBudgetRes: Result<BWBudget, BWError>
-
-        readBudgetRes = BWFiles.readBudgetFile(url: budgetURL)
-
-        switch readBudgetRes {
-            case .failure(let error):
-                return .failure(.rebaseFailed(underlying: error))
-            case .success(let budget):
-                budgetOnDisk = budget
-        }
-
-        if let revisionIdInMemory = budgetInMemory.revisionId,
-           let revisionIdOnDisk = budgetOnDisk.revisionId,
-           revisionIdInMemory == revisionIdOnDisk
-        {
-            // exit case one - budgets are identical
+        else if let revisionIdInMemory = budgetInMemory.revisionId,
+                let revisionIdOnDisk = budgetOnDisk.revisionId,
+                revisionIdInMemory == revisionIdOnDisk {
             return .success(budgetInMemory)
         }
-
-        if (budgetInMemory.revisionId == nil || budgetOnDisk.revisionId == nil) &&
-            budgetInMemory.revision == budgetOnDisk.revision {
-            // exit case one - budgets are identical
+        else if (budgetInMemory.revisionId == nil || budgetOnDisk.revisionId == nil),
+                budgetInMemory.revision == budgetOnDisk.revision {
             return .success(budgetInMemory)
         }
 
