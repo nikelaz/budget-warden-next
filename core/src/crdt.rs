@@ -468,8 +468,6 @@ mod tests {
         }
     }
 
-    // ── same revision returns mem unchanged ──────────────────────────
-
     #[test]
     fn merge_same_revision_returns_mem() {
         let rev_id = Uuid::new_v4();
@@ -483,8 +481,6 @@ mod tests {
         assert_eq!(result.revision, 1);
     }
 
-    // ── revision is max + 1 ─────────────────────────────────────────
-
     #[test]
     fn merge_revision_is_max_plus_one() {
         let mem = make_budget("B", 3, vec![], empty_changes());
@@ -492,8 +488,6 @@ mod tests {
         let result = merge(mem, disk);
         assert_eq!(result.revision, 8);
     }
-
-    // ── schema_version takes max ────────────────────────────────────
 
     #[test]
     fn merge_schema_version_takes_max() {
@@ -504,8 +498,6 @@ mod tests {
         let result = merge(mem, disk);
         assert_eq!(result.schema_version, 5);
     }
-
-    // ── budget title resolved from changes ──────────────────────────
 
     #[test]
     fn merge_budget_title_disk_wins_when_newer() {
@@ -567,8 +559,6 @@ mod tests {
         assert_eq!(result.title, "Keep Me");
     }
 
-    // ── category changes: newer timestamp wins per field ────────────
-
     #[test]
     fn merge_category_field_newer_timestamp_wins() {
         let cat_id = Uuid::from_u128(0xCA7);
@@ -616,8 +606,6 @@ mod tests {
         assert_eq!(result.categories[0].title, "New Title");
     }
 
-    // ── independent fields from different devices merge ─────────────
-
     #[test]
     fn merge_category_independent_fields_from_both_sides() {
         let cat_id = Uuid::from_u128(0xCA7);
@@ -663,8 +651,6 @@ mod tests {
         assert_eq!(result.categories[0].title, "Mem Title");
         assert_eq!(result.categories[0].amount_planned.value, 50000);
     }
-
-    // ── transaction changes merge ───────────────────────────────────
 
     #[test]
     fn merge_transaction_field_newer_wins() {
@@ -714,8 +700,6 @@ mod tests {
         assert_eq!(result.categories[0].transactions[0].title, "New Tx");
     }
 
-    // ── category tombstones ─────────────────────────────────────────
-
     #[test]
     fn merge_category_tombstone_excludes_category() {
         let cat_id = Uuid::from_u128(0xCA7);
@@ -730,8 +714,6 @@ mod tests {
 
         assert!(result.categories.is_empty());
     }
-
-    // ── transaction tombstones ──────────────────────────────────────
 
     #[test]
     fn merge_transaction_tombstone_excludes_transaction() {
@@ -750,8 +732,6 @@ mod tests {
         assert_eq!(result.categories[0].transactions.len(), 0);
     }
 
-    // ── amount_actual recalculated from surviving transactions ──────
-
     #[test]
     fn merge_recalculates_amount_actual() {
         let cat_id = Uuid::from_u128(0xCA7);
@@ -769,8 +749,6 @@ mod tests {
         assert_eq!(result.categories[0].amount_actual.value, 10000);
     }
 
-    // ── disk-only category included in result ───────────────────────
-
     #[test]
     fn merge_includes_disk_only_category() {
         let disk_cat_id = Uuid::from_u128(0xD15C);
@@ -783,8 +761,6 @@ mod tests {
         assert_eq!(result.categories.len(), 1);
         assert_eq!(result.categories[0].title, "Disk Only Cat");
     }
-
-    // ── mem-only category included in result ────────────────────────
 
     #[test]
     fn merge_includes_mem_only_category() {
@@ -799,8 +775,6 @@ mod tests {
         assert_eq!(result.categories[0].title, "Mem Only Cat");
     }
 
-    // ── categories sorted by ordinal ────────────────────────────────
-
     #[test]
     fn merge_categories_sorted_by_ordinal() {
         let cat_a = make_category(Uuid::from_u128(1), 2, "Second", vec![]);
@@ -814,8 +788,6 @@ mod tests {
         let titles: Vec<&str> = result.categories.iter().map(|c| c.title.as_str()).collect();
         assert_eq!(titles, vec!["First", "Middle", "Second"]);
     }
-
-    // ── tombstone merge keeps newer timestamp ───────────────────────
 
     #[test]
     fn merge_tombstones_keeps_newer() {
@@ -833,8 +805,6 @@ mod tests {
 
         assert_eq!(result.changes.category_tombstones[&id].physical_ms, 200);
     }
-
-    // ── logical clock breaks tie ────────────────────────────────────
 
     #[test]
     fn merge_budget_title_logical_clock_breaks_tie() {
@@ -862,8 +832,6 @@ mod tests {
         assert_eq!(result.title, "Logical Winner");
     }
 
-    // ── mem category data preferred over disk for same id ───────────
-
     #[test]
     fn merge_mem_category_data_preferred_for_same_id() {
         let cat_id = Uuid::from_u128(0xCA7);
@@ -877,8 +845,6 @@ mod tests {
         // mem is processed second in build_merged_categories, so its base data wins
         assert_eq!(result.categories[0].title, "Mem Version");
     }
-
-    // ── preserves mem id and url ────────────────────────────────────
 
     #[test]
     fn merge_preserves_mem_id_and_url() {
