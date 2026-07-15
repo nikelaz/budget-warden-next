@@ -14,7 +14,7 @@ use chrono::{Datelike, Local};
 use crate::crdt::*;
 
 #[data]
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct BWBudget {
     pub id: Uuid,
     pub revision: i64,
@@ -28,6 +28,14 @@ pub struct BWBudget {
     pub url: Option<String>,
 }
 
+impl BWBudget {
+    pub fn update_actuals(&mut self) {
+        for category in &mut self.categories {
+            category.update_actuals();
+        }
+    }
+}
+
 #[data]
 #[derive(Clone, Serialize, Deserialize)]
 pub struct BWCategory {
@@ -39,6 +47,18 @@ pub struct BWCategory {
     pub amount_accumulated: BWMoneyAmount,
     pub category_type: BWCategoryType,
     pub transactions: Vec<BWTransaction>
+}
+
+impl BWCategory {
+    pub fn update_actuals(&mut self) {
+        let mut actual = 0;
+
+        for transaction in &self.transactions {
+            actual += transaction.amount.value;
+        }
+
+        self.amount_actual = BWMoneyAmount { value: actual };
+    }
 }
 
 #[data]
@@ -80,7 +100,7 @@ pub enum BWCategoryType {
 }
 
 #[data]
-#[derive(Copy, Clone, Serialize, Deserialize)]
+#[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BWDate {
     pub year: i32,
     pub month: i32,
@@ -100,7 +120,7 @@ impl BWDate {
 }
 
 #[data]
-#[derive(Copy, Clone, Serialize, Deserialize)]
+#[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(transparent)]
 pub struct BWMoneyAmount {
     pub value: i64,

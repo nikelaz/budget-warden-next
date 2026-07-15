@@ -9,22 +9,49 @@
 
 use boltffi::*;
 use uuid::Uuid;
-use crate::models::*;
 use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
+use chrono::Utc;
+use crate::app_state::*;
+use crate::models::*;
 
 #[data]
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct HlcTimestamp {
-    physical_ms: u64,
-    logical: u32,
-    device_id: Uuid,
+    pub physical_ms: i64,
+    pub logical: i32,
+    pub device_id: Uuid,
 }
 
 impl Ord for HlcTimestamp {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.physical_ms.cmp(&other.physical_ms)
             .then(self.logical.cmp(&other.logical))
+    }
+}
+
+impl HlcTimestamp {
+    pub fn now() -> Self {
+        let state = app_state();
+        let mut last = state.last_hlc.lock().unwrap();
+        let now_ms = Utc::now().timestamp_millis();
+
+        let ts = if now_ms <= last.physical_ms {
+            Self {
+                physical_ms: last.physical_ms,
+                logical: last.logical + 1,
+                device_id: state.device_id,
+            }
+        } else {
+            Self {
+                physical_ms: now_ms,
+                logical: 0,
+                device_id: state.device_id,
+            }
+        };
+
+        *last = ts.clone();
+        ts
     }
 }
 
@@ -39,11 +66,10 @@ impl PartialOrd for HlcTimestamp {
 pub enum CRDTOperation {
     Create,
     Update,
-    Delete,
 }
 
 #[data]
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TransactionChangePayload {
     pub title: Option<String>,
     pub description: Option<String>,
@@ -52,7 +78,7 @@ pub struct TransactionChangePayload {
 }
 
 #[data]
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TransactionChange {
     change_id: Uuid,
     timestamp: HlcTimestamp,
@@ -60,6 +86,113 @@ pub struct TransactionChange {
     category_id: Uuid,
     transaction_id: Uuid,
     payload: Option<TransactionChangePayload>,
+}
+
+pub fn new_change_transaction_create(
+    category_id: Uuid,
+    transaction: BWTransaction
+) -> HashMap<TransactionField, TransactionChange> {
+    let mut map = HashMap::new();
+
+    map.insert(TransactionField::Title, TransactionChange {
+        change_id: Uuid::new_v4(),
+        timestamp: HlcTimestamp::now(),
+        operation: CRDTOperation::Create,
+        category_id, 
+        transaction_id: transaction.id,
+        payload: Some(TransactionChangePayload {
+            title: Some(transaction.title),
+            description: None,
+            date: None,
+            amount: None,
+        })
+    });
+
+    map.insert(TransactionField::Description, TransactionChange {
+        change_id: Uuid::new_v4(),
+        timestamp: HlcTimestamp::now(),
+        operation: CRDTOperation::Create,
+        category_id, 
+        transaction_id: transaction.id,
+        payload: Some(TransactionChangePayload {
+            title: None,
+            description: Some(transaction.description),
+            date: None,
+            amount: None,
+        })
+    });
+
+    map.insert(TransactionField::Date, TransactionChange {
+        change_id: Uuid::new_v4(),
+        timestamp: HlcTimestamp::now(),
+        operation: CRDTOperation::Create,
+        category_id, 
+        transaction_id: transaction.id,
+        payload: Some(TransactionChangePayload {
+            title: None,
+            description: None,
+            date: Some(transaction.date),
+            amount: None,
+        })
+    });
+
+    map.insert(TransactionField::Amount, TransactionChange {
+        change_id: Uuid::new_v4(),
+        timestamp: HlcTimestamp::now(),
+        operation: CRDTOperation::Create,
+        category_id, 
+        transaction_id: transaction.id,
+        payload: Some(TransactionChangePayload {
+            title: None,
+            description: None,
+            date: None,
+            amount: Some(transaction.amount),
+        })
+    });
+
+    map
+}
+
+pub fn new_change_transaction_update(
+    category_id: Uuid,
+    transaction: BWTransaction,
+    field: TransactionField,
+) -> TransactionChange {
+    let payload = match field {
+        TransactionField::Title => TransactionChangePayload {
+            title: Some(transaction.title),
+            description: None,
+            date: None,
+            amount: None,
+        },
+        TransactionField::Description => TransactionChangePayload {
+            title: None,
+            description: Some(transaction.description),
+            date: None,
+            amount: None,
+        },
+        TransactionField::Date => TransactionChangePayload {
+            title: None,
+            description: None,
+            date: Some(transaction.date),
+            amount: None,
+        },
+        TransactionField::Amount => TransactionChangePayload {
+            title: None,
+            description: None,
+            date: None,
+            amount: Some(transaction.amount),
+        },
+    };
+
+    TransactionChange { 
+        change_id: Uuid::new_v4(),
+        timestamp: HlcTimestamp::now(),
+        operation: CRDTOperation::Update,
+        category_id, 
+        transaction_id: transaction.id,
+        payload: Some(payload),
+    }
 }
 
 #[data]
@@ -83,13 +216,13 @@ pub struct CategoryChange {
 }
 
 #[data]
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct BudgetChangePayload {
     pub title: Option<String>,
 }
 
 #[data]
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct BudgetChange {
     change_id: Uuid,
     timestamp: HlcTimestamp,
@@ -116,7 +249,7 @@ pub enum TransactionField {
 }
 
 #[data]
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct CRDTChanges {
     pub budget: Vec<BudgetChange>,
     pub categories: HashMap<Uuid, HashMap<CategoryField, CategoryChange>>,
@@ -349,7 +482,6 @@ fn build_merged_categories(
     result
 }
 
-#[export]
 pub fn merge(budget_in_memory: BWBudget, budget_on_disk: BWBudget) -> BWBudget {
     // Simple case: no merge is necessary
     if budget_in_memory.revision_id == budget_on_disk.revision_id {
@@ -410,7 +542,7 @@ mod tests {
     const DEVICE_A: Uuid = Uuid::from_u128(0xAAAA);
     const DEVICE_B: Uuid = Uuid::from_u128(0xBBBB);
 
-    fn ts(physical_ms: u64, logical: u32, device_id: Uuid) -> HlcTimestamp {
+    fn ts(physical_ms: i64, logical: i32, device_id: Uuid) -> HlcTimestamp {
         HlcTimestamp { physical_ms, logical, device_id }
     }
 
