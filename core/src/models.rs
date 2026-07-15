@@ -21,6 +21,9 @@ pub struct BWBudget {
     pub schema_version: i32,
     pub title: String,
     pub categories: Vec<BWCategory>,
+
+    #[serde(skip_serializing)]
+    pub url: String,
 }
 
 #[data]
