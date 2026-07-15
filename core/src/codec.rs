@@ -10,26 +10,23 @@
 use boltffi::*;
 use crate::models::BWBudget;
 
-#[data]
-pub struct BWCodec {}
+#[export]
+pub fn encode_budget(budget: &BWBudget) -> Result<String, String> {
+    serde_json::to_string_pretty(budget)
+        .map_err(|e| format!("Failed to encode budget to JSON: {e}"))
+}
 
-#[data(impl)]
-impl BWCodec {
-    pub fn encode_budget(budget: &BWBudget) -> Result<String, String> {
-        serde_json::to_string_pretty(budget)
-            .map_err(|e| format!("Failed to encode budget to JSON: {e}"))
-    }
-
-    pub fn decode_budget(json: &str) -> Result<BWBudget, String> {
-        serde_json::from_str(json)
-            .map_err(|e| format!("Failed to decode budget from JSON: {e}"))
-    }
+#[export]
+pub fn decode_budget(json: &str) -> Result<BWBudget, String> {
+    serde_json::from_str(json)
+        .map_err(|e| format!("Failed to decode budget from JSON: {e}"))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::models::*;
+    use crate::crdt::*;
     use uuid::Uuid;
 
     #[test]
@@ -60,10 +57,18 @@ mod tests {
                     ],
                 }
             ],
+            changes: CRDTChanges {
+                budget: Vec::new(),
+                categories: std::collections::HashMap::new(),
+                transactions: std::collections::HashMap::new(),
+                category_tombstones: std::collections::HashMap::new(),
+                transaction_tombstones: std::collections::HashMap::new(),
+            },
+            url: Some(String::new()),
         };
 
-        let json = BWCodec::encode_budget(&budget).unwrap();
-        let decoded = BWCodec::decode_budget(&json).unwrap();
+        let json = encode_budget(&budget).unwrap();
+        let decoded = decode_budget(&json).unwrap();
 
         assert_eq!(decoded.id, budget.id);
         assert_eq!(decoded.title, "Test Budget");

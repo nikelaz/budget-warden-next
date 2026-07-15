@@ -11,6 +11,7 @@ use boltffi::*;
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 use chrono::{Datelike, Local};
+use crate::crdt::*;
 
 #[data]
 #[derive(Serialize, Deserialize)]
@@ -21,13 +22,14 @@ pub struct BWBudget {
     pub schema_version: i32,
     pub title: String,
     pub categories: Vec<BWCategory>,
+    pub changes: CRDTChanges, 
 
     #[serde(skip_serializing)]
-    pub url: String,
+    pub url: Option<String>,
 }
 
 #[data]
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct BWCategory {
     pub id: Uuid,
     pub ordinal: i32,
@@ -40,7 +42,7 @@ pub struct BWCategory {
 }
 
 #[data]
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct BWTransaction {
     pub id: Uuid,
     pub title: String,
