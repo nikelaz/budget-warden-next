@@ -21,8 +21,10 @@ pub fn load_budget(path: String) -> Result<BWBudget, String> {
     let json = fs::read_to_string(&path)
         .map_err(|err| format!("Failed to read budget file: {err}"))?;
 
-    let budget = codec::decode_budget(&json)
+    let mut budget = codec::decode_budget(&json)
         .map_err(|err| format!("Failed to decode budget file: {err}"))?;
+
+    budget.url = Some(path);
 
     Ok(budget)
 }
@@ -74,9 +76,7 @@ pub fn create_transaction(
 
     budget.changes.transactions.insert(transaction.id, change);
 
-    let merged_budget = update_and_merge_budget(budget.clone())?;
-
-    Ok(merged_budget)
+    Ok(budget)
 }
 
 #[export]
@@ -151,9 +151,7 @@ pub fn update_transaction(
         transaction_changes.insert(TransactionField::Amount, change);
     }
 
-    let merged_budget = update_and_merge_budget(budget.clone())?;
-
-    Ok(merged_budget)
+    Ok(budget)
 }
 
 #[export]
@@ -180,7 +178,5 @@ pub fn remove_transaction(
 
     budget.changes.transaction_tombstones.insert(transaction_id, HlcTimestamp::now());
 
-    let merged_budget = update_and_merge_budget(budget.clone())?;
-
-    Ok(merged_budget)
+    Ok(budget)
 }
