@@ -16,18 +16,11 @@ use crate::app_state::*;
 use crate::models::*;
 
 #[data]
-#[derive(Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Ord, PartialOrd)]
 pub struct HlcTimestamp {
     pub physical_ms: i64,
     pub logical: i32,
     pub device_id: Uuid,
-}
-
-impl Ord for HlcTimestamp {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.physical_ms.cmp(&other.physical_ms)
-            .then(self.logical.cmp(&other.logical))
-    }
 }
 
 impl HlcTimestamp {
@@ -52,12 +45,6 @@ impl HlcTimestamp {
 
         *last = ts.clone();
         ts
-    }
-}
-
-impl PartialOrd for HlcTimestamp {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
     }
 }
 
@@ -534,6 +521,8 @@ pub fn merge(budget_in_memory: BWBudget, budget_on_disk: BWBudget) -> BWBudget {
     }
 }
 
+// @TODO: These tests are LLM generated and still not reviewed at all
+// they are also old, generated before multiple changes to the crdt layer
 #[cfg(test)]
 mod tests {
     use super::*;
