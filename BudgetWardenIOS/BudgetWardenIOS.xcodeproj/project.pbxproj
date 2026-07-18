@@ -45,11 +45,6 @@
 			path = BudgetWardenIOS;
 			sourceTree = "<group>";
 		};
-		B20000030000000000000003 /* BudgetWardenIOSUITests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = BudgetWardenIOSUITests;
-			sourceTree = "<group>";
-		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -76,7 +71,6 @@
 			isa = PBXGroup;
 			children = (
 				B10000050000000000000005 /* BudgetWardenIOS */,
-				B20000030000000000000003 /* BudgetWardenIOSUITests */,
 				B10000080000000000000008 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -129,9 +123,6 @@
 			);
 			dependencies = (
 				B20000080000000000000008 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				B20000030000000000000003 /* BudgetWardenIOSUITests */,
 			);
 			name = BudgetWardenIOSUITests;
 			packageProductDependencies = (

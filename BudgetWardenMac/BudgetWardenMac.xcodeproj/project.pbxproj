@@ -31,11 +31,6 @@
 			path = BudgetWardenMac;
 			sourceTree = "<group>";
 		};
-		5A87E6812FB2E0010029A3E7 /* BudgetWardenMacUITests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = BudgetWardenMacUITests;
-			sourceTree = "<group>";
-		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -61,7 +56,6 @@
 			isa = PBXGroup;
 			children = (
 				5A87E6722FB1961B0029A3E7 /* BudgetWardenMac */,
-				5A87E6812FB2E0010029A3E7 /* BudgetWardenMacUITests */,
 				5A87E6712FB1961B0029A3E7 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -113,9 +107,6 @@
 			);
 			dependencies = (
 				5A87E6872FB2E0010029A3E7 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				5A87E6812FB2E0010029A3E7 /* BudgetWardenMacUITests */,
 			);
 			name = BudgetWardenMacUITests;
 			packageProductDependencies = (
