@@ -9,7 +9,7 @@
  */
 
 import SwiftUI
-import BudgetWardenAppleCore
+import BWCore
 
 struct BWReportingView: View {
     @ObservedObject var store: BWStore
@@ -56,15 +56,15 @@ struct BWReportingView: View {
 
     private var budgetMenu: some View {
         Menu {
-            ForEach(store.budgetsInVault) { budget in
+            ForEach(store.recentFiles, id: \.self) { url in
                 Button {
-                    store.selectBudget(budget)
+                    Task { _ = await store.openBudget(at: url, windowStore: windowStore) }
                 } label: {
-                    if store.currentBudget?.id == budget.id {
-                        Label(budget.title, systemImage: "checkmark")
+                    if store.currentBudget?.url == url.path {
+                        Label(store.currentBudget?.title ?? url.deletingPathExtension().lastPathComponent, systemImage: "checkmark")
                     }
                     else {
-                        Text(budget.title)
+                        Text(url.deletingPathExtension().lastPathComponent)
                     }
                 }
             }

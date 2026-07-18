@@ -7,9 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		AB0000010000000000000001 /* BudgetWardenAppleCore in Frameworks */ = {isa = PBXBuildFile; productRef = AB0000030000000000000003 /* BudgetWardenAppleCore */; };
-		AB0010010000000000000001 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = AB0010030000000000000003 /* GoogleSignIn */; };
-		D054AFEB2FFAB1920075958D /* MacTestPlan.xctestplan in Resources */ = {isa = PBXBuildFile; fileRef = D054AFEA2FFAB1920075958D /* MacTestPlan.xctestplan */; };
+		D0F82B5C300B9E3600577902 /* BWCore in Frameworks */ = {isa = PBXBuildFile; productRef = D0F82B5B300B9E3600577902 /* BWCore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -25,7 +23,6 @@
 /* Begin PBXFileReference section */
 		5A87E6702FB1961B0029A3E7 /* Budget Warden.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Budget Warden.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5A87E6802FB2E0010029A3E7 /* BudgetWardenMacUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BudgetWardenMacUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		D054AFEA2FFAB1920075958D /* MacTestPlan.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; name = MacTestPlan.xctestplan; path = ../MacTestPlan.xctestplan; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -46,8 +43,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				AB0000010000000000000001 /* BudgetWardenAppleCore in Frameworks */,
-				AB0010010000000000000001 /* GoogleSignIn in Frameworks */,
+				D0F82B5C300B9E3600577902 /* BWCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -64,7 +60,6 @@
 		5A87E6672FB1961B0029A3E7 = {
 			isa = PBXGroup;
 			children = (
-				D054AFEA2FFAB1920075958D /* MacTestPlan.xctestplan */,
 				5A87E6722FB1961B0029A3E7 /* BudgetWardenMac */,
 				5A87E6812FB2E0010029A3E7 /* BudgetWardenMacUITests */,
 				5A87E6712FB1961B0029A3E7 /* Products */,
@@ -88,8 +83,8 @@
 			buildConfigurationList = 5A87E67B2FB1961C0029A3E7 /* Build configuration list for PBXNativeTarget "BudgetWardenMac" */;
 			buildPhases = (
 				5A87E66C2FB1961B0029A3E7 /* Sources */,
-				5A87E66D2FB1961B0029A3E7 /* Frameworks */,
 				5A87E66E2FB1961B0029A3E7 /* Resources */,
+				5A87E66D2FB1961B0029A3E7 /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -100,8 +95,7 @@
 			);
 			name = BudgetWardenMac;
 			packageProductDependencies = (
-				AB0000030000000000000003 /* BudgetWardenAppleCore */,
-				AB0010030000000000000003 /* GoogleSignIn */,
+				D0F82B5B300B9E3600577902 /* BWCore */,
 			);
 			productName = BudgetWardenMac;
 			productReference = 5A87E6702FB1961B0029A3E7 /* Budget Warden.app */;
@@ -159,8 +153,7 @@
 			mainGroup = 5A87E6672FB1961B0029A3E7;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				AB0000020000000000000002 /* XCLocalSwiftPackageReference "../BudgetWardenAppleCore" */,
-				AB0010020000000000000002 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				D0D277DF300BF5C4002B45D1 /* XCLocalSwiftPackageReference "../core/dist/apple" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 5A87E6712FB1961B0029A3E7 /* Products */;
@@ -178,7 +171,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D054AFEB2FFAB1920075958D /* MacTestPlan.xctestplan in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -271,8 +263,6 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				GOOGLE_CLIENT_ID = "1012163901484-it19vp6ohp660laat181jhq0sjqek2eq.apps.googleusercontent.com";
-				GOOGLE_REVERSED_CLIENT_ID = "com.googleusercontent.apps.1012163901484-it19vp6ohp660laat181jhq0sjqek2eq";
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.4;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
@@ -333,8 +323,6 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				GOOGLE_CLIENT_ID = "1012163901484-it19vp6ohp660laat181jhq0sjqek2eq.apps.googleusercontent.com";
-				GOOGLE_REVERSED_CLIENT_ID = "com.googleusercontent.apps.1012163901484-it19vp6ohp660laat181jhq0sjqek2eq";
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.4;
 				MTL_ENABLE_DEBUG_INFO = NO;
@@ -362,8 +350,6 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = NO;
-				GOOGLE_CLIENT_ID = "1012163901484-it19vp6ohp660laat181jhq0sjqek2eq.apps.googleusercontent.com";
-				GOOGLE_REVERSED_CLIENT_ID = "com.googleusercontent.apps.1012163901484-it19vp6ohp660laat181jhq0sjqek2eq";
 				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Budget Warden";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
@@ -404,8 +390,6 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = NO;
-				GOOGLE_CLIENT_ID = "1012163901484-it19vp6ohp660laat181jhq0sjqek2eq.apps.googleusercontent.com";
-				GOOGLE_REVERSED_CLIENT_ID = "com.googleusercontent.apps.1012163901484-it19vp6ohp660laat181jhq0sjqek2eq";
 				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Budget Warden";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
@@ -496,33 +480,16 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		AB0000020000000000000002 /* XCLocalSwiftPackageReference "../BudgetWardenAppleCore" */ = {
+		D0D277DF300BF5C4002B45D1 /* XCLocalSwiftPackageReference "../core/dist/apple" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = ../BudgetWardenAppleCore;
+			relativePath = ../core/dist/apple;
 		};
 /* End XCLocalSwiftPackageReference section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		AB0010020000000000000002 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 9.2.0;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
 /* Begin XCSwiftPackageProductDependency section */
-		AB0000030000000000000003 /* BudgetWardenAppleCore */ = {
+		D0F82B5B300B9E3600577902 /* BWCore */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = AB0000020000000000000002 /* XCLocalSwiftPackageReference "../BudgetWardenAppleCore" */;
-			productName = BudgetWardenAppleCore;
-		};
-		AB0010030000000000000003 /* GoogleSignIn */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = AB0010020000000000000002 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
-			productName = GoogleSignIn;
+			productName = BWCore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

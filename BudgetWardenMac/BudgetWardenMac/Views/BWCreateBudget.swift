@@ -9,8 +9,8 @@
  *
  */
 
+import BWCore
 import SwiftUI
-import BudgetWardenAppleCore
 
 struct CreateBudgetView: View {
     @EnvironmentObject var store: BWStore
@@ -20,8 +20,8 @@ struct CreateBudgetView: View {
     @Environment(\.dismissWindow) private var dismissWindow
 
     @State private var title: Swift.String
-    @State private var selectedTemplate: BWTemplateSelection = .basic
-    @State private var selectedLocation: BWVaultLocation = .local
+    @State private var selectedTemplate: BWTemplateType = .basicMonthly
+    @State private var recentTemplates: [BWTemplateType] = []
 
     let onCreateSuccess: () -> Void
 
@@ -45,29 +45,23 @@ struct CreateBudgetView: View {
                     .padding(.bottom, 10)
                     .accessibilityIdentifier("titleTextField")
 
-                Picker("Storage", selection: $selectedLocation) {
-                    Text("iCloud").tag(BWVaultLocation.iCloud)
-                    Text("Google Drive").tag(BWVaultLocation.googleDrive)
-                    Text("Local File").tag(BWVaultLocation.local)
-                }
-
                 Picker(selection: $selectedTemplate, content: {
                     Text("Templates")
                         .selectionDisabled(true)
 
-                    Text("Basic budget (recommended)")
-                        .tag(BWTemplateSelection.basic)
+                    Text("Monthly Budget")
+                        .tag(BWTemplateType.basicMonthly)
 
-                    Text("Blank budget")
-                        .tag(BWTemplateSelection.blank)
+                    Text("Empty Budget")
+                        .tag(BWTemplateType.empty)
 
                     Text("Previous budget")
                         .selectionDisabled(true)
 
-                    ForEach(store.budgetsInVault) { budget in
-                        if let budgetUrl = budget.url {
+                    ForEach(recentTemplates, id: \.self) { template in
+                        if case .previousBudget(let budget) = template {
                             Text(budget.title)
-                                .tag(BWTemplateSelection.previous(budgetUrl))
+                                .tag(template)
                         }
                     }
                 }, label: {
@@ -88,7 +82,6 @@ struct CreateBudgetView: View {
                         if await store.createBudget(
                             title: title,
                             template: selectedTemplate,
-                            location: selectedLocation,
                             windowStore: windowStore
                         ) {
                             windowStore.closeBudgetDialog()
@@ -101,8 +94,8 @@ struct CreateBudgetView: View {
             }
         }
         .padding(20)
-        .task {
-            selectedLocation = store.preferredBudgetLocation
+        .task(id: store.recentFiles) {
+            recentTemplates = store.recentBudgetTemplates()
         }
     }
 

@@ -9,7 +9,7 @@
  */
 
 import SwiftUI
-import BudgetWardenAppleCore
+import BWCore
 
 enum SidebarSection: Hashable {
     case budget

@@ -9,7 +9,7 @@
  */
 
 import SwiftUI
-import BudgetWardenAppleCore
+import BWCore
 
 struct BWCategoryTransactionsWindowValue: Codable, Hashable {
     let budgetID: UUID
@@ -51,23 +51,12 @@ struct BWCategoryTransactionsWindow: View {
         return "\(category.title) Transactions"
     }
 
-    private var hasAutoRefreshBlockingEditor: Bool {
-        isCreatingTransaction || isFilterPresented || windowStore.isErrorState
-    }
-
-    private func updateAutoRefreshEditorBlocker() {
-        store.setAutoRefreshSuspended(
-            hasAutoRefreshBlockingEditor,
-            reason: "categoryTransactionsWindowEditor"
-        )
-    }
-
     private var filteredTransactions: [BWTransaction] {
         sortedTransactions(category?.transactions.filter(matchesFilters) ?? [])
     }
 
     private var transactionDateRange: (oldest: Date, newest: Date) {
-        let dates = category?.transactions.map(\.date) ?? []
+        let dates = category?.transactions.map { $0.date.foundationDate } ?? []
         let now = Date()
 
         return (
@@ -174,21 +163,6 @@ struct BWCategoryTransactionsWindow: View {
         } message: {
             Text(windowStore.errorMessage)
         }
-        .onAppear {
-            updateAutoRefreshEditorBlocker()
-        }
-        .onDisappear {
-            store.setAutoRefreshSuspended(false, reason: "categoryTransactionsWindowEditor")
-        }
-        .onChange(of: isCreatingTransaction) { _, _ in
-            updateAutoRefreshEditorBlocker()
-        }
-        .onChange(of: isFilterPresented) { _, _ in
-            updateAutoRefreshEditorBlocker()
-        }
-        .onChange(of: windowStore.isErrorState) { _, _ in
-            updateAutoRefreshEditorBlocker()
-        }
     }
 
     private func transactionTable(category: BWCategory) -> some View {
@@ -213,7 +187,7 @@ struct BWCategoryTransactionsWindow: View {
             else {
                 Table(filteredTransactions, selection: $selection, sortOrder: $sortOrder) {
                     TableColumn("Date", value: \.date) { transaction in
-                        Text(transaction.date.formatted(date: .abbreviated, time: .omitted))
+                        Text(transaction.date.foundationDate.formatted(date: .abbreviated, time: .omitted))
                             .monospacedDigit()
                     }
                     .width(110)
@@ -288,7 +262,7 @@ struct BWCategoryTransactionsWindow: View {
         let haystack = [
             transaction.title,
             transaction.description,
-            transaction.date.formatted(date: .abbreviated, time: .omitted),
+            transaction.date.foundationDate.formatted(date: .abbreviated, time: .omitted),
             transaction.amount.formattedMoneyAmount(currency: store.selectedCurrency),
             transaction.amount.moneyInputText
         ].joined(separator: " ")
@@ -302,7 +276,7 @@ struct BWCategoryTransactionsWindow: View {
         }
 
         let calendar = Calendar.current
-        let transactionDay = calendar.startOfDay(for: transaction.date)
+        let transactionDay = calendar.startOfDay(for: transaction.date.foundationDate)
         let startDay = calendar.startOfDay(for: startDate)
         let endDay = calendar.startOfDay(for: endDate)
 
@@ -319,7 +293,7 @@ struct BWCategoryTransactionsWindow: View {
                 return false
             }
 
-            guard transaction.amount >= minimumAmount else {
+            guard transaction.amount.unsignedValue >= minimumAmount else {
                 return false
             }
         }
@@ -329,7 +303,7 @@ struct BWCategoryTransactionsWindow: View {
                 return false
             }
 
-            guard transaction.amount <= maximumAmount else {
+            guard transaction.amount.unsignedValue <= maximumAmount else {
                 return false
             }
         }
@@ -539,7 +513,7 @@ struct BWTransactionInspectorView: View {
                             let categories = orderedCategories(for: type)
 
                             if !categories.isEmpty {
-                                Text(type.title)
+                                Text(type.toString())
                                     .font(.headline)
                                     .selectionDisabled(true)
 
@@ -644,14 +618,16 @@ struct BWTransactionInspectorView: View {
     }
 
     private func orderedCategories(for type: BWCategoryType) -> [BWCategory] {
-        BWBudget(title: "", categories: categories).orderedCategories(for: type)
+        categories
+            .filter { $0.categoryType == type }
+            .sorted { $0.ordinal < $1.ordinal }
     }
 
     private func resetFields() {
         title = transaction.title
         amount = transaction.amount.moneyInputText
         description = transaction.description
-        date = transaction.date
+        date = transaction.date.foundationDate
         selectedCategoryID = categoryID
     }
 
@@ -664,8 +640,8 @@ struct BWTransactionInspectorView: View {
             id: transaction.id,
             title: trimmedTitle,
             description: trimmedDescription,
-            date: date,
-            amount: parsedAmount
+            date: BWDate(date),
+            amount: BWMoneyAmount(value: Int64(parsedAmount))
         ))
     }
 }

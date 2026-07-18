@@ -9,7 +9,7 @@
  */
 
 import SwiftUI
-import BudgetWardenAppleCore
+import BWCore
 
 private struct BWTransactionListItem: Identifiable {
     let id: UUID
@@ -27,11 +27,11 @@ private struct BWTransactionListItem: Identifiable {
     }
 
     var date: Date {
-        transaction.date
+        transaction.date.foundationDate
     }
 
     var amount: UInt64 {
-        transaction.amount
+        transaction.amount.unsignedValue
     }
 }
 
@@ -56,17 +56,6 @@ struct BWTransactionsView: View {
         store.currentBudget?.categories.isEmpty == false
     }
 
-    private var hasAutoRefreshBlockingEditor: Bool {
-        isCreatingTransaction || isFilterPresented
-    }
-
-    private func updateAutoRefreshEditorBlocker() {
-        store.setAutoRefreshSuspended(
-            hasAutoRefreshBlockingEditor,
-            reason: "transactionsViewEditor"
-        )
-    }
-
     private var transactions: [BWTransactionListItem] {
         guard let budget = store.currentBudget else {
             return []
@@ -78,7 +67,7 @@ struct BWTransactionsView: View {
                     id: transaction.id,
                     categoryID: category.id,
                     categoryTitle: category.title,
-                    categoryTypeTitle: category.categoryType.title,
+                    categoryTypeTitle: category.categoryType.toString(),
                     transaction: transaction
                 )
             }
@@ -115,15 +104,15 @@ struct BWTransactionsView: View {
             .toolbar {
                 ToolbarItemGroup(placement: .principal) {
                     Menu {
-                        ForEach(store.budgetsInVault) { budget in
+                        ForEach(store.recentFiles, id: \.self) { url in
                             Button {
-                                store.selectBudget(budget)
+                                Task { _ = await store.openBudget(at: url, windowStore: windowStore) }
                             } label: {
-                                if store.currentBudget?.id == budget.id {
-                                    Label(budget.title, systemImage: "checkmark")
+                                if store.currentBudget?.url == url.path {
+                                    Label(store.currentBudget?.title ?? url.deletingPathExtension().lastPathComponent, systemImage: "checkmark")
                                 }
                                 else {
-                                    Text(budget.title)
+                                    Text(url.deletingPathExtension().lastPathComponent)
                                 }
                             }
                         }
@@ -226,18 +215,6 @@ struct BWTransactionsView: View {
                 .environmentObject(store)
                 .environmentObject(windowStore)
                 .frame(minWidth: 360)
-            }
-            .onAppear {
-                updateAutoRefreshEditorBlocker()
-            }
-            .onDisappear {
-                store.setAutoRefreshSuspended(false, reason: "transactionsViewEditor")
-            }
-            .onChange(of: isCreatingTransaction) { _, _ in
-                updateAutoRefreshEditorBlocker()
-            }
-            .onChange(of: isFilterPresented) { _, _ in
-                updateAutoRefreshEditorBlocker()
             }
     }
 

@@ -9,7 +9,7 @@
  */
 
 import SwiftUI
-import BudgetWardenAppleCore
+import BWCore
 
 struct BWPreferencesView: View {
     @Binding var selectedCurrency: BWCurrency
