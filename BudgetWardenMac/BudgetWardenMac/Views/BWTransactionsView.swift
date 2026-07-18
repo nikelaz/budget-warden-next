@@ -67,7 +67,7 @@ struct BWTransactionsView: View {
                     id: transaction.id,
                     categoryID: category.id,
                     categoryTitle: category.title,
-                    categoryTypeTitle: category.categoryType.title,
+                    categoryTypeTitle: category.categoryType.toString(),
                     transaction: transaction
                 )
             }

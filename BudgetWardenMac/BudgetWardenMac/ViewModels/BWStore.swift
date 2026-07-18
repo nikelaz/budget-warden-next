@@ -13,12 +13,6 @@ import Foundation
 import UniformTypeIdentifiers
 import BWCore
 
-enum BWTemplateSelection: Hashable {
-    case basic
-    case blank
-    case previous(URL)
-}
-
 @MainActor
 final class BWStore: ObservableObject {
     private static let recentBookmarksKey = "BW_RECENT_BUDGET_BOOKMARKS_V1"
@@ -57,7 +51,7 @@ final class BWStore: ObservableObject {
 
     func createBudget(
         title: String,
-        template: BWTemplateSelection,
+        template: BWTemplateType,
         windowStore: BWWindowStore
     ) async -> Bool {
         let panel = NSSavePanel()
@@ -68,32 +62,7 @@ final class BWStore: ObservableObject {
         guard panel.runModal() == .OK, let url = panel.url else { return false }
 
         do {
-            var newBudget = Self.emptyBudget(title: title, url: url)
-            let templateCategories: [BWCategory]
-            switch template {
-            case .blank:
-                templateCategories = []
-            case .basic:
-                templateCategories = Self.basicCategories
-            case .previous(let previousURL):
-                let previous = try readBudget(at: previousURL)
-                templateCategories = previous.categories.map {
-                    BWCategory(
-                        id: UUID(),
-                        ordinal: $0.ordinal,
-                        title: $0.title,
-                        amountPlanned: $0.amountPlanned,
-                        amountActual: BWMoneyAmount(value: 0),
-                        amountAccumulated: $0.amountAccumulated,
-                        categoryType: $0.categoryType,
-                        transactions: []
-                    )
-                }
-            }
-
-            for category in templateCategories {
-                newBudget = try BWCore.createCategory(budget: newBudget, category: category)
-            }
+            var newBudget = BWCore.budgetFromTemplate(template: template, title: title)
             newBudget.url = url.path
             try writeBudget(newBudget, to: url)
             selectBudget(newBudget)
@@ -102,6 +71,12 @@ final class BWStore: ObservableObject {
         } catch {
             windowStore.setError(error)
             return false
+        }
+    }
+
+    func recentBudgetTemplates() -> [BWTemplateType] {
+        recentFiles.compactMap { url in
+            try? BWTemplateType.previousBudget(readBudget(at: url))
         }
     }
 
@@ -240,7 +215,7 @@ final class BWStore: ObservableObject {
     private func mutate(windowStore: BWWindowStore, operation: () throws -> BWBudget) -> Bool {
         do {
             var updated = try operation()
-            Self.updateActuals(in: &updated)
+            updated.updateActuals()
             guard let path = updated.url ?? currentBudget?.url else {
                 throw BWError.savingFile()
             }
@@ -289,14 +264,6 @@ final class BWStore: ObservableObject {
         recentFiles = NSDocumentController.shared.recentDocumentURLs
     }
 
-    private static func updateActuals(in budget: inout BWBudget) {
-        for index in budget.categories.indices {
-            budget.categories[index].amountActual = BWMoneyAmount(
-                value: budget.categories[index].transactions.reduce(0) { $0 + $1.amount.value }
-            )
-        }
-    }
-
     private static var budgetFileType: UTType {
         UTType(filenameExtension: "budget") ?? .json
     }
@@ -305,54 +272,5 @@ final class BWStore: ObservableObject {
         let invalid = CharacterSet(charactersIn: "/:")
         let safe = title.components(separatedBy: invalid).joined(separator: "-")
         return safe.hasSuffix(".budget") ? safe : "\(safe).budget"
-    }
-
-    private static func emptyBudget(title: String, url: URL) -> BWBudget {
-        BWBudget(
-            id: UUID(),
-            revision: 0,
-            revisionId: UUID(),
-            schemaVersion: 2,
-            title: title,
-            categories: [],
-            changes: CRDTChanges(
-                budget: [],
-                categories: [:],
-                transactions: [:],
-                categoryTombstones: [:],
-                transactionTombstones: [:]
-            ),
-            url: url.path
-        )
-    }
-
-    private static var basicCategories: [BWCategory] {
-        func category(_ ordinal: Int32, _ title: String, _ amount: Int64, _ type: BWCategoryType) -> BWCategory {
-            BWCategory(
-                id: UUID(),
-                ordinal: ordinal,
-                title: title,
-                amountPlanned: BWMoneyAmount(value: amount),
-                amountActual: BWMoneyAmount(value: 0),
-                amountAccumulated: BWMoneyAmount(value: 0),
-                categoryType: type,
-                transactions: []
-            )
-        }
-        return [
-            category(0, "Salary", 480_000, .income),
-            category(0, "Fun & Entertainment", 20_000, .expenses),
-            category(1, "Health & Fitness", 15_000, .expenses),
-            category(2, "Giving", 24_000, .expenses),
-            category(3, "Utilities", 28_000, .expenses),
-            category(4, "Miscellaneous", 15_000, .expenses),
-            category(5, "Insurance", 30_000, .expenses),
-            category(6, "Housing", 120_000, .expenses),
-            category(7, "Food", 64_000, .expenses),
-            category(8, "Personal Care", 18_000, .expenses),
-            category(9, "Transportation", 24_000, .expenses),
-            category(0, "Emergency Fund", 50_000, .savings),
-            category(1, "Retirement", 72_000, .savings)
-        ]
     }
 }

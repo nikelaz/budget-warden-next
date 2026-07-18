@@ -7,11 +7,15 @@
  * See the LICENSE file in the project root for full terms.
  */
 
+use std::collections::HashMap;
+
 use boltffi::*;
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 use chrono::{Datelike, Local};
 use crate::crdt::*;
+
+const CURRENT_SCHEMA_VERSION: i32 = 2;
 
 #[data]
 #[derive(Clone, Serialize, Deserialize)]
@@ -28,7 +32,27 @@ pub struct BWBudget {
     pub url: Option<String>,
 }
 
+#[data(impl)]
 impl BWBudget {
+    pub fn new(title: String) -> Self {
+        BWBudget {
+            id: Uuid::new_v4(),
+            revision: 0,
+            revision_id: Uuid::new_v4(),
+            schema_version: CURRENT_SCHEMA_VERSION,
+            title,
+            categories: vec![],
+            changes: CRDTChanges {
+                budget: vec![],
+                categories: HashMap::new(),
+                transactions: HashMap::new(),
+                category_tombstones: HashMap::new(),
+                transaction_tombstones: HashMap::new(),
+            },
+            url: None,
+        }
+    }
+
     pub fn update_actuals(&mut self) {
         for category in &mut self.categories {
             category.update_actuals();
@@ -99,8 +123,20 @@ pub enum BWCategoryType {
     Debt = 4,
 }
 
+#[data(impl)]
+impl BWCategoryType {
+    pub fn to_string(&self) -> String {
+        match self {
+            BWCategoryType::Income => "Income",
+            BWCategoryType::Expenses => "Expenses",
+            BWCategoryType::Savings => "Savings",
+            BWCategoryType::Debt => "Debt",
+        }.to_string()
+    }
+}
+
 #[data]
-#[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct BWDate {
     pub year: i32,
     pub month: i32,

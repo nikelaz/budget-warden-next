@@ -195,7 +195,7 @@ private struct BWCategoryInspectorView: View {
 
                 Picker("Type", selection: $draftCategory.categoryType) {
                     ForEach(BWCategoryType.allCases, id: \.self) { categoryType in
-                        Text(categoryType.title)
+                        Text(categoryType.toString())
                             .tag(categoryType)
                     }
                 }

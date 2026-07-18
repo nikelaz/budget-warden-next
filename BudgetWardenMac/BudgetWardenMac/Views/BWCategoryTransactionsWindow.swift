@@ -513,7 +513,7 @@ struct BWTransactionInspectorView: View {
                             let categories = orderedCategories(for: type)
 
                             if !categories.isEmpty {
-                                Text(type.title)
+                                Text(type.toString())
                                     .font(.headline)
                                     .selectionDisabled(true)
 

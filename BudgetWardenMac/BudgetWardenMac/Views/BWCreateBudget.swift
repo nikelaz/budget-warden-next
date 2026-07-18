@@ -9,6 +9,7 @@
  *
  */
 
+import BWCore
 import SwiftUI
 
 struct CreateBudgetView: View {
@@ -19,7 +20,8 @@ struct CreateBudgetView: View {
     @Environment(\.dismissWindow) private var dismissWindow
 
     @State private var title: Swift.String
-    @State private var selectedTemplate: BWTemplateSelection = .basic
+    @State private var selectedTemplate: BWTemplateType = .basicMonthly
+    @State private var recentTemplates: [BWTemplateType] = []
 
     let onCreateSuccess: () -> Void
 
@@ -47,18 +49,20 @@ struct CreateBudgetView: View {
                     Text("Templates")
                         .selectionDisabled(true)
 
-                    Text("Basic budget (recommended)")
-                        .tag(BWTemplateSelection.basic)
+                    Text("Monthly Budget")
+                        .tag(BWTemplateType.basicMonthly)
 
-                    Text("Blank budget")
-                        .tag(BWTemplateSelection.blank)
+                    Text("Empty Budget")
+                        .tag(BWTemplateType.empty)
 
                     Text("Previous budget")
                         .selectionDisabled(true)
 
-                    ForEach(store.recentFiles, id: \.self) { url in
-                        Text(url.deletingPathExtension().lastPathComponent)
-                            .tag(BWTemplateSelection.previous(url))
+                    ForEach(recentTemplates, id: \.self) { template in
+                        if case .previousBudget(let budget) = template {
+                            Text(budget.title)
+                                .tag(template)
+                        }
                     }
                 }, label: {
                     Text("Template")
@@ -90,6 +94,9 @@ struct CreateBudgetView: View {
             }
         }
         .padding(20)
+        .task(id: store.recentFiles) {
+            recentTemplates = store.recentBudgetTemplates()
+        }
     }
 
     private static func currentMonthTitle(calendar: Calendar = .current, now: Date = Date()) -> Swift.String {

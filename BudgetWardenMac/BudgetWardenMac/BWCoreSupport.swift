@@ -77,17 +77,6 @@ struct BWCurrency: RawRepresentable, CaseIterable, Hashable, Sendable {
     }
 }
 
-extension BWCategoryType {
-    var title: String {
-        switch self {
-        case .income: "Income"
-        case .expenses: "Expenses"
-        case .savings: "Savings"
-        case .debt: "Debt"
-        }
-    }
-}
-
 extension BWBudget {
     func orderedCategories(for type: BWCategoryType? = nil) -> [BWCategory] {
         categories
@@ -115,6 +104,8 @@ extension BWDate {
     }
 }
 
+// @TODO: This is only necessary for some order in Transactions
+// can be refactored to avoid it
 extension BWDate: @retroactive Comparable {
     public static func < (lhs: BWDate, rhs: BWDate) -> Bool {
         (lhs.year, lhs.month, lhs.day) < (rhs.year, rhs.month, rhs.day)
