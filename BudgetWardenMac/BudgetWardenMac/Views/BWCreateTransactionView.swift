@@ -9,7 +9,7 @@
  */
 
 import SwiftUI
-import BudgetWardenAppleCore
+import BWCore
 
 struct CreateTransactionView: View {
     @EnvironmentObject var store: BWStore
@@ -69,9 +69,11 @@ struct CreateTransactionView: View {
                             .textFieldStyle(.roundedBorder)
                             .foregroundStyle(parsedAmount == nil && !amount.isEmpty ? .red : .primary)
 
+                        /*
                         Text(store.selectedCurrency.symbol)
                             .font(.callout)
                             .foregroundStyle(.secondary)
+                         */
                     }
                 }
 

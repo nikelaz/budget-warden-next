@@ -9,7 +9,6 @@
  */
 
 import SwiftUI
-import BudgetWardenAppleCore
 
 struct BWCommands: Commands {
     @EnvironmentObject var store: BWStore
@@ -27,12 +26,6 @@ struct BWCommands: Commands {
             .keyboardShortcut(",", modifiers: .command)
         }
 
-        CommandGroup(after: .appSettings) {
-            Button("Configure Vault", systemImage: "externaldrive") {
-                windowStore.openVaultConfigDialog()
-            }
-        }
-
         CommandGroup(replacing: .newItem) {
             Button("New Budget", systemImage: "plus") {
                 windowStore.openBudgetDialog()
@@ -42,14 +35,18 @@ struct BWCommands: Commands {
 
         CommandGroup(after: .newItem) {
             Button("Open Budget", systemImage: "folder") {
-                Task(priority: .userInitiated) {
-                    if await store.openBudget(windowStore: windowStore) {
+                Task {
+                    guard let url = await store.openFilePicker(windowStore: windowStore) else {
+                        return
+                    }
+
+                    if await store.openBudget(at: url, windowStore: windowStore) {
                         openWindow(id: "window-main")
                         dismissWindow(id: "window-welcome")
                     }
                 }
             }
             .keyboardShortcut("o", modifiers: [.command])
-        }       
+        }
     }
 }

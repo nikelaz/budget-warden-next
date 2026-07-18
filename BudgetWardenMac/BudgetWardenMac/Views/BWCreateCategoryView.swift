@@ -9,7 +9,7 @@
  */
 
 import SwiftUI
-import BudgetWardenAppleCore
+import BWCore
 
 struct CreateCategoryView: View {
     @EnvironmentObject var store: BWStore

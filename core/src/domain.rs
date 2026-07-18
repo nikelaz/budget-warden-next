@@ -11,43 +11,7 @@ use std::fs;
 use boltffi::*;
 use uuid::Uuid;
 use crate::models::*;
-use crate::codec;
-use crate::crdt;
 use crate::crdt::*;
-use crate::filesystem;
-
-#[export]
-pub fn load_budget(path: String) -> Result<BWBudget, String> {
-    let json = fs::read_to_string(&path)
-        .map_err(|err| format!("Failed to read budget file: {err}"))?;
-
-    let mut budget = codec::decode_budget(&json)
-        .map_err(|err| format!("Failed to decode budget file: {err}"))?;
-
-    budget.url = Some(path);
-
-    Ok(budget)
-}
-
-#[export]
-pub fn update_and_merge_budget(budget: BWBudget) -> Result<BWBudget, String> {
-    let Some(url) = budget.url.clone() else {
-        return Err(format!("Budget does not have a URL"));
-    };
-
-    let budget_on_disk = load_budget(url.clone())?;
-
-    let mut merged_budget = crdt::merge(budget, budget_on_disk);
-
-    merged_budget.update_actuals();
-
-    let merged_budget_encoded = codec::encode_budget(&merged_budget)?;
-
-    filesystem::write_file_atomic(url.as_str(), merged_budget_encoded.as_bytes())
-        .map_err(|_| format!("Could not save the file"))?;
-
-    Ok(merged_budget)
-}
 
 #[export]
 pub fn delete_budget(path: String) -> Result<(), String> {

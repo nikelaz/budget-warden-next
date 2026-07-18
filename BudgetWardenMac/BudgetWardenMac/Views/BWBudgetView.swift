@@ -9,7 +9,7 @@
  */
 
 import SwiftUI
-import BudgetWardenAppleCore
+import BWCore
 
 enum BWCategoryTableRowType {
     case regular
@@ -39,8 +39,6 @@ struct BudgetView: View {
     @State var isInspectorPresented: Bool = true
     @State private var inspectorPanel: BWBudgetInspectorPanel = .reporting
     @State private var categoryPendingDeletion: BWCategory?
-    @State private var isPreparingShare = false
-    @State private var isGoogleDriveSharePresented = false
 
     private func openCreateCategoryDialog() {
         isCreatingCategoryDialogOpen = true
@@ -138,7 +136,7 @@ struct BudgetView: View {
 
     private func sectionTotal(
         categoryType: BWCategoryType,
-        amount: (BWCategory) -> UInt64
+        amount: (BWCategory) -> BWMoneyAmount
     ) -> UInt64? {
         guard let budget = store.currentBudget else {
             return 0
@@ -147,13 +145,13 @@ struct BudgetView: View {
         return UInt64.sumMoneyAmounts(
             budget.categories
                 .filter { $0.categoryType == categoryType }
-                .map(amount)
+                .map { amount($0).unsignedValue }
         )
     }
 
     private func formattedSectionTotal(
         categoryType: BWCategoryType,
-        amount: (BWCategory) -> UInt64
+        amount: (BWCategory) -> BWMoneyAmount
     ) -> String {
         guard let total = sectionTotal(categoryType: categoryType, amount: amount) else {
             return "Too large"
@@ -172,23 +170,6 @@ struct BudgetView: View {
 
     private var hasCategories: Bool {
         store.currentBudget?.categories.isEmpty == false
-    }
-
-    private var hasAutoRefreshBlockingEditor: Bool {
-        isCreatingIncomeDialogOpen
-            || isCreatingExpenseDialogOpen
-            || isCreatingSavingsDialogOpen
-            || isCreatingDebtDialogOpen
-            || isCreatingCategoryDialogOpen
-            || isCreatingTransactionDialogOpen
-            || categoryPendingDeletion != nil
-    }
-
-    private func updateAutoRefreshEditorBlocker() {
-        store.setAutoRefreshSuspended(
-            hasAutoRefreshBlockingEditor,
-            reason: "budgetViewEditor"
-        )
     }
 
     var body: some View {
@@ -367,24 +348,19 @@ struct BudgetView: View {
             }
         }
         .tableStyle(.inset(alternatesRowBackgrounds: true))
-        .overlay {
-            if isPreparingShare {
-                BWPreparingCloudShareView()
-            }
-        }
         .navigationTitle("Budget")
         .toolbar {
             ToolbarItemGroup(placement: .principal) {
                 Menu {
-                    ForEach(store.budgetsInVault) { budget in
+                    ForEach(store.recentFiles, id: \.self) { url in
                         Button {
-                            store.selectBudget(budget)
+                            Task { _ = await store.openBudget(at: url, windowStore: windowStore) }
                         } label: {
-                            if store.currentBudget?.id == budget.id {
-                                Label(budget.title, systemImage: "checkmark")
+                            if store.currentBudget?.url == url.path {
+                                Label(store.currentBudget?.title ?? url.deletingPathExtension().lastPathComponent, systemImage: "checkmark")
                             }
                             else {
-                                Text(budget.title)
+                                Text(url.deletingPathExtension().lastPathComponent)
                             }
                         }
                     }
@@ -429,30 +405,6 @@ struct BudgetView: View {
             }
           
             ToolbarItemGroup(placement: .primaryAction) {
-                if let currentBudget = store.currentBudget,
-                   store.isICloudBudget(currentBudget) {
-                    Button {
-                        shareCurrentBudget()
-                    } label: {
-                        Image(systemName: "person.crop.circle.badge.plus")
-                    }
-                    .disabled(!store.isICloudEnabled)
-                    .accessibilityLabel("Share with iCloud")
-                    .help("Share with iCloud")
-                }
-
-
-                if let currentBudget = store.currentBudget,
-                   store.isGoogleDriveBudget(currentBudget) {
-                    Button {
-                        isGoogleDriveSharePresented = true
-                    } label: {
-                        Image(systemName: "person.crop.circle.badge.plus")
-                    }
-                    .accessibilityLabel("Share with Google Drive")
-                    .help("Share with Google Drive")
-                }
-
                 Button {
                     isInspectorPresented = !isInspectorPresented
                 } label: {
@@ -528,17 +480,6 @@ struct BudgetView: View {
             )
             .frame(minWidth: 360)
         }
-        .sheet(isPresented: $isGoogleDriveSharePresented) {
-            if let budget = store.currentBudget {
-                BWGoogleDriveSharingView(budget: budget) { email in
-                    await store.shareGoogleDriveBudget(
-                        budget,
-                        with: email,
-                        windowStore: windowStore
-                    )
-                }
-            }
-        }
         .confirmationDialog(
             "Delete \(categoryPendingDeletion?.title ?? "Category")?",
             isPresented: Binding(
@@ -567,52 +508,6 @@ struct BudgetView: View {
         } message: {
             Text("This will remove the category and its transactions from the budget.")
         }
-        .onAppear {
-            updateAutoRefreshEditorBlocker()
-        }
-        .onDisappear {
-            store.setAutoRefreshSuspended(false, reason: "budgetViewEditor")
-        }
-        .onChange(of: isCreatingIncomeDialogOpen) { _, _ in
-            updateAutoRefreshEditorBlocker()
-        }
-        .onChange(of: isCreatingExpenseDialogOpen) { _, _ in
-            updateAutoRefreshEditorBlocker()
-        }
-        .onChange(of: isCreatingSavingsDialogOpen) { _, _ in
-            updateAutoRefreshEditorBlocker()
-        }
-        .onChange(of: isCreatingDebtDialogOpen) { _, _ in
-            updateAutoRefreshEditorBlocker()
-        }
-        .onChange(of: isCreatingCategoryDialogOpen) { _, _ in
-            updateAutoRefreshEditorBlocker()
-        }
-        .onChange(of: isCreatingTransactionDialogOpen) { _, _ in
-            updateAutoRefreshEditorBlocker()
-        }
-        .onChange(of: categoryPendingDeletion?.id) { _, _ in
-            updateAutoRefreshEditorBlocker()
-        }
     }
 
-    private func shareCurrentBudget() {
-        guard let budget = store.currentBudget, !isPreparingShare else {
-            return
-        }
-
-        isPreparingShare = true
-
-        Task {
-            let result = await store.cloudRepository.prepareShare(for: budget)
-            isPreparingShare = false
-
-            switch result {
-                case .failure(let error):
-                    windowStore.setError(error)
-                case .success(let share):
-                    BWMacCloudSharing.shared.present(share)
-            }
-        }
-    }
 }

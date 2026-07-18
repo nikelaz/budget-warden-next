@@ -10,7 +10,6 @@
  */
 
 import SwiftUI
-import BudgetWardenAppleCore
 
 struct CreateBudgetView: View {
     @EnvironmentObject var store: BWStore
@@ -21,7 +20,6 @@ struct CreateBudgetView: View {
 
     @State private var title: Swift.String
     @State private var selectedTemplate: BWTemplateSelection = .basic
-    @State private var selectedLocation: BWVaultLocation = .local
 
     let onCreateSuccess: () -> Void
 
@@ -45,12 +43,6 @@ struct CreateBudgetView: View {
                     .padding(.bottom, 10)
                     .accessibilityIdentifier("titleTextField")
 
-                Picker("Storage", selection: $selectedLocation) {
-                    Text("iCloud").tag(BWVaultLocation.iCloud)
-                    Text("Google Drive").tag(BWVaultLocation.googleDrive)
-                    Text("Local File").tag(BWVaultLocation.local)
-                }
-
                 Picker(selection: $selectedTemplate, content: {
                     Text("Templates")
                         .selectionDisabled(true)
@@ -64,11 +56,9 @@ struct CreateBudgetView: View {
                     Text("Previous budget")
                         .selectionDisabled(true)
 
-                    ForEach(store.budgetsInVault) { budget in
-                        if let budgetUrl = budget.url {
-                            Text(budget.title)
-                                .tag(BWTemplateSelection.previous(budgetUrl))
-                        }
+                    ForEach(store.recentFiles, id: \.self) { url in
+                        Text(url.deletingPathExtension().lastPathComponent)
+                            .tag(BWTemplateSelection.previous(url))
                     }
                 }, label: {
                     Text("Template")
@@ -88,7 +78,6 @@ struct CreateBudgetView: View {
                         if await store.createBudget(
                             title: title,
                             template: selectedTemplate,
-                            location: selectedLocation,
                             windowStore: windowStore
                         ) {
                             windowStore.closeBudgetDialog()
@@ -101,9 +90,6 @@ struct CreateBudgetView: View {
             }
         }
         .padding(20)
-        .task {
-            selectedLocation = store.preferredBudgetLocation
-        }
     }
 
     private static func currentMonthTitle(calendar: Calendar = .current, now: Date = Date()) -> Swift.String {

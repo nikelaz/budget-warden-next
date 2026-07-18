@@ -67,12 +67,12 @@ pub struct TransactionChangePayload {
 #[data]
 #[derive(Clone, Serialize, Deserialize)]
 pub struct TransactionChange {
-    change_id: Uuid,
-    timestamp: HlcTimestamp,
-    operation: CRDTOperation,
-    category_id: Uuid,
-    transaction_id: Uuid,
-    payload: Option<TransactionChangePayload>,
+    pub change_id: Uuid,
+    pub timestamp: HlcTimestamp,
+    pub operation: CRDTOperation,
+    pub category_id: Uuid,
+    pub transaction_id: Uuid,
+    pub payload: Option<TransactionChangePayload>,
 }
 
 pub fn new_change_transaction_create(
@@ -334,11 +334,11 @@ pub struct CategoryChangePayload {
 #[data]
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CategoryChange {
-    change_id: Uuid,
-    timestamp: HlcTimestamp,
-    operation: CRDTOperation,
-    category_id: Uuid,
-    payload: Option<CategoryChangePayload>,
+    pub change_id: Uuid,
+    pub timestamp: HlcTimestamp,
+    pub operation: CRDTOperation,
+    pub category_id: Uuid,
+    pub payload: Option<CategoryChangePayload>,
 }
 
 #[data]
@@ -350,9 +350,9 @@ pub struct BudgetChangePayload {
 #[data]
 #[derive(Clone, Serialize, Deserialize)]
 pub struct BudgetChange {
-    change_id: Uuid,
-    timestamp: HlcTimestamp,
-    payload: Option<BudgetChangePayload>,
+    pub change_id: Uuid,
+    pub timestamp: HlcTimestamp,
+    pub payload: Option<BudgetChangePayload>,
 }
 
 #[data]

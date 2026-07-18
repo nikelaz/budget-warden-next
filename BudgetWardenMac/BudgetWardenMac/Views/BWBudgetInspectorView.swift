@@ -9,7 +9,7 @@
  */
 
 import SwiftUI
-import BudgetWardenAppleCore
+import BWCore
 
 enum BWBudgetInspectorPanel: Hashable {
     case reporting
@@ -240,11 +240,11 @@ private struct BWCategoryInspectorView: View {
                         }
                         .onChange(of: accumulatedAmountText) { _, newValue in
                             if let amount = UInt64.parseMoneyAmount(newValue, emptyValue: 0) {
-                                guard draftCategory.amountAccumulated != amount else {
+                                guard draftCategory.amountAccumulated.value != Int64(amount) else {
                                     return
                                 }
 
-                                draftCategory.amountAccumulated = amount
+                                draftCategory.amountAccumulated = BWMoneyAmount(value: Int64(amount))
                                 scheduleSave()
                             }
                         }
@@ -260,11 +260,11 @@ private struct BWCategoryInspectorView: View {
                     }
                     .onChange(of: plannedAmountText) { _, newValue in
                         if let amount = UInt64.parseMoneyAmount(newValue, emptyValue: 0) {
-                            guard draftCategory.amountPlanned != amount else {
+                            guard draftCategory.amountPlanned.value != Int64(amount) else {
                                 return
                             }
 
-                            draftCategory.amountPlanned = amount
+                            draftCategory.amountPlanned = BWMoneyAmount(value: Int64(amount))
                             scheduleSave()
                         }
                     }

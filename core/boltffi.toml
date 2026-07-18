@@ -12,12 +12,12 @@ name = "bw_core"
 enabled = true
 output = "dist/apple"
 deployment_target = "16.0"
-include_macos = false
+include_macos = true
 
 [targets.apple.swift]
-module_name = "BwCore"
+module_name = "BWCore"
 tools_version = "5.9"
-error_style = "throwing"
+error_style = "result"
 
 [targets.apple.swift.type_mappings]
 
@@ -35,7 +35,7 @@ bundle = "unstripped"
 standalone_archive = true
 
 [targets.android]
-enabled = true
+enabled = false
 output = "dist/android"
 min_sdk = 24
 
@@ -67,7 +67,7 @@ enabled = false
 preview_prune_unsupported = false
 
 [targets.wasm]
-enabled = true
+enabled = false
 triple = "wasm32-unknown-unknown"
 profile = "release"
 output = "dist/wasm"

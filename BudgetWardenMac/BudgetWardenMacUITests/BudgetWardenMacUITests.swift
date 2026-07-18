@@ -26,11 +26,8 @@ final class BudgetWardenMacUITests: XCTestCase {
         let openBudgetBtn = app.buttons["Open Budget"]
         XCTAssertTrue(openBudgetBtn.waitForExistence(timeout: 5))
         
-        let configureVaultBtn = app.buttons["Configure Vault"]
-        XCTAssertTrue(configureVaultBtn.waitForExistence(timeout: 5))
-        
-        let budgetsInVaultTitle = app.staticTexts["Budgets in Vault"]
-        XCTAssertTrue(budgetsInVaultTitle.waitForExistence(timeout: 5))
+        let recentlyOpenedTitle = app.staticTexts["Recently Opened"]
+        XCTAssertTrue(recentlyOpenedTitle.waitForExistence(timeout: 5))
 
         app.terminate()
     }
@@ -115,18 +112,10 @@ final class BudgetWardenMacUITests: XCTestCase {
         
         testBudgetButton.rightClick()
 
-        let removeMenuItem = app.menuItems["Remove from Vault"]
+        let removeMenuItem = app.menuItems["Remove from Recents"]
         XCTAssertTrue(removeMenuItem.waitForExistence(timeout: 2))
 
         removeMenuItem.click()
-
-        let removeDialogHeading = app.staticTexts["Remove Budget?"]
-        XCTAssertTrue(removeDialogHeading.waitForExistence(timeout: 2))
-
-        let confirmDeleteButton = app.buttons["MoveToTrashRemoveBudgetConfirm"]
-        XCTAssertTrue(confirmDeleteButton.waitForExistence(timeout: 5))
-
-        confirmDeleteButton.click()
 
         let testBudgetButtonAfterDelete = app.buttons["Button_\(budgetName)"]
         XCTAssertFalse(testBudgetButtonAfterDelete.waitForExistence(timeout: 5))
@@ -557,13 +546,9 @@ final class BudgetWardenMacUITests: XCTestCase {
         XCTAssertTrue(budgetButton.waitForExistence(timeout: 5))
         budgetButton.rightClick()
 
-        let removeMenuItem = app.menuItems["Remove from Vault"]
+        let removeMenuItem = app.menuItems["Remove from Recents"]
         XCTAssertTrue(removeMenuItem.waitForExistence(timeout: 2))
         removeMenuItem.click()
-
-        let confirmDeleteButton = app.buttons["MoveToTrashRemoveBudgetConfirm"]
-        XCTAssertTrue(confirmDeleteButton.waitForExistence(timeout: 5))
-        confirmDeleteButton.click()
 
         XCTAssertFalse(budgetButton.waitForExistence(timeout: 5))
     }

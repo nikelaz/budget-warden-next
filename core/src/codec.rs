@@ -7,16 +7,23 @@
  * See the LICENSE file in the project root for full terms.
  */
 
+use boltffi::*;
 use crate::models::BWBudget;
 
+#[export]
 pub fn encode_budget(budget: &BWBudget) -> Result<String, String> {
     serde_json::to_string_pretty(budget)
         .map_err(|e| format!("Failed to encode budget to JSON: {e}"))
 }
 
-pub fn decode_budget(json: &str) -> Result<BWBudget, String> {
-    serde_json::from_str(json)
-        .map_err(|e| format!("Failed to decode budget from JSON: {e}"))
+#[export]
+pub fn decode_budget(json: &str, url: String) -> Result<BWBudget, String> {
+    let mut budget: BWBudget = serde_json::from_str(json)
+        .map_err(|e| format!("Failed to decode budget from JSON: {e}"))?;
+
+    budget.url = Some(url);
+
+    Ok(budget)
 }
 
 #[cfg(test)]

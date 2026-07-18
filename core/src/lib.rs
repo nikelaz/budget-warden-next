@@ -12,4 +12,3 @@ pub mod models;
 pub mod codec;
 pub mod crdt;
 pub mod domain;
-pub mod filesystem;
