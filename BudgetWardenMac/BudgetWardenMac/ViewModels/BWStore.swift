@@ -138,7 +138,17 @@ final class BWStore: ObservableObject {
 
     func updateCategory(_ category: BWCategory, windowStore: BWWindowStore) async -> Bool {
         guard let budget = currentBudget else { return false }
-        return mutate(windowStore: windowStore) { try BWCore.updateCategory(budget: budget, category: category) }
+        var updated = category
+
+        // The inspector edits a snapshot of the category. Keep ordering owned by
+        // moveCategory so a delayed inspector save cannot restore a stale ordinal.
+        if let currentCategory = budget.categories.first(where: { $0.id == category.id }) {
+            updated.ordinal = currentCategory.ordinal
+        }
+
+        return mutate(windowStore: windowStore) {
+            try BWCore.updateCategory(budget: budget, category: updated)
+        }
     }
 
     func canMoveCategory(_ category: BWCategory, by offset: Int) -> Bool {
@@ -149,10 +159,26 @@ final class BWStore: ObservableObject {
     }
 
     func moveCategory(_ category: BWCategory, by offset: Int, windowStore: BWWindowStore) async -> Bool {
-        guard canMoveCategory(category, by: offset) else { return false }
-        var updated = category
-        updated.ordinal += Int32(offset)
-        return await updateCategory(updated, windowStore: windowStore)
+        guard
+            let budget = currentBudget,
+            let currentCategory = budget.categories.first(where: { $0.id == category.id })
+        else {
+            return false
+        }
+
+        let categories = budget.orderedCategories(for: currentCategory.categoryType)
+        guard
+            let currentIndex = categories.firstIndex(where: { $0.id == currentCategory.id }),
+            categories.indices.contains(currentIndex + offset)
+        else {
+            return false
+        }
+
+        var updated = currentCategory
+        updated.ordinal = Int32(currentIndex + offset)
+        return mutate(windowStore: windowStore) {
+            try BWCore.updateCategory(budget: budget, category: updated)
+        }
     }
 
     func deleteCategory(_ category: BWCategory, windowStore: BWWindowStore) async {
@@ -215,7 +241,7 @@ final class BWStore: ObservableObject {
     private func mutate(windowStore: BWWindowStore, operation: () throws -> BWBudget) -> Bool {
         do {
             var updated = try operation()
-            updated.updateActuals()
+            updated = updated.updateActuals()
             guard let path = updated.url ?? currentBudget?.url else {
                 throw BWError.savingFile()
             }
@@ -240,9 +266,24 @@ final class BWStore: ObservableObject {
             guard let json = String(data: data, encoding: .utf8) else {
                 throw BWError.readingFile()
             }
-            return try decodeBudget(json: json, url: url.path)
+            var budget = try decodeBudget(json: json, url: url.path)
+
+            // TEMPORARY LEGACY MIGRATION: remove this writeback branch together
+            // with the Rust migration after all live schema-v1 files are upgraded.
+            if budget.requiresMigrationWriteback {
+                try writeBudget(budget, to: url)
+                budget.requiresMigrationWriteback = false
+            }
+
+            return budget
         } catch let error as BWError {
             throw error
+        } catch let error as FfiError {
+            if error.message.hasPrefix("Failed to decode budget from JSON:")
+                || error.message.hasPrefix("Failed to migrate legacy budget JSON:") {
+                throw BWError.decodingFile(error)
+            }
+            throw BWError.core(error.message)
         } catch {
             throw BWError.readingFile(error)
         }

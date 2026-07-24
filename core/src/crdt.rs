@@ -670,6 +670,7 @@ pub fn merge(budget_in_memory: BWBudget, budget_on_disk: BWBudget) -> BWBudget {
         categories,
         changes: merged_changes,
         url: budget_in_memory.url,
+        requires_migration_writeback: false,
     }
 }
 
@@ -712,6 +713,7 @@ mod tests {
             categories,
             changes,
             url: Some(String::new()),
+            requires_migration_writeback: false,
         }
     }
 

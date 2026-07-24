@@ -1,0 +1,138 @@
+{
+  "id": "69191F81-08F1-4CCB-BB57-A3EAB49BD086",
+  "revision": 1,
+  "revisionId": "FD966378-22B3-4C83-A7E9-11D6F239AB5C",
+  "categories": [
+    {
+      "ordinal": 0,
+      "amountActual": 0,
+      "amountPlanned": 480000,
+      "transactions": [],
+      "amountAccumulated": 0,
+      "categoryType": 1,
+      "id": "A4B0140A-5D8A-4735-9BAE-75673635AEB0",
+      "title": "Salary"
+    },
+    {
+      "ordinal": 0,
+      "amountActual": 0,
+      "amountPlanned": 20000,
+      "transactions": [],
+      "amountAccumulated": 0,
+      "categoryType": 2,
+      "id": "17621862-062E-435D-9133-BDFC6F44F1FD",
+      "title": "Fun & Entertainment"
+    },
+    {
+      "ordinal": 1,
+      "amountActual": 0,
+      "amountPlanned": 15000,
+      "transactions": [],
+      "amountAccumulated": 0,
+      "categoryType": 2,
+      "id": "FE31AEA6-92F5-4621-B267-2F5BAEB3844F",
+      "title": "Health & Fitness"
+    },
+    {
+      "ordinal": 2,
+      "amountActual": 0,
+      "amountPlanned": 24000,
+      "transactions": [],
+      "amountAccumulated": 0,
+      "categoryType": 2,
+      "id": "9CE4C31F-7ECA-4CC6-909D-AEB3A906BCEB",
+      "title": "Giving"
+    },
+    {
+      "ordinal": 3,
+      "amountActual": 0,
+      "amountPlanned": 28000,
+      "transactions": [],
+      "amountAccumulated": 0,
+      "categoryType": 2,
+      "id": "674BFDE5-F8B2-4436-AC05-0B683F226432",
+      "title": "Utilities"
+    },
+    {
+      "ordinal": 4,
+      "amountActual": 0,
+      "amountPlanned": 15000,
+      "transactions": [],
+      "amountAccumulated": 0,
+      "categoryType": 2,
+      "id": "F967E528-3967-4F29-BA88-96660A61DA20",
+      "title": "Miscellaneous"
+    },
+    {
+      "ordinal": 5,
+      "amountActual": 0,
+      "amountPlanned": 30000,
+      "transactions": [],
+      "amountAccumulated": 0,
+      "categoryType": 2,
+      "id": "8E8DA2FA-9FB4-4C5D-B3FD-126B8CF0A6F0",
+      "title": "Insurance"
+    },
+    {
+      "ordinal": 6,
+      "amountActual": 0,
+      "amountPlanned": 120000,
+      "transactions": [],
+      "amountAccumulated": 0,
+      "categoryType": 2,
+      "id": "F84F606C-5D86-402C-B1B2-21F3244A73B3",
+      "title": "Housing"
+    },
+    {
+      "ordinal": 7,
+      "amountActual": 0,
+      "amountPlanned": 64000,
+      "transactions": [],
+      "amountAccumulated": 0,
+      "categoryType": 2,
+      "id": "D91A8C05-BDF5-4444-9125-70930DB455AF",
+      "title": "Food"
+    },
+    {
+      "ordinal": 8,
+      "amountActual": 0,
+      "amountPlanned": 18000,
+      "transactions": [],
+      "amountAccumulated": 0,
+      "categoryType": 2,
+      "id": "851DCD93-9D59-474F-84DC-99388A2F4765",
+      "title": "Personal Care"
+    },
+    {
+      "ordinal": 9,
+      "amountActual": 0,
+      "amountPlanned": 24000,
+      "transactions": [],
+      "amountAccumulated": 0,
+      "categoryType": 2,
+      "id": "461D4409-6C35-4F9E-9C44-3A4DA12B0A01",
+      "title": "Transportation"
+    },
+    {
+      "ordinal": 0,
+      "amountActual": 0,
+      "amountPlanned": 50000,
+      "transactions": [],
+      "amountAccumulated": 0,
+      "categoryType": 3,
+      "id": "EB5570C2-EAED-45AA-8496-13C741B04503",
+      "title": "Emergency Fund"
+    },
+    {
+      "ordinal": 1,
+      "amountActual": 0,
+      "amountPlanned": 72000,
+      "transactions": [],
+      "amountAccumulated": 0,
+      "categoryType": 3,
+      "id": "0C012FC7-A1C3-4372-ADF0-774C81F0AAA7",
+      "title": "Retirement"
+    }
+  ],
+  "title": "Old budget format"
+}

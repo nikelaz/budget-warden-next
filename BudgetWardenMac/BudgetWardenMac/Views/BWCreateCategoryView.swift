@@ -4,8 +4,7 @@
  * Author: Nikola Lazarov
  *
  * Licensed under the Source-Available Educational License. 
- * See the LICENSE file in the project root for full terms.
- *
+ * See the LICENSE file in the project root for full
  */
 
 import SwiftUI

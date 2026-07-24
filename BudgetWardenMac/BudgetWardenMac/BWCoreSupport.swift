@@ -14,6 +14,7 @@ extension BWBudget: @retroactive Identifiable {}
 extension BWCategory: @retroactive Identifiable {}
 extension BWTransaction: @retroactive Identifiable {}
 
+// @TODO: move BWError to an "apple-core" swift package to be reused between macOS and iOS, don't integrate it in ios for now, just create the package and use it in the macos app from there
 enum BWError: LocalizedError {
     case readingFile(Error? = nil)
     case decodingFile(Error? = nil)
@@ -28,7 +29,7 @@ enum BWError: LocalizedError {
         case .readingFile:
             return "Could not read the budget file."
         case .decodingFile:
-            return "The selected file is not a valid Budget Warden budget."
+            return "The budget file is corrupted and cannot be opened."
         case .savingFile:
             return "Could not save the budget file."
         case .creatingBudget:
@@ -77,6 +78,7 @@ struct BWCurrency: RawRepresentable, CaseIterable, Hashable, Sendable {
     }
 }
 
+// @TODO: This should just be a method/function in the rust core and be called from there?
 extension BWBudget {
     func orderedCategories(for type: BWCategoryType? = nil) -> [BWCategory] {
         categories
@@ -85,6 +87,7 @@ extension BWBudget {
     }
 }
 
+// @TODO: move this BWDate extension to an "apple-core" swift package to be reused between macOS and iOS, don't integrate it in ios for now, just create the package and use it in the macos app from there
 extension BWDate {
     init(_ date: Date, calendar: Calendar = .current) {
         let components = calendar.dateComponents([.year, .month, .day], from: date)
@@ -104,14 +107,14 @@ extension BWDate {
     }
 }
 
-// @TODO: This is only necessary for some order in Transactions
-// can be refactored to avoid it
+// @TODO: move this BWDate extension to an "apple-core" swift package to be reused between macOS and iOS, don't integrate it in ios for now, just create the package and use it in the macos app from there
 extension BWDate: @retroactive Comparable {
     public static func < (lhs: BWDate, rhs: BWDate) -> Bool {
         (lhs.year, lhs.month, lhs.day) < (rhs.year, rhs.month, rhs.day)
     }
 }
 
+// @TODO: move this extension to an "apple-core" swift package to be reused between macOS and iOS, don't integrate it in ios for now, just create the package and use it in the macos app from there
 extension BWMoneyAmount: @retroactive Comparable {
     public static func < (lhs: BWMoneyAmount, rhs: BWMoneyAmount) -> Bool {
         lhs.value < rhs.value
@@ -130,6 +133,7 @@ extension BWMoneyAmount: @retroactive Comparable {
     }
 }
 
+// @TODO: move this extension to an "apple-core" swift package to be reused between macOS and iOS, don't integrate it in ios for now, just create the package and use it in the macos app from there
 extension UInt64 {
     var moneyInputText: String {
         String(format: "%llu.%02llu", self / 100, self % 100)
@@ -173,6 +177,8 @@ extension UInt64 {
     }
 }
 
+
+// @TODO: Move this to the apple-core package to be reused by the ios app as well
 enum BWReportingAmountMode: String, CaseIterable, Identifiable {
     case planned
     case actual

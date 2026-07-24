@@ -5,7 +5,6 @@
  *
  * Licensed under the Source-Available Educational License. 
  * See the LICENSE file in the project root for full terms.
- *
  */
 
 import SwiftUI
@@ -42,7 +41,7 @@ struct BWBudgetInspectorView: View {
             .pickerStyle(.segmented)
             .controlSize(.extraLarge)
             .labelsHidden()
-            .padding(.bottom)
+            .padding(.vertical)
             .disabled(store.currentBudget == nil)
             .onChange(of: inspectorPanel) { _, newValue in
                 if newValue == .inspector && category == nil {
@@ -129,6 +128,7 @@ private struct BWCategoryInspectorView: View {
     @State private var accumulatedAmountText = ""
     @State private var plannedAmountText = ""
     @State private var isDeleteConfirmationPresented = false
+    @State private var isDeleting = false
     @State private var pendingSaveTask: Task<Void, Never>?
     @FocusState private var focusedField: Field?
 
@@ -325,7 +325,9 @@ private struct BWCategoryInspectorView: View {
             isPresented: $isDeleteConfirmationPresented
         ) {
             Button("Delete Category", role: .destructive) {
-                saveNow()
+                isDeleting = true
+                pendingSaveTask?.cancel()
+                pendingSaveTask = nil
                 deleteCategory()
             }
             .accessibilityIdentifier("categoryInspectorDeleteConfirmButton")
@@ -342,6 +344,10 @@ private struct BWCategoryInspectorView: View {
     }
 
     private func scheduleSave() {
+        guard !isDeleting else {
+            return
+        }
+
         pendingSaveTask?.cancel()
 
         let categoryToSave = draftCategory
@@ -349,7 +355,7 @@ private struct BWCategoryInspectorView: View {
         pendingSaveTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(600))
 
-            guard !Task.isCancelled else {
+            guard !Task.isCancelled, !isDeleting else {
                 return
             }
 
@@ -358,6 +364,10 @@ private struct BWCategoryInspectorView: View {
     }
 
     private func saveNow() {
+        guard !isDeleting else {
+            return
+        }
+
         pendingSaveTask?.cancel()
         pendingSaveTask = nil
 

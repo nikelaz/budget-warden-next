@@ -5,7 +5,6 @@
  *
  * Licensed under the Source-Available Educational License. 
  * See the LICENSE file in the project root for full terms.
- *
  */
 
 import SwiftUI
@@ -74,14 +73,12 @@ struct BWTransactionsView: View {
         }
     }
 
-    private var filteredTransactions: [BWTransactionListItem] {
+    private func filteredTransactions(
+        from transactions: [BWTransactionListItem]
+    ) -> [BWTransactionListItem] {
         transactions
             .filter(matchesFilters)
             .sorted(using: sortOrder)
-    }
-
-    private var selectedTransaction: BWTransactionListItem? {
-        filteredTransactions.first { $0.id == selection }
     }
 
     private var transactionDateRange: (oldest: Date, newest: Date) {
@@ -95,7 +92,17 @@ struct BWTransactionsView: View {
     }
 
     var body: some View {
-        transactionTable
+        let transactions = transactions
+        let filteredTransactions = filteredTransactions(from: transactions)
+        let selectedTransaction = filteredTransactions.first { $0.id == selection }
+        let isSelectionVisible = selection.map { selectedID in
+            filteredTransactions.contains { $0.id == selectedID }
+        } ?? true
+
+        transactionTable(
+            transactions: transactions,
+            filteredTransactions: filteredTransactions
+        )
             .navigationTitle("Transactions")
             .searchable(text: $searchText, placement: .toolbar, prompt: "Search transactions")
             .onAppear {
@@ -151,9 +158,9 @@ struct BWTransactionsView: View {
                     }
                 }
             }
-            .onChange(of: filteredTransactions.map(\.id)) { _, ids in
-                if let selection, !ids.contains(selection) {
-                    self.selection = nil
+            .onChange(of: isSelectionVisible) { _, isVisible in
+                if !isVisible {
+                    selection = nil
                 }
             }
             .onChange(of: store.currentBudget?.id) { _, _ in
@@ -218,7 +225,10 @@ struct BWTransactionsView: View {
             }
     }
 
-    private var transactionTable: some View {
+    private func transactionTable(
+        transactions: [BWTransactionListItem],
+        filteredTransactions: [BWTransactionListItem]
+    ) -> some View {
         Group {
             if transactions.isEmpty {
                 ContentUnavailableView(

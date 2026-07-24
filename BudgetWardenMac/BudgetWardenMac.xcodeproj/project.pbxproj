@@ -7,22 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		D0F82B5C300B9E3600577902 /* BWCore in Frameworks */ = {isa = PBXBuildFile; productRef = D0F82B5B300B9E3600577902 /* BWCore */; };
+		D027B7453013C00400A99C84 /* BWCore in Frameworks */ = {isa = PBXBuildFile; productRef = D027B7443013C00400A99C84 /* BWCore */; };
 /* End PBXBuildFile section */
-
-/* Begin PBXContainerItemProxy section */
-		5A87E6862FB2E0010029A3E7 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 5A87E6682FB1961B0029A3E7 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 5A87E66F2FB1961B0029A3E7;
-			remoteInfo = BudgetWardenMac;
-		};
-/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		5A87E6702FB1961B0029A3E7 /* Budget Warden.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Budget Warden.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		5A87E6802FB2E0010029A3E7 /* BudgetWardenMacUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BudgetWardenMacUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -38,14 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D0F82B5C300B9E3600577902 /* BWCore in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		5A87E6822FB2E0010029A3E7 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
+				D027B7453013C00400A99C84 /* BWCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -64,7 +46,6 @@
 			isa = PBXGroup;
 			children = (
 				5A87E6702FB1961B0029A3E7 /* Budget Warden.app */,
-				5A87E6802FB2E0010029A3E7 /* BudgetWardenMacUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -89,31 +70,11 @@
 			);
 			name = BudgetWardenMac;
 			packageProductDependencies = (
-				D0F82B5B300B9E3600577902 /* BWCore */,
+				D027B7443013C00400A99C84 /* BWCore */,
 			);
 			productName = BudgetWardenMac;
 			productReference = 5A87E6702FB1961B0029A3E7 /* Budget Warden.app */;
 			productType = "com.apple.product-type.application";
-		};
-		5A87E6832FB2E0010029A3E7 /* BudgetWardenMacUITests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 5A87E6892FB2E0010029A3E7 /* Build configuration list for PBXNativeTarget "BudgetWardenMacUITests" */;
-			buildPhases = (
-				5A87E6842FB2E0010029A3E7 /* Sources */,
-				5A87E6822FB2E0010029A3E7 /* Frameworks */,
-				5A87E6852FB2E0010029A3E7 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				5A87E6872FB2E0010029A3E7 /* PBXTargetDependency */,
-			);
-			name = BudgetWardenMacUITests;
-			packageProductDependencies = (
-			);
-			productName = BudgetWardenMacUITests;
-			productReference = 5A87E6802FB2E0010029A3E7 /* BudgetWardenMacUITests.xctest */;
-			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
 
@@ -128,10 +89,6 @@
 					5A87E66F2FB1961B0029A3E7 = {
 						CreatedOnToolsVersion = 26.4;
 					};
-					5A87E6832FB2E0010029A3E7 = {
-						CreatedOnToolsVersion = 26.4;
-						TestTargetID = 5A87E66F2FB1961B0029A3E7;
-					};
 				};
 			};
 			buildConfigurationList = 5A87E66B2FB1961B0029A3E7 /* Build configuration list for PBXProject "BudgetWardenMac" */;
@@ -144,7 +101,7 @@
 			mainGroup = 5A87E6672FB1961B0029A3E7;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				D0D277DF300BF5C4002B45D1 /* XCLocalSwiftPackageReference "../core/dist/apple" */,
+				D027B7433013C00400A99C84 /* XCLocalSwiftPackageReference "../core/dist/apple" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 5A87E6712FB1961B0029A3E7 /* Products */;
@@ -152,20 +109,12 @@
 			projectRoot = "";
 			targets = (
 				5A87E66F2FB1961B0029A3E7 /* BudgetWardenMac */,
-				5A87E6832FB2E0010029A3E7 /* BudgetWardenMacUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		5A87E66E2FB1961B0029A3E7 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		5A87E6852FB2E0010029A3E7 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -182,22 +131,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		5A87E6842FB2E0010029A3E7 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXSourcesBuildPhase section */
-
-/* Begin PBXTargetDependency section */
-		5A87E6872FB2E0010029A3E7 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 5A87E66F2FB1961B0029A3E7 /* BudgetWardenMac */;
-			targetProxy = 5A87E6862FB2E0010029A3E7 /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		5A87E6792FB1961C0029A3E7 /* Debug */ = {
@@ -404,40 +338,6 @@
 			};
 			name = Release;
 		};
-		5A87E68A2FB2E0010029A3E7 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.4;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.lazarovco.budgetwardenMacUITests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = BudgetWardenMac;
-			};
-			name = Debug;
-		};
-		5A87E68B2FB2E0010029A3E7 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.4;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.lazarovco.budgetwardenMacUITests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = BudgetWardenMac;
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -459,27 +359,19 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		5A87E6892FB2E0010029A3E7 /* Build configuration list for PBXNativeTarget "BudgetWardenMacUITests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				5A87E68A2FB2E0010029A3E7 /* Debug */,
-				5A87E68B2FB2E0010029A3E7 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		D0D277DF300BF5C4002B45D1 /* XCLocalSwiftPackageReference "../core/dist/apple" */ = {
+		D027B7433013C00400A99C84 /* XCLocalSwiftPackageReference "../core/dist/apple" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../core/dist/apple;
 		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		D0F82B5B300B9E3600577902 /* BWCore */ = {
+		D027B7443013C00400A99C84 /* BWCore */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = D027B7433013C00400A99C84 /* XCLocalSwiftPackageReference "../core/dist/apple" */;
 			productName = BWCore;
 		};
 /* End XCSwiftPackageProductDependency section */

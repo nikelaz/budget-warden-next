@@ -86,7 +86,6 @@ struct BWWindowWelcome: Scene {
                 Button("Open Budget", systemImage: "folder") {
                     Task {
                         guard let url = await store.openFilePicker(windowStore: windowStore) else {
-                            print("failed url retrieval from file picker")
                             return;
                         }
 
@@ -112,7 +111,7 @@ struct BWWindowWelcome: Scene {
             if store.recentFiles.isEmpty {
                 ContentUnavailableView(
                     "No Recent Budgets",
-                    systemImage: "clock",
+                    systemImage: "folder",
                     description: Text("Budgets you open will appear here.")
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -154,6 +153,7 @@ struct BWWindowWelcome: Scene {
         .frame(width: 370)
     }
 
+    // TODO: This does not actually dismiss window welcome
     private func openMainWindow() {
         windowStore.closeBudgetDialog()
         openWindow(id: "window-main")

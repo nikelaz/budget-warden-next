@@ -4,7 +4,4 @@
    <FileRef
       location = "group:BudgetWardenMac/BudgetWardenMac.xcodeproj">
    </FileRef>
-   <FileRef
-      location = "group:BudgetWardenIOS/BudgetWardenIOS.xcodeproj">
-   </FileRef>
 </Workspace>

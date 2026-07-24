@@ -5,7 +5,6 @@
  *
  * Licensed under the Source-Available Educational License. 
  * See the LICENSE file in the project root for full terms.
- *
  */
 
 import SwiftUI
@@ -51,8 +50,10 @@ struct BWCategoryTransactionsWindow: View {
         return "\(category.title) Transactions"
     }
 
-    private var filteredTransactions: [BWTransaction] {
-        sortedTransactions(category?.transactions.filter(matchesFilters) ?? [])
+    private func filteredTransactions(
+        from transactions: [BWTransaction]
+    ) -> [BWTransaction] {
+        sortedTransactions(transactions.filter(matchesFilters))
     }
 
     private var transactionDateRange: (oldest: Date, newest: Date) {
@@ -66,9 +67,19 @@ struct BWCategoryTransactionsWindow: View {
     }
 
     var body: some View {
+        let transactions = category?.transactions ?? []
+        let filteredTransactions = filteredTransactions(from: transactions)
+        let selectedTransaction = filteredTransactions.first { $0.id == selection }
+        let isSelectionVisible = selection.map { selectedID in
+            filteredTransactions.contains { $0.id == selectedID }
+        } ?? true
+
         Group {
             if let category {
-                transactionTable(category: category)
+                transactionTable(
+                    category: category,
+                    filteredTransactions: filteredTransactions
+                )
             }
             else {
                 ContentUnavailableView(
@@ -104,16 +115,13 @@ struct BWCategoryTransactionsWindow: View {
                 }
             }
         }
-        .onChange(of: filteredTransactions.map(\.id)) { _, ids in
-            if let selection, !ids.contains(selection) {
-                self.selection = nil
+        .onChange(of: isSelectionVisible) { _, isVisible in
+            if !isVisible {
+                selection = nil
             }
         }
         .inspector(isPresented: .constant(true)) {
-            if
-                let transaction = filteredTransactions.first(where: { $0.id == selection }),
-                category != nil
-            {
+            if let transaction = selectedTransaction, category != nil {
                 BWTransactionInspectorView(
                     categoryID: value.categoryID,
                     transaction: transaction,
@@ -165,7 +173,10 @@ struct BWCategoryTransactionsWindow: View {
         }
     }
 
-    private func transactionTable(category: BWCategory) -> some View {
+    private func transactionTable(
+        category: BWCategory,
+        filteredTransactions: [BWTransaction]
+    ) -> some View {
         Group {
             if category.transactions.isEmpty {
                 ContentUnavailableView(
@@ -636,11 +647,23 @@ struct BWTransactionInspectorView: View {
             return
         }
 
+        let updatedDate = BWDate(date)
+        guard
+            trimmedTitle != transaction.title ||
+            trimmedDescription != transaction.description ||
+            updatedDate.year != transaction.date.year ||
+            updatedDate.month != transaction.date.month ||
+            updatedDate.day != transaction.date.day ||
+            parsedAmount != transaction.amount.unsignedValue
+        else {
+            return
+        }
+
         saveTransaction(BWTransaction(
             id: transaction.id,
             title: trimmedTitle,
             description: trimmedDescription,
-            date: BWDate(date),
+            date: updatedDate,
             amount: BWMoneyAmount(value: Int64(parsedAmount))
         ))
     }

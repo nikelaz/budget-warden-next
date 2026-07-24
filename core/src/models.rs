@@ -15,7 +15,11 @@ use uuid::Uuid;
 use chrono::{Datelike, Local};
 use crate::crdt::*;
 
-const CURRENT_SCHEMA_VERSION: i32 = 2;
+pub(crate) const CURRENT_SCHEMA_VERSION: i32 = 2;
+
+fn always_skip_migration_writeback(_: &bool) -> bool {
+    true
+}
 
 #[data]
 #[derive(Clone, Serialize, Deserialize)]
@@ -30,6 +34,9 @@ pub struct BWBudget {
 
     #[serde(skip_serializing)]
     pub url: Option<String>,
+
+    #[serde(default, skip_serializing_if = "always_skip_migration_writeback")]
+    pub requires_migration_writeback: bool,
 }
 
 #[data(impl)]
@@ -50,13 +57,18 @@ impl BWBudget {
                 transaction_tombstones: HashMap::new(),
             },
             url: None,
+            requires_migration_writeback: false,
         }
     }
 
-    pub fn update_actuals(&mut self) {
-        for category in &mut self.categories {
+    pub fn update_actuals(&self) -> BWBudget {
+        let mut budget = self.clone();
+
+        for category in &mut budget.categories {
             category.update_actuals();
         }
+
+        budget
     }
 }
 
