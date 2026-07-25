@@ -160,8 +160,18 @@ final class BWStore: ObservableObject {
         return mutate(windowStore: windowStore) { try BWCore.createCategory(budget: budget, category: category) }
     }
 
-    func updateCategory(_ category: BWCategory, windowStore: BWWindowStore) async -> Bool {
-        guard let budget = currentBudget else { return false }
+    func updateCategory(
+        _ category: BWCategory,
+        in budgetID: UUID,
+        windowStore: BWWindowStore
+    ) async -> Bool {
+        guard
+            let budget = currentBudget,
+            budget.id == budgetID
+        else {
+            return false
+        }
+
         var updated = category
 
         // The inspector edits a snapshot of the category. Keep ordering owned by

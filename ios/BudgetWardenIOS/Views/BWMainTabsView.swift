@@ -16,6 +16,7 @@ struct BWMainTabsView: View {
     let budgetID: UUID
     let createBudget: () -> Void
     let openBudget: () -> Void
+    let openRecent: (URL) -> Void
     let closeBudget: () -> Void
 
     @State private var selectedTab: BWTabs = .budget
@@ -107,6 +108,21 @@ struct BWMainTabsView: View {
             }
             .toolbar {
                 ToolbarTitleMenu {
+                    ForEach(store.recentFiles, id: \.self) { url in
+                        Button {
+                            openRecent(url)
+                        } label: {
+                            Label(
+                                url.deletingPathExtension().lastPathComponent,
+                                systemImage: "doc"
+                            )
+                        }
+                    }
+
+                    if !store.recentFiles.isEmpty {
+                        Divider()
+                    }
+
                     Button {
                         createBudget()
                     } label: {
@@ -118,14 +134,6 @@ struct BWMainTabsView: View {
                         openBudget()
                     } label: {
                         Label("Open Budget", systemImage: "folder")
-                    }
-
-                    Divider()
-
-                    Button {
-                        closeBudget()
-                    } label: {
-                        Label("All Budgets", systemImage: "folder")
                     }
                 }
 
@@ -165,7 +173,7 @@ struct BWMainTabsView: View {
                     Button {
                         closeBudget()
                     } label: {
-                        Label("All Budgets", systemImage: "folder")
+                        Label("All Budgets", systemImage: "list.bullet")
                     }
                     .accessibilityIdentifier("allBudgetsButton")
                 }

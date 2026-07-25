@@ -70,6 +70,7 @@ struct BWRootView: View {
                 budgetID: budgetID,
                 createBudget: { isCreateBudgetPresented = true },
                 openBudget: { isOpenBudgetPresented = true },
+                openRecent: openBudget,
                 closeBudget: closeBudget
             )
         } else {

@@ -90,6 +90,7 @@ struct BWBudgetInspectorView: View {
                     Task(priority: .userInitiated) {
                         await store.updateCategory(
                             updatedCategory,
+                            in: budgetID,
                             windowStore: windowStore
                         )
                     }
