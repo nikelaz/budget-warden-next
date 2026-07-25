@@ -1,6 +1,6 @@
 # Budget Warden
 
-Budget Warden is a source-available native macOS, iOS, and Android budgeting app. Budgets are stored as portable local `.budget` files.
+Budget Warden is a source-available native macOS, iOS, Android, and Windows budgeting app. Budgets are stored as portable local `.budget` files.
 
 ## Architecture
 
@@ -13,6 +13,8 @@ core/ (Rust domain and FFI)
           ├── mac/ (SwiftUI macOS client)
           └── ios/ (SwiftUI iOS client)
 
+windows/ (WinUI 3 client using generated C# bindings)
+
 android/ (Kotlin/Compose client with its own domain implementation)
 ```
 
@@ -20,6 +22,7 @@ android/ (Kotlin/Compose client with its own domain implementation)
 - `apple-core/` wraps and re-exports the generated `BWCore` Swift package for the Apple apps.
 - `mac/` and `ios/` are Xcode projects that consume `apple-core` as a local Swift package. Open `BudgetWarden.xcworkspace` for the combined Apple workspace.
 - `android/` is a Gradle Android app using Jetpack Compose. Its `domain/` package currently owns Android-side models, CRDT/rebase behavior, and reporting; `data/` handles local files, Room metadata, and Google Drive sync.
+- `windows/` is a WinUI 3 app that consumes the generated Rust core directly through a local BoltFFI C# NuGet package. See `windows/README.md` for generation, build, and test commands.
 
 See [AGENTS.md](AGENTS.md) for a compact contributor map and change-routing notes.
 
@@ -27,6 +30,7 @@ See [AGENTS.md](AGENTS.md) for a compact contributor map and change-routing note
 
 - macOS and Xcode for the Apple clients
 - Android Studio / a compatible JDK for Android development
+- Windows, .NET 10, Visual Studio C++ build tools, and WinApp CLI for the Windows client
 - Rust and the project’s FFI generator when regenerating `core/dist` bindings
 
 ## License

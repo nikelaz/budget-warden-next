@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "BudgetWarden.Windows (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "BudgetWarden.Windows (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

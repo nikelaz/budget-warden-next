@@ -1,13 +1,13 @@
 [package]
 name = "bw_core"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 
 [lib]
 crate-type = ["rlib", "cdylib", "staticlib"]
 
 [dependencies]
-boltffi = "0.27.5"
+boltffi = { git = "https://github.com/boltffi/boltffi.git", rev = "d2c403db4db249c70586818f5bfd19018c979a38" }
 chrono = "0.4.45"
 uuid = { version = "1.23.5", features = ["v4", "serde"] }
 serde = { version = "1", features = ["derive"] }

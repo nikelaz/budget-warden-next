@@ -4,3 +4,7 @@ xcuserdata/
 .build/
 DerivedData/
 .swiftpm/
+bin/
+obj/
+windows/test-artifacts/
+.codex-tmp/

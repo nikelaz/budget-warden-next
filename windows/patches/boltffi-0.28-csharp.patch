@@ -1,0 +1,26 @@
+diff --git a/boltffi_backend/src/target/csharp/codec/write.rs b/boltffi_backend/src/target/csharp/codec/write.rs
+index 27ec93a..c9e4fb3 100644
+--- a/boltffi_backend/src/target/csharp/codec/write.rs
++++ b/boltffi_backend/src/target/csharp/codec/write.rs
+@@ -241,7 +241,7 @@ impl CodecWrite for Writer<'_, '_> {
+         map_value: Vec<Self::Stmt>,
+     ) -> Vec<Self::Stmt> {
+         vec![self.value(value).and_then(|value| {
+-            let entry = Identifier::parse("boltffiEntry")?;
++            let entry = Identifier::parse(format!("boltffiEntry{}", key_binder.raw()))?;
+             let key_binder = ValueExpression::binder(key_binder)?;
+             let value_binder = ValueExpression::binder(value_binder)?;
+             let key = collect_statements(key)?;
+diff --git a/boltffi_backend/src/target/csharp/render/mod.rs b/boltffi_backend/src/target/csharp/render/mod.rs
+index cdeb965..fa2937d 100644
+--- a/boltffi_backend/src/target/csharp/render/mod.rs
++++ b/boltffi_backend/src/target/csharp/render/mod.rs
+@@ -1352,7 +1352,7 @@ impl Function {
+             })
+             .transpose()?;
+         let is_asynchronous = asynchronous.is_some();
+-        let copy_buffer_entry = requires_copy_buffer
++        let copy_buffer_entry = (requires_copy_buffer || requires_wire_runtime)
+             .then(|| {
+                 bridge
+                     .support()
