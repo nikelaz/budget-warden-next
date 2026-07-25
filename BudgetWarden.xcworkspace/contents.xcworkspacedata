@@ -2,6 +2,12 @@
 <Workspace
    version = "1.0">
    <FileRef
-      location = "group:BudgetWardenMac/BudgetWardenMac.xcodeproj">
+      location = "group:apple-core">
+   </FileRef>
+   <FileRef
+      location = "group:mac/BudgetWardenMac.xcodeproj">
+   </FileRef>
+   <FileRef
+      location = "group:ios/BudgetWardenIOS.xcodeproj">
    </FileRef>
 </Workspace>

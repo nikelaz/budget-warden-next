@@ -10,11 +10,13 @@
 use boltffi::*;
 use crate::legacy_migration::migrate_legacy_budget;
 use crate::models::{BWBudget, CURRENT_SCHEMA_VERSION};
+use crate::validation::validate_budget;
 
 const NEWER_SCHEMA_ERROR: &str = "This budget was created with a newer version of Budget Warden. Please update Budget Warden to open it.";
 
 #[export]
 pub fn encode_budget(budget: &BWBudget) -> Result<String, String> {
+    validate_budget(budget)?;
     serde_json::to_string_pretty(budget)
         .map_err(|e| format!("Failed to encode budget to JSON: {e}"))
 }
@@ -25,7 +27,9 @@ pub fn decode_budget(json: &str, url: String) -> Result<BWBudget, String> {
         .map_err(|e| format!("Failed to decode budget from JSON: {e}"))?;
 
     let Some(schema_version) = value.get("schema_version") else {
-        return migrate_legacy_budget(value, url);
+        let budget = migrate_legacy_budget(value, url)?;
+        validate_budget(&budget)?;
+        return Ok(budget);
     };
     let schema_version = schema_version.as_i64().ok_or_else(|| {
         "Failed to decode budget from JSON: schema_version must be an integer".to_string()
@@ -39,6 +43,7 @@ pub fn decode_budget(json: &str, url: String) -> Result<BWBudget, String> {
         .map_err(|e| format!("Failed to decode budget from JSON: {e}"))?;
 
     budget.url = Some(url);
+    validate_budget(&budget)?;
 
     Ok(budget)
 }

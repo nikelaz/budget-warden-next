@@ -14,6 +14,7 @@ use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 use chrono::{Datelike, Local};
 use crate::crdt::*;
+use crate::validation::{checked_money_sum, validate_money_amount};
 
 pub(crate) const CURRENT_SCHEMA_VERSION: i32 = 2;
 
@@ -61,14 +62,27 @@ impl BWBudget {
         }
     }
 
-    pub fn update_actuals(&self) -> BWBudget {
+    pub fn update_actuals(&self) -> Result<BWBudget, String> {
         let mut budget = self.clone();
 
         for category in &mut budget.categories {
-            category.update_actuals();
+            category.update_actuals()?;
         }
 
-        budget
+        Ok(budget)
+    }
+
+    pub fn ordered_categories(&self, category_type: Option<BWCategoryType>) -> Vec<BWCategory> {
+        let mut categories: Vec<_> = self.categories
+            .iter()
+            .filter(|category| {
+                category_type.is_none_or(|value| category.category_type == value)
+            })
+            .cloned()
+            .collect();
+
+        categories.sort_by_key(|category| (category.category_type as i32, category.ordinal));
+        categories
     }
 }
 
@@ -86,14 +100,12 @@ pub struct BWCategory {
 }
 
 impl BWCategory {
-    pub fn update_actuals(&mut self) {
-        let mut actual = 0;
-
-        for transaction in &self.transactions {
-            actual += transaction.amount.value;
-        }
-
-        self.amount_actual = BWMoneyAmount { value: actual };
+    pub fn update_actuals(&mut self) -> Result<(), String> {
+        self.amount_actual = checked_money_sum(
+            self.transactions.iter().map(|transaction| transaction.amount),
+            &format!("Category {} actual amount", self.id),
+        )?;
+        Ok(())
     }
 }
 
@@ -107,22 +119,21 @@ pub struct BWTransaction {
     pub amount: BWMoneyAmount,
 }
 
-#[data(impl)]
-impl BWTransaction {
-    pub fn new(
-        title:String,
-        description: Option<String>,
-        date: Option<BWDate>,
-        amount: BWMoneyAmount
-    ) -> BWTransaction {
-        BWTransaction {
-            id: Uuid::new_v4(),
-            title: title, 
-            description: description.unwrap_or("".to_string()),
-            date: date.unwrap_or(BWDate::now()),
-            amount: amount,
-        }
-    }
+#[export]
+pub fn new_transaction(
+    title: String,
+    description: Option<String>,
+    date: Option<BWDate>,
+    amount: BWMoneyAmount,
+) -> Result<BWTransaction, String> {
+    validate_money_amount(amount, "Transaction amount")?;
+    Ok(BWTransaction {
+        id: Uuid::new_v4(),
+        title,
+        description: description.unwrap_or_default(),
+        date: date.unwrap_or(BWDate::now()),
+        amount,
+    })
 }
 
 #[data]

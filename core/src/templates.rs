@@ -11,12 +11,13 @@ use crate::domain::create_category as add_category;
 use crate::models::*;
 use boltffi::*;
 use uuid::Uuid;
+use crate::validation::validate_budget;
 
 #[data]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum BWTemplateType {
     Empty,
     BasicMonthly,
-    PreviousBudget(BWBudget),
 }
 
 fn create_category(
@@ -95,16 +96,24 @@ pub fn budget_from_template(template: BWTemplateType, title: String) -> BWBudget
             }
             new_budget
         }
-        BWTemplateType::PreviousBudget(budget) => {
-            let categories = budget.categories;
-            let mut new_budget = BWBudget::new(title);
-            for category in categories {
-                new_budget =
-                    add_category(new_budget, category).expect("template categories must be valid");
-            }
-            new_budget
-        }
     }
+}
+
+#[export]
+pub fn budget_from_previous_budget(
+    budget: BWBudget,
+    title: String,
+) -> Result<BWBudget, String> {
+    validate_budget(&budget)?;
+
+    let categories = budget.categories;
+    let mut new_budget = BWBudget::new(title);
+    for category in categories {
+        new_budget = add_category(new_budget, category)?;
+    }
+
+    validate_budget(&new_budget)?;
+    Ok(new_budget)
 }
 
 #[cfg(test)]
@@ -166,10 +175,11 @@ mod tests {
             BWCategoryType::Expenses,
         ));
 
-        let budget = budget_from_template(
-            BWTemplateType::PreviousBudget(previous_budget),
+        let budget = budget_from_previous_budget(
+            previous_budget,
             "New Budget".to_string(),
-        );
+        )
+        .unwrap();
 
         assert_category_changes_are_initialized(&budget);
         assert_first_category_can_be_updated(budget);

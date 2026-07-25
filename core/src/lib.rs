@@ -14,3 +14,6 @@ pub mod crdt;
 pub mod domain;
 mod legacy_migration;
 pub mod templates;
+pub mod money;
+pub mod reporting;
+pub mod validation;

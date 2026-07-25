@@ -12,6 +12,12 @@ use boltffi::*;
 use uuid::Uuid;
 use crate::models::*;
 use crate::crdt::*;
+use crate::validation::{validate_budget, validate_category, validate_money_amount};
+
+fn validated_budget(budget: BWBudget) -> Result<BWBudget, String> {
+    validate_budget(&budget)?;
+    Ok(budget)
+}
 
 #[export]
 pub fn delete_budget(path: String) -> Result<(), String> {
@@ -27,6 +33,9 @@ pub fn create_transaction(
     category_id: Uuid,
     transaction: BWTransaction
 ) -> Result<BWBudget, String> {
+    validate_budget(&budget)?;
+    validate_money_amount(transaction.amount, "Transaction amount")?;
+
     let category = budget.categories
         .iter_mut()
         .find(|x| x.id == category_id)
@@ -40,7 +49,7 @@ pub fn create_transaction(
 
     budget.changes.transactions.insert(transaction.id, change);
 
-    Ok(budget)
+    validated_budget(budget)
 }
 
 #[export]
@@ -49,6 +58,9 @@ pub fn update_transaction(
     category_id: Uuid,
     transaction: BWTransaction
 ) -> Result<BWBudget, String> {
+    validate_budget(&budget)?;
+    validate_money_amount(transaction.amount, "Transaction amount")?;
+
     let category = budget.categories
         .iter_mut()
         .find(|x| x.id == category_id)
@@ -115,7 +127,7 @@ pub fn update_transaction(
         transaction_changes.insert(TransactionField::Amount, change);
     }
 
-    Ok(budget)
+    validated_budget(budget)
 }
 
 #[export]
@@ -124,6 +136,8 @@ pub fn delete_transaction(
     category_id: Uuid,
     transaction_id: Uuid
 ) -> Result<BWBudget, String> {
+    validate_budget(&budget)?;
+
     let category = budget.categories
         .iter_mut()
         .find(|x| x.id == category_id)
@@ -142,7 +156,7 @@ pub fn delete_transaction(
 
     budget.changes.transaction_tombstones.insert(transaction_id, HlcTimestamp::now());
 
-    Ok(budget)
+    validated_budget(budget)
 }
 
 #[export]
@@ -152,6 +166,8 @@ pub fn move_transaction(
     target_category_id: Uuid,
     transaction_id: Uuid,
 ) -> Result<BWBudget, String> {
+    validate_budget(&budget)?;
+
     let origin_category_index = budget.categories
         .iter()
         .position(|category| category.id == origin_category_id)
@@ -175,7 +191,7 @@ pub fn move_transaction(
         })?;
 
     if origin_category_index == target_category_index {
-        return Ok(budget);
+        return validated_budget(budget);
     }
 
     let transaction = budget.categories[origin_category_index]
@@ -201,7 +217,7 @@ pub fn move_transaction(
         .transactions
         .push(transaction);
 
-    Ok(budget)
+    validated_budget(budget)
 }
 
 #[export]
@@ -209,13 +225,16 @@ pub fn create_category(
     mut budget: BWBudget,
     category: BWCategory
 ) -> Result<BWBudget, String> {
+    validate_budget(&budget)?;
+    validate_category(&category)?;
+
     budget.categories.push(category.clone());
 
     let change = new_change_category_create(category.clone());
 
     budget.changes.categories.insert(category.id, change);
 
-    Ok(budget)
+    validated_budget(budget)
 }
 
 fn ordered_category_ids(
@@ -261,6 +280,9 @@ pub fn update_category(
     mut budget: BWBudget,
     category: BWCategory
 ) -> Result<BWBudget, String> {
+    validate_budget(&budget)?;
+    validate_category(&category)?;
+
     let original_category = budget.categories
         .iter()
         .find(|item| item.id == category.id)
@@ -389,7 +411,7 @@ pub fn update_category(
         }
     }
 
-    Ok(budget)
+    validated_budget(budget)
 }
 
 #[export]
@@ -397,6 +419,8 @@ pub fn delete_category(
     mut budget: BWBudget,
     category_id: Uuid
 ) -> Result<BWBudget, String> {
+    validate_budget(&budget)?;
+
     let deleted_category = budget.categories
         .iter()
         .find(|category| category.id == category_id)
@@ -467,5 +491,5 @@ pub fn delete_category(
     budget.changes.category_tombstones
         .insert(category_id, HlcTimestamp::now());
 
-    Ok(budget)
+    validated_budget(budget)
 }
