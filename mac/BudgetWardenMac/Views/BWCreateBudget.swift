@@ -83,7 +83,6 @@ struct CreateBudgetView: View {
                             template: selectedTemplate,
                             windowStore: windowStore
                         ) {
-                            windowStore.closeBudgetDialog()
                             onCreateSuccess()
                         }
                     }

@@ -18,6 +18,8 @@ struct BWWindowWelcome: Scene {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
     @StateObject private var windowStore = BWWindowStore()
+    @State private var welcomeWindowReference = BWWindowReference()
+    @State private var shouldOpenMainWindowAfterBudgetDialogDismisses = false
 
     var body: some Scene {
         Window("Welcome", id: "window-welcome") {
@@ -32,6 +34,7 @@ struct BWWindowWelcome: Scene {
                 width: welcomeWindowWidth,
                 height: welcomeWindowHeight
             )
+            .background(BWWindowReader(reference: welcomeWindowReference))
             .task {
                 await store.migrateLegacyBudgetsIfNeeded(windowStore: windowStore)
             }
@@ -47,10 +50,16 @@ struct BWWindowWelcome: Scene {
             } message: {
                 Text(windowStore.errorMessage)
             }
-            .sheet(isPresented: $windowStore.isBudgetDialogOpen) {
-                CreateBudgetView(onCreateSuccess: openMainWindow)
-                    .environmentObject(windowStore)
-                    .frame(minWidth: 420)
+            .sheet(
+                isPresented: $windowStore.isBudgetDialogOpen,
+                onDismiss: openMainWindowAfterBudgetCreation
+            ) {
+                CreateBudgetView {
+                    shouldOpenMainWindowAfterBudgetDialogDismisses = true
+                    windowStore.closeBudgetDialog()
+                }
+                .environmentObject(windowStore)
+                .frame(minWidth: 420)
             }
             .sheet(isPresented: $windowStore.isPreferencesDialogOpen) {
                 BWPreferencesView(
@@ -157,10 +166,42 @@ struct BWWindowWelcome: Scene {
         .frame(width: 370)
     }
 
-    // TODO: This does not actually dismiss window welcome
+    private func openMainWindowAfterBudgetCreation() {
+        guard shouldOpenMainWindowAfterBudgetDialogDismisses else { return }
+        shouldOpenMainWindowAfterBudgetDialogDismisses = false
+        openMainWindow()
+    }
+
     private func openMainWindow() {
         windowStore.closeBudgetDialog()
         openWindow(id: "window-main")
-        dismissWindow(id: "window-welcome")
+        if let welcomeWindow = welcomeWindowReference.window {
+            welcomeWindow.close()
+        } else {
+            dismissWindow(id: "window-welcome")
+        }
+    }
+}
+
+@MainActor
+private final class BWWindowReference {
+    weak var window: NSWindow?
+}
+
+private struct BWWindowReader: NSViewRepresentable {
+    let reference: BWWindowReference
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            reference.window = view.window
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            reference.window = nsView.window
+        }
     }
 }
