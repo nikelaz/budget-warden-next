@@ -1,0 +1,236 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<UserControl
+    x:Class="BudgetWarden_Windows.Views.TransactionsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:BudgetWarden_Windows.Views"
+    xmlns:viewModels="using:BudgetWarden_Windows.ViewModels"
+    Loaded="TransactionsView_Loaded">
+    <UserControl.Resources>
+        <Style x:Key="TransactionListItemStyle" TargetType="ListViewItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <CommandBar DefaultLabelPosition="Right">
+            <AppBarButton
+                Icon="Add"
+                Label="New transaction"
+                Click="NewTransaction_Click"
+                AutomationProperties.AutomationId="TransactionsNewButton" />
+            <AppBarToggleButton
+                x:Name="TransactionInspectorToggle"
+                Icon="OpenPane"
+                LabelPosition="Collapsed"
+                IsChecked="False"
+                IsEnabled="{x:Bind Vm.HasTransactions, Mode=OneWay}"
+                Click="TransactionInspectorToggle_Click"
+                AutomationProperties.Name="Show or hide the transaction inspector"
+                AutomationProperties.AutomationId="TransactionInspectorToggle" />
+        </CommandBar>
+
+        <SplitView
+            x:Name="TransactionInspectorSplitView"
+            Grid.Row="1"
+            Margin="8,0,0,0"
+            DisplayMode="Inline"
+            IsPaneOpen="False"
+            OpenPaneLength="390"
+            PaneBackground="Transparent"
+            PanePlacement="Right"
+            Visibility="{x:Bind local:ViewVisibility.When(Vm.HasTransactions), Mode=OneWay}">
+            <SplitView.Content>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid Padding="12,15,12,8" ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="2*" />
+                            <ColumnDefinition Width="1.25*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Title" Style="{StaticResource CaptionTextBlockStyle}" />
+                        <TextBlock
+                            Grid.Column="1"
+                            Text="Category"
+                            Style="{StaticResource CaptionTextBlockStyle}" />
+                        <TextBlock
+                            Grid.Column="2"
+                            Text="Date"
+                            Style="{StaticResource CaptionTextBlockStyle}" />
+                        <TextBlock
+                            Grid.Column="3"
+                            Text="Amount"
+                            Style="{StaticResource CaptionTextBlockStyle}" />
+                    </Grid>
+                    <ListView
+                        x:Name="TransactionList"
+                        Grid.Row="1"
+                        Padding="0"
+                        ItemContainerStyle="{StaticResource TransactionListItemStyle}"
+                        ItemsSource="{x:Bind Vm.Transactions, Mode=OneWay}"
+                        SelectedItem="{x:Bind Vm.SelectedTransaction, Mode=TwoWay}"
+                        SelectionChanged="TransactionList_SelectionChanged"
+                        SelectionMode="Single"
+                        AutomationProperties.AutomationId="TransactionList">
+                        <ListView.ItemContainerTransitions>
+                            <TransitionCollection />
+                        </ListView.ItemContainerTransitions>
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="viewModels:TransactionRowViewModel">
+                                <Grid Padding="12" ColumnSpacing="16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="2*" />
+                                        <ColumnDefinition Width="1.25*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock
+                                        Text="{x:Bind Title, Mode=OneWay}"
+                                        VerticalAlignment="Center"
+                                        Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                    <TextBlock
+                                        Grid.Column="1"
+                                        Text="{x:Bind Category, Mode=OneWay}"
+                                        VerticalAlignment="Center" />
+                                    <TextBlock
+                                        Grid.Column="2"
+                                        Text="{x:Bind Date, Mode=OneWay}"
+                                        VerticalAlignment="Center" />
+                                    <TextBlock
+                                        Grid.Column="3"
+                                        Text="{x:Bind Amount, Mode=OneWay}"
+                                        VerticalAlignment="Center" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Grid>
+            </SplitView.Content>
+
+            <SplitView.Pane>
+                <Border
+                    Margin="24,0,4,4"
+                    Padding="12,12,12,0"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="{ThemeResource ControlCornerRadius}">
+                    <ScrollViewer
+                        x:Name="TransactionInspectorContent"
+                        AutomationProperties.Name="Transaction inspector">
+                        <StackPanel Spacing="12" Padding="0,0,0,12">
+                            <TextBox
+                                x:Name="TransactionInspectorTitleBox"
+                                Header="Title"
+                                TextChanged="TransactionInspectorField_Changed"
+                                AutomationProperties.AutomationId="TransactionInspectorTitleBox" />
+                            <ComboBox
+                                x:Name="TransactionInspectorCategoryBox"
+                                Header="Category"
+                                ItemsSource="{x:Bind Vm.Categories, Mode=OneWay}"
+                                DisplayMemberPath="Title"
+                                SelectionChanged="TransactionInspectorField_Changed"
+                                AutomationProperties.AutomationId="TransactionInspectorCategoryBox" />
+                            <CalendarDatePicker
+                                x:Name="TransactionInspectorDatePicker"
+                                Header="Date"
+                                DateChanged="TransactionInspectorField_Changed"
+                                AutomationProperties.AutomationId="TransactionInspectorDatePicker" />
+                            <TextBox
+                                x:Name="TransactionInspectorAmountBox"
+                                Header="Amount"
+                                InputScope="Number"
+                                TextChanged="TransactionInspectorField_Changed"
+                                AutomationProperties.AutomationId="TransactionInspectorAmountBox" />
+                            <TextBox
+                                x:Name="TransactionInspectorDescriptionBox"
+                                Header="Description"
+                                AcceptsReturn="True"
+                                MinHeight="88"
+                                TextWrapping="Wrap"
+                                TextChanged="TransactionInspectorField_Changed"
+                                AutomationProperties.AutomationId="TransactionInspectorDescriptionBox" />
+                            <Button
+                                HorizontalAlignment="Stretch"
+                                Click="DeleteTransaction_Click"
+                                AutomationProperties.AutomationId="DeleteTransactionButton">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <SymbolIcon Symbol="Delete" />
+                                    <TextBlock Text="Delete transaction" />
+                                </StackPanel>
+                            </Button>
+                            <Button
+                                x:Name="TransactionInspectorApplyButton"
+                                HorizontalAlignment="Stretch"
+                                IsEnabled="False"
+                                Click="ApplyTransactionInspector_Click"
+                                AutomationProperties.AutomationId="TransactionInspectorApplyButton">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <SymbolIcon Symbol="Save" />
+                                    <TextBlock Text="Apply" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </SplitView.Pane>
+        </SplitView>
+
+        <Grid
+            Grid.Row="1"
+            Padding="32"
+            Visibility="{x:Bind local:ViewVisibility.WhenNot(Vm.HasTransactions), Mode=OneWay}">
+            <StackPanel
+                MaxWidth="420"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Spacing="16">
+                <Border
+                    Width="64"
+                    Height="64"
+                    HorizontalAlignment="Center"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="32">
+                    <SymbolIcon
+                        Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                        Symbol="List" />
+                </Border>
+                <StackPanel Spacing="6">
+                    <TextBlock
+                        HorizontalAlignment="Center"
+                        Text="No transactions yet"
+                        TextAlignment="Center"
+                        Style="{StaticResource SubtitleTextBlockStyle}" />
+                    <TextBlock
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="Add your first transaction to start tracking activity in this budget."
+                        TextAlignment="Center"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+                <Button
+                    HorizontalAlignment="Center"
+                    Click="NewTransaction_Click"
+                    Style="{StaticResource AccentButtonStyle}"
+                    AutomationProperties.AutomationId="EmptyTransactionsAddButton"
+                    AutomationProperties.Name="Add transaction">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <SymbolIcon Symbol="Add" />
+                        <TextBlock Text="Add transaction" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

@@ -1,34 +1,34 @@
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Globalization;
 using Bw_core;
 using CommunityToolkit.Mvvm.ComponentModel;
-using BudgetWarden_Windows.Services;
+using Windows.Globalization.NumberFormatting;
 using CoreApi = Bw_core.Bw_core;
 
 namespace BudgetWarden_Windows.ViewModels;
 
-public sealed partial class MainPageViewModel : ObservableObject
+public sealed partial class AppViewModel : ObservableObject
 {
-    public BudgetStore Store { get; } = new();
-
     public ObservableCollection<CategoryRowViewModel> Categories { get; } = [];
+    public ObservableCollection<CategoryGroupViewModel> CategoryGroups { get; } = [];
     public ObservableCollection<TransactionRowViewModel> Transactions { get; } = [];
     public ObservableCollection<ReportingRowViewModel> ReportingRows { get; } = [];
-    public ObservableCollection<CurrencyOption> CurrencyOptions { get; } =
+    public IReadOnlyList<CategoryTypeOption> CategoryTypes { get; } =
     [
-        new("USD", "USD — US Dollar", "$"),
-        new("EUR", "EUR — Euro", "€"),
-        new("GBP", "GBP — British Pound", "£"),
-        new("BGN", "BGN — Bulgarian Lev", "лв."),
-        new("CAD", "CAD — Canadian Dollar", "CA$"),
-        new("AUD", "AUD — Australian Dollar", "A$"),
-        new("JPY", "JPY — Japanese Yen", "¥"),
+        new("Income", BwCategoryType.Income),
+        new("Expenses", BwCategoryType.Expenses),
+        new("Savings", BwCategoryType.Savings),
+        new("Debt", BwCategoryType.Debt),
     ];
+
+    public IReadOnlyList<CurrencyOption> CurrencyOptions { get; } = CurrencyCatalog.All;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelectedCategory))]
     public partial CategoryRowViewModel? SelectedCategory { get; set; }
+
+    [ObservableProperty]
+    public partial CategoryListItemViewModel? SelectedCategoryListItem { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelectedTransaction))]
@@ -68,32 +68,35 @@ public sealed partial class MainPageViewModel : ObservableObject
     public partial string LeftToBudgetTotal { get; private set; } = string.Empty;
 
     [ObservableProperty]
+    public partial ReportingPresentation Reporting { get; private set; } = ReportingPresentation.Empty;
+
+    [ObservableProperty]
     public partial CurrencyOption SelectedCurrency { get; set; }
 
-    public bool ShowWelcome => !Store.HasBudget;
-    public bool HasBudget => Store.HasBudget;
+    public bool ShowWelcome => !HasBudget;
     public bool HasSelectedCategory => SelectedCategory is not null;
     public bool HasSelectedTransaction => SelectedTransaction is not null;
-    public string BudgetTitle => Store.CurrentBudget?.Title ?? "Budget Warden";
-    public ObservableCollection<RecentBudget> RecentFiles => Store.RecentFiles;
+    public bool HasTransactions => Transactions.Count > 0;
+    public bool IsRefreshing { get; private set; }
+    public string BudgetTitle => CurrentBudget?.Title ?? "Budget Warden";
 
-    public MainPageViewModel()
+    public AppViewModel()
     {
-        SelectedCurrency = CurrencyOptions.FirstOrDefault(item => item.Code == Store.SelectedCurrencyCode)
+        InitializePersistence();
+        SelectedCurrency = CurrencyOptions.FirstOrDefault(item => item.Code == SelectedCurrencyCode)
             ?? CurrencyOptions[0];
-        Store.PropertyChanged += Store_PropertyChanged;
     }
 
     partial void OnSearchTextChanged(string value) => RefreshTransactions();
 
     partial void OnSelectedCurrencyChanged(CurrencyOption value)
     {
-        if (value is null)
+        if (value is null || value.Code == SelectedCurrencyCode)
         {
             return;
         }
 
-        Store.SelectedCurrencyCode = value.Code;
+        SelectedCurrencyCode = value.Code;
         Refresh();
     }
 
@@ -112,7 +115,6 @@ public sealed partial class MainPageViewModel : ObservableObject
             await action();
             StatusMessage = successMessage;
             IsStatusOpen = true;
-            Refresh();
             return null;
         }
         catch (Exception error) when (error is BoltException or IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
@@ -121,14 +123,6 @@ public sealed partial class MainPageViewModel : ObservableObject
             IsStatusOpen = true;
             return error;
         }
-    }
-
-    public void CloseBudget()
-    {
-        Store.CloseBudget();
-        SelectedCategory = null;
-        SelectedTransaction = null;
-        Refresh();
     }
 
     public async Task<IReadOnlyList<BudgetTemplate>> GetBudgetTemplatesAsync()
@@ -143,7 +137,7 @@ public sealed partial class MainPageViewModel : ObservableObject
         {
             try
             {
-                BwBudget previous = await Store.ReadBudgetAsync(recent.Path);
+                BwBudget previous = await ReadBudgetAsync(recent.Path);
                 templates.Add(new($"Previous: {previous.Title}", BwTemplateType.Empty, previous));
             }
             catch (Exception error) when (error is BoltException or IOException or UnauthorizedAccessException)
@@ -156,29 +150,50 @@ public sealed partial class MainPageViewModel : ObservableObject
 
     public void Refresh()
     {
-        BwBudget? budget = Store.CurrentBudget;
-        ClearCollections();
-        NotifyShellProperties();
-
-        if (budget is not BwBudget current)
+        Guid? selectedCategoryId = SelectedCategory?.Id;
+        Guid? selectedTransactionId = SelectedTransaction?.TransactionId;
+        IsRefreshing = true;
+        try
         {
-            return;
-        }
+            BwBudget? budget = CurrentBudget;
+            ClearCollections();
+            NotifyShellProperties();
 
-        foreach (BwCategory category in current.OrderedCategories(null))
+            if (budget is not BwBudget current)
+            {
+                return;
+            }
+
+            foreach (BwCategory category in current.OrderedCategories(null))
+            {
+                Categories.Add(CategoryRowViewModel.From(category, FormatMoney));
+            }
+
+            AddCategoryGroup("Income", BwCategoryType.Income);
+            AddCategoryGroup("Expenses", BwCategoryType.Expenses);
+            AddCategoryGroup("Savings", BwCategoryType.Savings);
+            AddCategoryGroup("Debt", BwCategoryType.Debt);
+
+            RefreshTransactions();
+            RefreshReporting(current);
+            SelectedCategory = Categories.FirstOrDefault(item => item.Id == selectedCategoryId);
+            SelectedCategoryListItem = CategoryGroups
+                .SelectMany(group => group)
+                .FirstOrDefault(item => item.Category?.Id == selectedCategoryId);
+            SelectedTransaction = Transactions.FirstOrDefault(item => item.TransactionId == selectedTransactionId);
+        }
+        finally
         {
-            Categories.Add(CategoryRowViewModel.From(category, FormatMoney));
+            IsRefreshing = false;
         }
-
-        RefreshTransactions();
-        RefreshReporting(current);
     }
 
     private void RefreshTransactions()
     {
         Transactions.Clear();
-        if (Store.CurrentBudget is not BwBudget budget)
+        if (CurrentBudget is not BwBudget budget)
         {
+            OnPropertyChanged(nameof(HasTransactions));
             return;
         }
 
@@ -200,6 +215,15 @@ public sealed partial class MainPageViewModel : ObservableObject
         {
             Transactions.Add(row);
         }
+        OnPropertyChanged(nameof(HasTransactions));
+    }
+
+    private void AddCategoryGroup(string title, BwCategoryType type)
+    {
+        CategoryRowViewModel[] rows = Categories
+            .Where(category => category.Category.CategoryType == type)
+            .ToArray();
+        CategoryGroups.Add(new(title, type, rows));
     }
 
     private void RefreshReporting(BwBudget budget)
@@ -209,6 +233,7 @@ public sealed partial class MainPageViewModel : ObservableObject
         PlannedAllocationTotal = FormatMoney(report.Totals.PlannedAllocation.Value);
         ActualAllocationTotal = FormatMoney(report.Totals.ActualAllocation.Value);
         LeftToBudgetTotal = FormatMoney(report.Totals.LeftToBudget);
+        Reporting = ReportingPresentation.From(report, FormatMoney);
 
         foreach (BwReportingCategorySegment segment in report.CategorySegments
                      .Where(item => item.AmountMode == BwReportingAmountMode.Actual)
@@ -230,8 +255,11 @@ public sealed partial class MainPageViewModel : ObservableObject
 
     private string FormatMoney(long cents)
     {
-        decimal amount = cents / 100m;
-        return string.Format(CultureInfo.CurrentCulture, "{0} {1:N2}", SelectedCurrency.Symbol, amount);
+        CurrencyFormatter formatter = new(SelectedCurrency.Code)
+        {
+            IsGrouped = true,
+        };
+        return formatter.FormatDouble((double)cents / 100.0);
     }
 
     private static string TypeLabel(BwCategoryType type) => type switch
@@ -243,19 +271,14 @@ public sealed partial class MainPageViewModel : ObservableObject
         _ => type.ToString(),
     };
 
-    private void Store_PropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(BudgetStore.CurrentBudget))
-        {
-            Refresh();
-        }
-    }
-
     private void ClearCollections()
     {
         Categories.Clear();
+        CategoryGroups.Clear();
         Transactions.Clear();
+        OnPropertyChanged(nameof(HasTransactions));
         ReportingRows.Clear();
+        Reporting = ReportingPresentation.Empty;
     }
 
     private void NotifyShellProperties()
@@ -266,7 +289,57 @@ public sealed partial class MainPageViewModel : ObservableObject
     }
 }
 
-public sealed record CurrencyOption(string Code, string DisplayName, string Symbol);
+public sealed record CurrencyOption(string Code, string Name, string Symbol)
+{
+    public string DisplayName => $"{Code} — {Name}";
+}
+
+public sealed record CategoryTypeOption(string DisplayName, BwCategoryType Value)
+{
+    public bool HasAccumulated => Value is BwCategoryType.Savings or BwCategoryType.Debt;
+}
+
+public sealed class CategoryGroupViewModel(
+    string title,
+    BwCategoryType categoryType,
+    IEnumerable<CategoryRowViewModel> categories)
+    : ObservableCollection<CategoryListItemViewModel>(
+        categories
+            .Select(CategoryListItemViewModel.ForCategory)
+            .Append(CategoryListItemViewModel.Footer(categoryType)))
+{
+    public string Title { get; } = title;
+    public bool HasAccumulated => categoryType is BwCategoryType.Savings or BwCategoryType.Debt;
+    public string AccumulatedLabel => categoryType == BwCategoryType.Debt ? "Leftover debt" : "Accumulated";
+}
+
+public sealed record CategoryListItemViewModel(
+    CategoryRowViewModel? Category,
+    BwCategoryType CategoryType,
+    bool IsFooter,
+    string ActionLabel)
+{
+    public bool IsCategory => !IsFooter;
+    public string Title => Category?.Title ?? string.Empty;
+    public string Planned => Category?.Planned ?? string.Empty;
+    public string Actual => Category?.Actual ?? string.Empty;
+    public string Accumulated => Category?.Accumulated ?? string.Empty;
+    public bool HasAccumulated => CategoryType is BwCategoryType.Savings or BwCategoryType.Debt;
+    public string AutomationId => $"Create{CategoryType}CategoryFooterButton";
+
+    public static CategoryListItemViewModel ForCategory(CategoryRowViewModel category) =>
+        new(category, category.Category.CategoryType, false, string.Empty);
+
+    public static CategoryListItemViewModel Footer(BwCategoryType categoryType) =>
+        new(null, categoryType, true, categoryType switch
+        {
+            BwCategoryType.Income => "New Income",
+            BwCategoryType.Expenses => "New Category",
+            BwCategoryType.Savings => "New Fund",
+            BwCategoryType.Debt => "New Debt",
+            _ => "New Category",
+        });
+}
 
 public sealed record CategoryRowViewModel(
     Guid Id,
@@ -282,13 +355,13 @@ public sealed record CategoryRowViewModel(
     public static CategoryRowViewModel From(BwCategory category, Func<long, string> format) => new(
         category.Id,
         category,
-        MainPageViewModelTypeLabel(category.CategoryType),
+        AppViewModelTypeLabel(category.CategoryType),
         category.Title,
         format(category.AmountPlanned.Value),
         format(category.AmountActual.Value),
         format(category.AmountAccumulated.Value));
 
-    private static string MainPageViewModelTypeLabel(BwCategoryType type) => type switch
+    private static string AppViewModelTypeLabel(BwCategoryType type) => type switch
     {
         BwCategoryType.Income => "Income",
         BwCategoryType.Expenses => "Expenses",

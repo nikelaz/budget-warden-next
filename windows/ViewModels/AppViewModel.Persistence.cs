@@ -5,9 +5,9 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Windows.Storage;
 using CoreApi = Bw_core.Bw_core;
 
-namespace BudgetWarden_Windows.Services;
+namespace BudgetWarden_Windows.ViewModels;
 
-public sealed partial class BudgetStore : ObservableObject
+public sealed partial class AppViewModel
 {
     private const string DeviceIdKey = "BW_DEVICE_ID";
     private const string CurrencyKey = "BW_CURRENCY";
@@ -17,6 +17,8 @@ public sealed partial class BudgetStore : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasBudget))]
+    [NotifyPropertyChangedFor(nameof(ShowWelcome))]
+    [NotifyPropertyChangedFor(nameof(BudgetTitle))]
     public partial BwBudget? CurrentBudget { get; private set; }
 
     [ObservableProperty]
@@ -26,7 +28,7 @@ public sealed partial class BudgetStore : ObservableObject
 
     public ObservableCollection<RecentBudget> RecentFiles { get; } = [];
 
-    public BudgetStore()
+    private void InitializePersistence()
     {
         SelectedCurrencyCode = ReadSetting(CurrencyKey) ?? "USD";
         InitializeCore();
@@ -35,6 +37,12 @@ public sealed partial class BudgetStore : ObservableObject
 
     partial void OnSelectedCurrencyCodeChanged(string value) =>
         _settings.Values[CurrencyKey] = value;
+
+    partial void OnCurrentBudgetChanged(BwBudget? value)
+    {
+        UpdateRecentBudgetSelection();
+        Refresh();
+    }
 
     public async Task<BwBudget> ReadBudgetAsync(string path)
     {
@@ -77,11 +85,19 @@ public sealed partial class BudgetStore : ObservableObject
         RememberRecent(normalizedPath);
     }
 
-    public async Task CreateCategoryAsync(string title, string plannedAmount, BwCategoryType categoryType)
+    public async Task CreateCategoryAsync(
+        string title,
+        string plannedAmount,
+        string accumulatedAmount,
+        BwCategoryType categoryType)
     {
         BwBudget budget = RequireBudget();
         BwMoneyAmount amount = CoreApi.ParseMoneyAmount(plannedAmount, 0)
             ?? throw new ArgumentException("Enter a valid planned amount.", nameof(plannedAmount));
+        BwMoneyAmount accumulated = HasAccumulatedAmount(categoryType)
+            ? CoreApi.ParseMoneyAmount(accumulatedAmount, 0)
+                ?? throw new ArgumentException("Enter a valid accumulated amount.", nameof(accumulatedAmount))
+            : new BwMoneyAmount(0);
         string trimmedTitle = title.Trim();
         if (trimmedTitle.Length == 0)
         {
@@ -90,24 +106,33 @@ public sealed partial class BudgetStore : ObservableObject
 
         int ordinal = budget.Categories.Count(item => item.CategoryType == categoryType);
         BwCategory category = new(
-            Guid.NewGuid(),
-            ordinal,
-            trimmedTitle,
-            amount,
-            new BwMoneyAmount(0),
-            new BwMoneyAmount(0),
-            categoryType,
-            []);
+            Id: Guid.NewGuid(),
+            Ordinal: ordinal,
+            Title: trimmedTitle,
+            AmountPlanned: amount,
+            AmountActual: new BwMoneyAmount(0),
+            AmountAccumulated: accumulated,
+            CategoryType: categoryType,
+            Transactions: []);
 
         await MutateAsync(current => CoreApi.CreateCategory(current, category));
     }
 
-    public async Task UpdateCategoryAsync(Guid categoryId, string title, string plannedAmount, BwCategoryType categoryType)
+    public async Task UpdateCategoryAsync(
+        Guid categoryId,
+        string title,
+        string plannedAmount,
+        string accumulatedAmount,
+        BwCategoryType categoryType)
     {
         BwBudget budget = RequireBudget();
         BwCategory existing = budget.Categories.First(item => item.Id == categoryId);
         BwMoneyAmount amount = CoreApi.ParseMoneyAmount(plannedAmount, 0)
             ?? throw new ArgumentException("Enter a valid planned amount.", nameof(plannedAmount));
+        BwMoneyAmount accumulated = HasAccumulatedAmount(categoryType)
+            ? CoreApi.ParseMoneyAmount(accumulatedAmount, 0)
+                ?? throw new ArgumentException("Enter a valid accumulated amount.", nameof(accumulatedAmount))
+            : new BwMoneyAmount(0);
         string trimmedTitle = title.Trim();
         if (trimmedTitle.Length == 0)
         {
@@ -118,10 +143,19 @@ public sealed partial class BudgetStore : ObservableObject
         {
             Title = trimmedTitle,
             AmountPlanned = amount,
+            AmountAccumulated = accumulated,
             CategoryType = categoryType,
         };
+        if (updated == existing)
+        {
+            return;
+        }
+
         await MutateAsync(current => CoreApi.UpdateCategory(current, updated));
     }
+
+    private static bool HasAccumulatedAmount(BwCategoryType categoryType) =>
+        categoryType is BwCategoryType.Savings or BwCategoryType.Debt;
 
     public Task DeleteCategoryAsync(Guid categoryId) =>
         MutateAsync(current => CoreApi.DeleteCategory(current, categoryId));
@@ -154,7 +188,51 @@ public sealed partial class BudgetStore : ObservableObject
     public Task DeleteTransactionAsync(Guid categoryId, Guid transactionId) =>
         MutateAsync(current => CoreApi.DeleteTransaction(current, categoryId, transactionId));
 
-    public void CloseBudget() => CurrentBudget = null;
+    public async Task UpdateTransactionAsync(
+        Guid categoryId,
+        Guid targetCategoryId,
+        Guid transactionId,
+        string title,
+        string description,
+        DateTimeOffset date,
+        string amountText)
+    {
+        BwBudget budget = RequireBudget();
+        BwCategory category = budget.Categories.First(item => item.Id == categoryId);
+        BwTransaction existing = category.Transactions.First(item => item.Id == transactionId);
+        BwMoneyAmount amount = CoreApi.ParseMoneyAmount(amountText, null)
+            ?? throw new ArgumentException("Enter a valid transaction amount.", nameof(amountText));
+        if (amount.Value <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(amountText), "The transaction amount must be greater than zero.");
+        }
+
+        string trimmedTitle = title.Trim();
+        if (trimmedTitle.Length == 0)
+        {
+            throw new ArgumentException("A transaction title is required.", nameof(title));
+        }
+
+        BwTransaction updated = existing with
+        {
+            Title = trimmedTitle,
+            Description = description.Trim(),
+            Date = new BwDate(date.Year, date.Month, date.Day),
+            Amount = amount,
+        };
+        if (updated == existing && categoryId == targetCategoryId)
+        {
+            return;
+        }
+
+        await MutateAsync(current =>
+        {
+            BwBudget result = CoreApi.UpdateTransaction(current, categoryId, updated);
+            return categoryId == targetCategoryId
+                ? result
+                : CoreApi.MoveTransaction(result, categoryId, targetCategoryId, transactionId);
+        });
+    }
 
     private async Task MutateAsync(Func<BwBudget, BwBudget> mutation)
     {
@@ -260,14 +338,32 @@ public sealed partial class BudgetStore : ObservableObject
             RecentFiles.RemoveAt(RecentFiles.Count - 1);
         }
 
+        UpdateRecentBudgetSelection();
         _settings.Values[RecentFilesKey] = JsonSerializer.Serialize(RecentFiles.Select(item => item.Path));
+    }
+
+    private void UpdateRecentBudgetSelection()
+    {
+        string? currentPath = CurrentBudget?.Url;
+        foreach (RecentBudget recent in RecentFiles)
+        {
+            recent.IsCurrent = currentPath is not null
+                && string.Equals(recent.Path, currentPath, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     private string? ReadSetting(string key) => _settings.Values[key] as string;
 }
 
-public sealed record RecentBudget(string Title, string Folder, string Path)
+public sealed partial class RecentBudget(string title, string folder, string path) : ObservableObject
 {
+    public string Title { get; } = title;
+    public string Folder { get; } = folder;
+    public string Path { get; } = path;
+
+    [ObservableProperty]
+    public partial bool IsCurrent { get; set; }
+
     public static RecentBudget FromPath(string path) => new(
         System.IO.Path.GetFileNameWithoutExtension(path),
         System.IO.Path.GetDirectoryName(path) ?? string.Empty,

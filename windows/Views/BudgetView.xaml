@@ -1,0 +1,405 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<UserControl
+    x:Class="BudgetWarden_Windows.Views.BudgetView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls"
+    xmlns:local="using:BudgetWarden_Windows.Views"
+    xmlns:viewModels="using:BudgetWarden_Windows.ViewModels"
+    Loaded="BudgetView_Loaded">
+    <UserControl.Resources>
+        <CollectionViewSource
+            x:Name="CategoryGroupsViewSource"
+            IsSourceGrouped="True"
+            Source="{x:Bind Vm.CategoryGroups, Mode=OneWay}" />
+        <Style x:Key="CategoryListItemStyle" TargetType="ListViewItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+        <Style x:Key="CategoryFooterListItemStyle" TargetType="ListViewItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="IsTabStop" Value="False" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListViewItem">
+                        <ContentPresenter
+                            Padding="{TemplateBinding Padding}"
+                            HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            ContentTemplateSelector="{TemplateBinding ContentTemplateSelector}"
+                            ContentTransitions="{TemplateBinding ContentTransitions}" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <local:CategoryListItemContainerStyleSelector
+            x:Key="CategoryListItemContainerStyleSelector"
+            CategoryStyle="{StaticResource CategoryListItemStyle}"
+            FooterStyle="{StaticResource CategoryFooterListItemStyle}" />
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <CommandBar
+            DefaultLabelPosition="Right"
+            VerticalContentAlignment="Center">
+            <CommandBar.Content>
+                <Button
+                    x:Name="BudgetSwitcherButton"
+                    Margin="12,0,0,0"
+                    VerticalAlignment="Center"
+                    AutomationProperties.AutomationId="BudgetSwitcherMenu"
+                    AutomationProperties.Name="Switch budget">
+                    <Button.Content>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock
+                                MaxWidth="280"
+                                Text="{x:Bind Vm.BudgetTitle, Mode=OneWay}"
+                                TextTrimming="CharacterEllipsis"
+                                VerticalAlignment="Center" />
+                            <FontIcon
+                                FontSize="12"
+                                Glyph="&#xE70D;"
+                                VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button.Content>
+                    <Button.Flyout>
+                        <Flyout Placement="BottomEdgeAlignedLeft">
+                            <Flyout.FlyoutPresenterStyle>
+                                <Style TargetType="FlyoutPresenter">
+                                    <Setter Property="Padding" Value="8" />
+                                </Style>
+                            </Flyout.FlyoutPresenterStyle>
+                            <StackPanel>
+                                <ItemsRepeater ItemsSource="{x:Bind Vm.RecentFiles, Mode=OneWay}">
+                                    <ItemsRepeater.ItemTemplate>
+                                        <DataTemplate x:DataType="viewModels:RecentBudget">
+                                            <Button
+                                                Padding="8"
+                                                HorizontalAlignment="Stretch"
+                                                HorizontalContentAlignment="Stretch"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                Click="OpenRecent_Click"
+                                                Tag="{x:Bind Path}"
+                                                AutomationProperties.Name="{x:Bind Title}">
+                                                <Grid ColumnSpacing="8">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="20" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <FontIcon
+                                                        FontSize="12"
+                                                        Glyph="&#xE73E;"
+                                                        VerticalAlignment="Center"
+                                                        Visibility="{x:Bind local:ViewVisibility.When(IsCurrent), Mode=OneWay}" />
+                                                    <TextBlock
+                                                        Grid.Column="1"
+                                                        Text="{x:Bind Title}"
+                                                        TextTrimming="CharacterEllipsis"
+                                                        VerticalAlignment="Center" />
+                                                </Grid>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsRepeater.ItemTemplate>
+                                </ItemsRepeater>
+                                <Rectangle
+                                    Height="1"
+                                    Margin="0,4"
+                                    Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                                <Button
+                                    Padding="8"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Left"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Click="NewBudget_Click"
+                                    AutomationProperties.AutomationId="BudgetSwitcherNewBudgetButton">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <FontIcon
+                                            FontSize="15"
+                                            Glyph="&#xE710;"
+                                            VerticalAlignment="Center" />
+                                        <TextBlock
+                                            Text="New Budget"
+                                            VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+            </CommandBar.Content>
+            <AppBarButton
+                Icon="Add"
+                Label="New Category"
+                Click="NewCategory_Click"
+                AutomationProperties.AutomationId="NewCategoryButton" />
+            <AppBarButton
+                Icon="Add"
+                Label="New Transaction"
+                Click="NewTransaction_Click"
+                AutomationProperties.AutomationId="NewTransactionButton" />
+            <AppBarToggleButton
+                x:Name="BudgetInspectorToggle"
+                Icon="OpenPane"
+                IsChecked="True"
+                LabelPosition="Collapsed"
+                Click="BudgetInspectorToggle_Click"
+                AutomationProperties.Name="Show or hide the inspector right sidebar"
+                AutomationProperties.AutomationId="BudgetInspectorToggle" />
+        </CommandBar>
+
+        <SplitView
+            x:Name="BudgetInspectorSplitView"
+            Grid.Row="1"
+            Margin="8,0,0,0"
+            DisplayMode="Inline"
+            IsPaneOpen="True"
+            OpenPaneLength="390"
+            PaneBackground="Transparent"
+            PanePlacement="Right">
+            <SplitView.Content>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <ListView
+                        x:Name="CategoryList"
+                        Grid.Row="1"
+                        Padding="0"
+                        ItemsSource="{x:Bind CategoryGroupsViewSource.View, Mode=OneWay}"
+                        SelectedItem="{x:Bind Vm.SelectedCategoryListItem, Mode=TwoWay}"
+                        SelectionChanged="CategoryList_SelectionChanged"
+                        SizeChanged="CategoryList_SizeChanged"
+                        LayoutUpdated="CategoryList_LayoutUpdated"
+                        SelectionMode="Single"
+                        ItemContainerStyleSelector="{StaticResource CategoryListItemContainerStyleSelector}"
+                        AutomationProperties.AutomationId="CategoryList">
+                        <ListView.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <ItemsStackPanel AreStickyGroupHeadersEnabled="True" />
+                            </ItemsPanelTemplate>
+                        </ListView.ItemsPanel>
+                        <ListView.GroupStyle>
+                            <GroupStyle HidesIfEmpty="False">
+                                <GroupStyle.HeaderContainerStyle>
+                                    <Style TargetType="ListViewHeaderItem">
+                                        <Setter Property="IsTabStop" Value="False" />
+                                        <Setter Property="IsHitTestVisible" Value="False" />
+                                        <Setter Property="Background" Value="Transparent" />
+                                    </Style>
+                                </GroupStyle.HeaderContainerStyle>
+                                <GroupStyle.HeaderTemplate>
+                                    <DataTemplate x:DataType="viewModels:CategoryGroupViewModel">
+                                        <Grid
+                                            Padding="12,15,12,8"
+                                            HorizontalAlignment="Stretch"
+                                            ColumnSpacing="16"
+                                            Loaded="CategoryGroupHeader_Loaded"
+                                            Unloaded="CategoryGroupHeader_Unloaded">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="2*" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock
+                                                Text="{x:Bind Title, Mode=OneWay}"
+                                                Style="{StaticResource BodyStrongTextBlockStyle}"
+                                                AutomationProperties.Name="{x:Bind Title, Mode=OneWay}" />
+                                            <TextBlock
+                                                Grid.Column="1"
+                                                Text="{x:Bind AccumulatedLabel, Mode=OneWay}"
+                                                Visibility="{x:Bind local:ViewVisibility.When(HasAccumulated), Mode=OneWay}"
+                                                Style="{StaticResource CaptionTextBlockStyle}" />
+                                            <TextBlock
+                                                Grid.Column="2"
+                                                Text="Planned"
+                                                Style="{StaticResource CaptionTextBlockStyle}" />
+                                            <TextBlock
+                                                Grid.Column="3"
+                                                Text="Actual"
+                                                Style="{StaticResource CaptionTextBlockStyle}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </GroupStyle.HeaderTemplate>
+                            </GroupStyle>
+                        </ListView.GroupStyle>
+                        <ListView.ItemContainerTransitions>
+                            <TransitionCollection />
+                        </ListView.ItemContainerTransitions>
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="viewModels:CategoryListItemViewModel">
+                                <Grid>
+                                    <Grid
+                                        Padding="12"
+                                        ColumnSpacing="16"
+                                        Tag="CategoryDataRow"
+                                        Visibility="{x:Bind local:ViewVisibility.When(IsCategory), Mode=OneWay}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="2*" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock
+                                            Text="{x:Bind Title, Mode=OneWay}"
+                                            VerticalAlignment="Center"
+                                            Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                        <TextBlock
+                                            Grid.Column="1"
+                                            Text="{x:Bind Accumulated, Mode=OneWay}"
+                                            Visibility="{x:Bind local:ViewVisibility.When(HasAccumulated), Mode=OneWay}"
+                                            VerticalAlignment="Center" />
+                                        <TextBlock
+                                            Grid.Column="2"
+                                            Text="{x:Bind Planned, Mode=OneWay}"
+                                            VerticalAlignment="Center" />
+                                        <TextBlock
+                                            Grid.Column="3"
+                                            Text="{x:Bind Actual, Mode=OneWay}"
+                                            VerticalAlignment="Center" />
+                                    </Grid>
+                                    <HyperlinkButton
+                                        Margin="0,2,0,8"
+                                        Padding="12,6"
+                                        HorizontalAlignment="Left"
+                                        Click="NewCategoryForGroup_Click"
+                                        Visibility="{x:Bind local:ViewVisibility.When(IsFooter), Mode=OneWay}"
+                                        AutomationProperties.Name="{x:Bind ActionLabel, Mode=OneWay}"
+                                        AutomationProperties.AutomationId="{x:Bind AutomationId, Mode=OneWay}">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <FontIcon Glyph="&#xE710;" FontSize="14" />
+                                            <TextBlock Text="{x:Bind ActionLabel, Mode=OneWay}" />
+                                        </StackPanel>
+                                    </HyperlinkButton>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Grid>
+            </SplitView.Content>
+
+            <SplitView.Pane>
+                <Border
+                    Margin="24,0,4,4"
+                    Padding="12,12,4,0"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="{ThemeResource ControlCornerRadius}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <controls:Segmented
+                            x:Name="BudgetInspectorSelector"
+                            HorizontalAlignment="Center"
+                            Loaded="BudgetInspectorSelector_Loaded"
+                            SelectionMode="Single"
+                            SelectionChanged="BudgetInspectorSelector_SelectionChanged"
+                            AutomationProperties.Name="Category pane mode"
+                            AutomationProperties.AutomationId="BudgetInspectorSelector">
+                            <controls:SegmentedItem
+                                x:Name="BudgetAtAGlanceItem"
+                                ToolTipService.ToolTip="At a glance"
+                                AutomationProperties.Name="At a glance"
+                                AutomationProperties.AutomationId="BudgetAtAGlanceItem">
+                                <controls:SegmentedItem.Icon>
+                                    <FontIcon
+                                        FontFamily="Segoe MDL2 Assets"
+                                        Glyph="&#xEB05;" />
+                                </controls:SegmentedItem.Icon>
+                            </controls:SegmentedItem>
+                            <controls:SegmentedItem
+                                x:Name="BudgetDetailsItem"
+                                IsEnabled="{x:Bind Vm.HasSelectedCategory, Mode=OneWay}"
+                                ToolTipService.ToolTip="Inspector"
+                                AutomationProperties.Name="Inspector"
+                                AutomationProperties.AutomationId="BudgetDetailsItem">
+                                <controls:SegmentedItem.Icon>
+                                    <SymbolIcon Symbol="Edit" />
+                                </controls:SegmentedItem.Icon>
+                            </controls:SegmentedItem>
+                        </controls:Segmented>
+                        <Grid
+                            x:Name="BudgetAtAGlanceContent"
+                            Grid.Row="1"
+                            Margin="0,16,0,0">
+                            <local:AtAGlanceReportingView Data="{x:Bind Vm.Reporting, Mode=OneWay}" />
+                        </Grid>
+                        <ScrollViewer
+                            x:Name="CategoryInspectorContent"
+                            Grid.Row="1"
+                            Margin="0,20,0,0"
+                            Visibility="Collapsed">
+                            <StackPanel Spacing="16" Padding="0,0,8,0">
+                                <TextBox
+                                    x:Name="CategoryInspectorTitleBox"
+                                    Header="Title"
+                                    TextChanged="CategoryInspectorField_Changed"
+                                    AutomationProperties.AutomationId="CategoryInspectorTitleBox" />
+                                <ComboBox
+                                    x:Name="CategoryInspectorTypeBox"
+                                    Header="Type"
+                                    ItemsSource="{x:Bind Vm.CategoryTypes, Mode=OneTime}"
+                                    DisplayMemberPath="DisplayName"
+                                    SelectionChanged="CategoryInspectorField_Changed"
+                                    AutomationProperties.AutomationId="CategoryInspectorTypeBox" />
+                                <TextBox
+                                    x:Name="CategoryInspectorPlannedBox"
+                                    Header="Planned"
+                                    InputScope="Number"
+                                    TextChanged="CategoryInspectorField_Changed"
+                                    AutomationProperties.AutomationId="CategoryInspectorPlannedBox" />
+                                <TextBox
+                                    x:Name="CategoryInspectorAccumulatedBox"
+                                    Header="Accumulated"
+                                    InputScope="Number"
+                                    TextChanged="CategoryInspectorField_Changed"
+                                    AutomationProperties.AutomationId="CategoryInspectorAccumulatedBox" />
+                                <StackPanel Spacing="4">
+                                    <TextBlock
+                                        Text="Actual"
+                                        Style="{StaticResource CaptionTextBlockStyle}" />
+                                    <TextBlock
+                                        Text="{x:Bind Vm.SelectedCategory.Actual, Mode=OneWay, FallbackValue=''}" />
+                                </StackPanel>
+                                <Button
+                                    HorizontalAlignment="Stretch"
+                                    Click="DeleteCategory_Click"
+                                    AutomationProperties.AutomationId="DeleteCategoryButton">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <SymbolIcon Symbol="Delete" />
+                                        <TextBlock Text="Delete category" />
+                                    </StackPanel>
+                                </Button>
+                                <Button
+                                    x:Name="CategoryInspectorApplyButton"
+                                    HorizontalAlignment="Stretch"
+                                    Style="{StaticResource AccentButtonStyle}"
+                                    Click="ApplyCategoryInspector_Click"
+                                    AutomationProperties.AutomationId="CategoryInspectorApplyButton">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <SymbolIcon Symbol="Save" />
+                                        <TextBlock Text="Apply" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
+            </SplitView.Pane>
+        </SplitView>
+    </Grid>
+</UserControl>

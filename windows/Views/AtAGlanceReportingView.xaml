@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<UserControl
+    x:Class="BudgetWarden_Windows.Views.AtAGlanceReportingView"
+    x:Name="Root"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls"
+    xmlns:local="using:BudgetWarden_Windows.Views"
+    xmlns:viewModels="using:BudgetWarden_Windows.ViewModels">
+    <ScrollViewer>
+        <StackPanel Spacing="16" Padding="0,0,8,12">
+            <ItemsRepeater ItemsSource="{Binding Data.Metrics, ElementName=Root}">
+                <ItemsRepeater.Layout>
+                    <UniformGridLayout
+                        MinItemWidth="130"
+                        MinItemHeight="76"
+                        MinColumnSpacing="12"
+                        MinRowSpacing="12"
+                        ItemsStretch="Fill" />
+                </ItemsRepeater.Layout>
+                <ItemsRepeater.ItemTemplate>
+                    <DataTemplate x:DataType="viewModels:ReportingMetricViewModel">
+                        <local:ReportingMetricCard Model="{x:Bind}" />
+                    </DataTemplate>
+                </ItemsRepeater.ItemTemplate>
+            </ItemsRepeater>
+            <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
+            <controls:Segmented
+                x:Name="AmountSelector"
+                HorizontalAlignment="Stretch"
+                SelectionMode="Single"
+                SelectionChanged="AmountSelector_SelectionChanged"
+                AutomationProperties.Name="At a glance reporting amount">
+                <controls:SegmentedItem Content="Planned" />
+                <controls:SegmentedItem Content="Actual" />
+            </controls:Segmented>
+            <ItemsRepeater x:Name="ChartRepeater">
+                <ItemsRepeater.Layout>
+                    <StackLayout Spacing="16" />
+                </ItemsRepeater.Layout>
+                <ItemsRepeater.ItemTemplate>
+                    <DataTemplate x:DataType="viewModels:ReportingChartViewModel">
+                        <local:ReportingChartCard Model="{x:Bind}" />
+                    </DataTemplate>
+                </ItemsRepeater.ItemTemplate>
+            </ItemsRepeater>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

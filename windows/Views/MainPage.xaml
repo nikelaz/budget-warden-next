@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="BudgetWarden_Windows.Views.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:BudgetWarden_Windows.Views"
+    Loaded="MainPage_Loaded">
+    <Grid>
+        <local:WelcomeView
+            x:Name="WelcomeScreen"
+            Visibility="{x:Bind Vm.ShowWelcome, Mode=OneWay}" />
+
+        <NavigationView
+            x:Name="ShellNavigation"
+            Visibility="{x:Bind Vm.HasBudget, Mode=OneWay}"
+            Loaded="ShellNavigation_Loaded"
+            IsBackButtonVisible="Collapsed"
+            IsSettingsVisible="True"
+            IsPaneToggleButtonVisible="True"
+            IsTitleBarAutoPaddingEnabled="False"
+            PaneDisplayMode="Left"
+            SelectionChanged="ShellNavigation_SelectionChanged"
+            AutomationProperties.AutomationId="ShellNavigation">
+            <NavigationView.MenuItems>
+                <NavigationViewItem
+                    x:Name="BudgetNavigationItem"
+                    Content="Budget"
+                    Icon="Calculator"
+                    IsSelected="True"
+                    Tag="budget"
+                    AutomationProperties.AutomationId="NavBudget" />
+                <NavigationViewItem
+                    Content="Reporting"
+                    Tag="reporting"
+                    AutomationProperties.AutomationId="NavReporting">
+                    <NavigationViewItem.Icon>
+                        <FontIcon
+                            FontFamily="Segoe MDL2 Assets"
+                            Glyph="&#xEB05;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem
+                    Content="Transactions"
+                    Icon="List"
+                    Tag="transactions"
+                    AutomationProperties.AutomationId="NavTransactions" />
+            </NavigationView.MenuItems>
+
+            <Grid>
+                <local:BudgetView
+                    x:Name="BudgetScreen"
+                    Visibility="{x:Bind local:ViewVisibility.When(Vm.IsBudgetPage), Mode=OneWay}" />
+                <local:ReportingView
+                    Data="{x:Bind Vm.Reporting, Mode=OneWay}"
+                    Visibility="{x:Bind local:ViewVisibility.When(Vm.IsReportingPage), Mode=OneWay}" />
+                <local:TransactionsView
+                    x:Name="TransactionsScreen"
+                    Visibility="{x:Bind local:ViewVisibility.When(Vm.IsTransactionsPage), Mode=OneWay}" />
+                <local:SettingsView
+                    Visibility="{x:Bind local:ViewVisibility.When(Vm.IsSettingsPage), Mode=OneWay}" />
+            </Grid>
+        </NavigationView>
+    </Grid>
+</Page>

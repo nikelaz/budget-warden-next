@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<UserControl
+    x:Class="BudgetWarden_Windows.Views.WelcomeView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:viewModels="using:BudgetWarden_Windows.ViewModels">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="380" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <StackPanel
+            Grid.Column="0"
+            Padding="36"
+            Spacing="24"
+            VerticalAlignment="Center">
+            <Image
+                Width="104"
+                Height="104"
+                HorizontalAlignment="Left"
+                Source="ms-appx:///Assets/BudgetWarden.svg"
+                AutomationProperties.AccessibilityView="Raw" />
+            <TextBlock
+                Text="Budget Warden"
+                Style="{StaticResource TitleTextBlockStyle}" />
+            <StackPanel Spacing="16">
+                <Button
+                    x:Name="WelcomeNewBudgetButton"
+                    Click="NewBudget_Click"
+                    AutomationProperties.Name="Create new budget"
+                    AutomationProperties.AutomationId="WelcomeNewBudgetButton">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE710;" FontSize="15" VerticalAlignment="Center" />
+                        <TextBlock Text="Create new budget" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <Button
+                    x:Name="WelcomeOpenBudgetButton"
+                    Click="OpenBudget_Click"
+                    AutomationProperties.Name="Open budget"
+                    AutomationProperties.AutomationId="WelcomeOpenBudgetButton">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE8E5;" FontSize="15" VerticalAlignment="Center" />
+                        <TextBlock Text="Open budget" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </StackPanel>
+
+        <Border
+            Grid.Column="1"
+            Margin="0,16,16,16"
+            Padding="36"
+            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            BorderThickness="1"
+            CornerRadius="{ThemeResource ControlCornerRadius}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <StackPanel Spacing="4">
+                    <TextBlock
+                        Text="Recently opened"
+                        Style="{StaticResource SubtitleTextBlockStyle}" />
+                    <TextBlock
+                        Text="Your most recent .budget files stay on this device."
+                        Style="{StaticResource CaptionTextBlockStyle}" />
+                </StackPanel>
+                <ListView
+                    x:Name="RecentBudgetsList"
+                    Grid.Row="1"
+                    Margin="0,20,0,0"
+                    Padding="0"
+                    ItemsSource="{x:Bind Vm.RecentFiles, Mode=OneWay}"
+                    SelectionMode="None"
+                    AutomationProperties.AutomationId="RecentBudgetsList">
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem">
+                            <Setter Property="Padding" Value="0" />
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        </Style>
+                    </ListView.ItemContainerStyle>
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="viewModels:RecentBudget">
+                            <Button
+                                Margin="0,0,0,8"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch"
+                                Click="OpenRecent_Click"
+                                AutomationProperties.AutomationId="{x:Bind Path, Mode=OneWay}"
+                                AutomationProperties.Name="{x:Bind Title, Mode=OneWay}">
+                                <Grid Padding="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <FontIcon Margin="0,0,16,0" Glyph="&#xE8A5;" />
+                                    <StackPanel Grid.Column="1" Spacing="2">
+                                        <TextBlock
+                                            Text="{x:Bind Title, Mode=OneWay}"
+                                            Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                        <TextBlock
+                                            Text="{x:Bind Folder, Mode=OneWay}"
+                                            TextTrimming="CharacterEllipsis"
+                                            Style="{StaticResource CaptionTextBlockStyle}" />
+                                    </StackPanel>
+                                    <FontIcon Grid.Column="2" Glyph="&#xE76C;" />
+                                </Grid>
+                            </Button>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

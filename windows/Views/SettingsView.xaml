@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<UserControl
+    x:Class="BudgetWarden_Windows.Views.SettingsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:viewModels="using:BudgetWarden_Windows.ViewModels">
+    <ScrollViewer Padding="30">
+        <StackPanel
+            HorizontalAlignment="Left"
+            Spacing="12">
+            <TextBlock
+                Text="Settings"
+                Margin="0,0,0,10"
+                Style="{StaticResource TitleTextBlockStyle}" />
+            <Border
+                Padding="24"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="{ThemeResource ControlCornerRadius}">
+                <Grid ColumnSpacing="24">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Text="Currency"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <AutoSuggestBox
+                        x:Name="CurrencyBox"
+                        Grid.Column="1"
+                        MinWidth="300"
+                        PlaceholderText="Search by currency name or code"
+                        QueryIcon="Find"
+                        TextMemberPath="DisplayName"
+                        TextChanged="CurrencyBox_TextChanged"
+                        SuggestionChosen="CurrencyBox_SuggestionChosen"
+                        QuerySubmitted="CurrencyBox_QuerySubmitted"
+                        LostFocus="CurrencyBox_LostFocus"
+                        AutomationProperties.Name="Currency"
+                        AutomationProperties.AutomationId="CurrencySearchBox">
+                        <AutoSuggestBox.ItemTemplate>
+                            <DataTemplate x:DataType="viewModels:CurrencyOption">
+                                <TextBlock Text="{x:Bind DisplayName}" />
+                            </DataTemplate>
+                        </AutoSuggestBox.ItemTemplate>
+                    </AutoSuggestBox>
+                </Grid>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

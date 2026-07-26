@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Window
+    x:Class="BudgetWarden_Windows.Views.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:BudgetWarden_Windows.Views"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Title="Budget Warden"
+    mc:Ignorable="d">
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <TitleBar x:Name="AppTitleBar">
+            <TitleBar.LeftHeader>
+                <StackPanel Orientation="Horizontal" Spacing="16" Padding="20, 0, 0, 0">
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <Image
+                            Width="16"
+                            Height="16"
+                            Source="ms-appx:///Assets/AppIcon.ico" />
+                        <TextBlock
+                            Margin="0,0,4,0"
+                            VerticalAlignment="Center"
+                            Text="Budget Warden"
+                            Style="{StaticResource CaptionTextBlockStyle}" />
+                    </StackPanel>
+
+                    <MenuBar
+                        x:Name="MainMenuBar"
+                        Height="32"
+                        MinHeight="0"
+                        Background="Transparent"
+                        VerticalAlignment="Center"
+                        AutomationProperties.AutomationId="MainMenuBar">
+                        <MenuBarItem Title="File">
+                            <MenuFlyoutItem
+                                Text="New Budget"
+                                Click="NewBudget_Click"
+                                AutomationProperties.AutomationId="FileNewBudgetMenuItem" />
+                            <MenuFlyoutItem
+                                Text="Open Budget"
+                                Click="OpenBudget_Click"
+                                AutomationProperties.AutomationId="FileOpenBudgetMenuItem" />
+                            <MenuFlyoutSeparator />
+                            <MenuFlyoutItem
+                                Text="Exit"
+                                Click="Exit_Click"
+                                AutomationProperties.AutomationId="FileExitMenuItem" />
+                        </MenuBarItem>
+                        <MenuBarItem Title="Edit">
+                            <MenuFlyoutItem
+                                x:Name="EditNewCategoryMenuItem"
+                                Text="New Category"
+                                Click="NewCategory_Click"
+                                AutomationProperties.AutomationId="EditNewCategoryMenuItem" />
+                            <MenuFlyoutItem
+                                x:Name="EditNewTransactionMenuItem"
+                                Text="New Transaction"
+                                Click="NewTransaction_Click"
+                                AutomationProperties.AutomationId="EditNewTransactionMenuItem" />
+                        </MenuBarItem>
+                    </MenuBar>
+                </StackPanel>
+            </TitleBar.LeftHeader>
+            <TitleBar.Content>
+                <AutoSuggestBox
+                    x:Name="TransactionSearchBox"
+                    Width="320"
+                    Margin="12,0"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    QueryIcon="Find"
+                    PlaceholderText="Search transactions"
+                    TextChanged="TransactionSearchBox_TextChanged"
+                    Visibility="Collapsed"
+                    AutomationProperties.Name="Search transactions"
+                    AutomationProperties.AutomationId="TransactionSearchBox" />
+            </TitleBar.Content>
+        </TitleBar>
+
+        <Frame x:Name="RootFrame" Grid.Row="1" />
+    </Grid>
+</Window>

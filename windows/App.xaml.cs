@@ -1,5 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI;
+using BudgetWarden_Windows.ViewModels;
+using BudgetWarden_Windows.Views;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -11,6 +13,8 @@ namespace BudgetWarden_Windows;
 /// </summary>
 public partial class App : Application
 {
+    public static AppViewModel ViewModel { get; } = new();
+
     /// <summary>
     /// The main application window. Use <c>App.Window</c> from any class that needs
     /// the window reference (for dialogs, pickers, interop, etc.).

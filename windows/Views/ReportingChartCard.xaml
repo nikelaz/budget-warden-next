@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<UserControl
+    x:Class="BudgetWarden_Windows.Views.ReportingChartCard"
+    x:Name="Root"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:canvas="using:Microsoft.Graphics.Canvas.UI.Xaml"
+    xmlns:viewModels="using:BudgetWarden_Windows.ViewModels">
+    <Grid RowSpacing="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <TextBlock
+            Text="{Binding Model.Title, ElementName=Root}"
+            Style="{StaticResource BodyStrongTextBlockStyle}" />
+        <Border
+            Grid.Row="1"
+            MinHeight="250"
+            Padding="12"
+            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            BorderThickness="1"
+            CornerRadius="{ThemeResource ControlCornerRadius}">
+            <StackPanel Spacing="10">
+                <Grid Height="160">
+                    <canvas:CanvasControl
+                        x:Name="ChartCanvas"
+                        Draw="ChartCanvas_Draw"
+                        AutomationProperties.Name="Reporting chart" />
+                    <TextBlock
+                        x:Name="EmptyText"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        TextAlignment="Center"
+                        TextWrapping="Wrap"
+                        Style="{StaticResource BodyTextBlockStyle}" />
+                </Grid>
+                <Grid ColumnSpacing="20">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <ItemsControl x:Name="LegendItems">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="viewModels:ReportingChartSegmentViewModel">
+                                <Grid Margin="0,0,0,6" ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="48" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border
+                                        Width="9"
+                                        Height="9"
+                                        VerticalAlignment="Center"
+                                        Background="{x:Bind Brush, Mode=OneWay}"
+                                        CornerRadius="2" />
+                                    <TextBlock Grid.Column="1" Text="{x:Bind Title, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Column="2" Text="{x:Bind FormattedAmount, Mode=OneWay}" Style="{StaticResource CaptionTextBlockStyle}" />
+                                    <TextBlock Grid.Column="3" Text="{x:Bind Percent, Mode=OneWay}" TextAlignment="Right" Style="{StaticResource CaptionTextBlockStyle}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <ItemsControl
+                        x:Name="SummaryItems"
+                        Grid.Column="1">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Margin="0,0,0,3" Text="{Binding}" Style="{StaticResource CaptionTextBlockStyle}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Grid>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>
