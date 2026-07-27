@@ -9,7 +9,7 @@
     xmlns:viewModels="using:BudgetWarden_Windows.ViewModels">
     <ScrollViewer>
         <StackPanel Spacing="16" Padding="0,0,8,12">
-            <ItemsRepeater ItemsSource="{Binding Data.Metrics, ElementName=Root}">
+            <ItemsRepeater x:Name="MetricItems">
                 <ItemsRepeater.Layout>
                     <UniformGridLayout
                         MinItemWidth="130"

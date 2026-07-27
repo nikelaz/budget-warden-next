@@ -313,7 +313,9 @@ public sealed partial class AppViewModel
             return;
         }
 
-        foreach (string path in JsonSerializer.Deserialize<string[]>(serialized) ?? [])
+        foreach (string path in JsonSerializer.Deserialize(
+                     serialized,
+                     AppJsonContext.Default.StringArray) ?? [])
         {
             if (File.Exists(path) && string.Equals(Path.GetExtension(path), ".budget", StringComparison.OrdinalIgnoreCase))
             {
@@ -339,7 +341,10 @@ public sealed partial class AppViewModel
         }
 
         UpdateRecentBudgetSelection();
-        _settings.Values[RecentFilesKey] = JsonSerializer.Serialize(RecentFiles.Select(item => item.Path));
+        string[] recentPaths = RecentFiles.Select(item => item.Path).ToArray();
+        _settings.Values[RecentFilesKey] = JsonSerializer.Serialize(
+            recentPaths,
+            AppJsonContext.Default.StringArray);
     }
 
     private void UpdateRecentBudgetSelection()

@@ -329,7 +329,7 @@ public sealed partial class BudgetView : UserControl
         BudgetDialogs.ShowTransactionAsync(this, Vm);
 }
 
-public sealed class CategoryListItemContainerStyleSelector : StyleSelector
+public sealed partial class CategoryListItemContainerStyleSelector : StyleSelector
 {
     public Style? CategoryStyle { get; set; }
     public Style? FooterStyle { get; set; }

@@ -30,11 +30,13 @@ public sealed partial class ReportingMetricCard : UserControl
 
     private void UpdateTone()
     {
-        if (ValueText is null)
+        if (TitleText is null || ValueText is null)
         {
             return;
         }
 
+        TitleText.Text = Model?.Title ?? string.Empty;
+        ValueText.Text = Model?.Value ?? string.Empty;
         string? resource = Model?.Tone switch
         {
             ReportingMetricTone.Positive => "SystemFillColorSuccessBrush",

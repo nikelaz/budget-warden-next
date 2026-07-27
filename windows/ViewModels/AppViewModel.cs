@@ -13,7 +13,7 @@ public sealed partial class AppViewModel : ObservableObject
     public ObservableCollection<CategoryGroupViewModel> CategoryGroups { get; } = [];
     public ObservableCollection<TransactionRowViewModel> Transactions { get; } = [];
     public ObservableCollection<ReportingRowViewModel> ReportingRows { get; } = [];
-    public IReadOnlyList<CategoryTypeOption> CategoryTypes { get; } =
+    public ObservableCollection<CategoryTypeOption> CategoryTypes { get; } =
     [
         new("Income", BwCategoryType.Income),
         new("Expenses", BwCategoryType.Expenses),
@@ -21,7 +21,8 @@ public sealed partial class AppViewModel : ObservableObject
         new("Debt", BwCategoryType.Debt),
     ];
 
-    public IReadOnlyList<CurrencyOption> CurrencyOptions { get; } = CurrencyCatalog.All;
+    public ObservableCollection<CurrencyOption> CurrencyOptions { get; } =
+        new(CurrencyCatalog.All);
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelectedCategory))]
@@ -299,7 +300,7 @@ public sealed record CategoryTypeOption(string DisplayName, BwCategoryType Value
     public bool HasAccumulated => Value is BwCategoryType.Savings or BwCategoryType.Debt;
 }
 
-public sealed class CategoryGroupViewModel(
+public sealed partial class CategoryGroupViewModel(
     string title,
     BwCategoryType categoryType,
     IEnumerable<CategoryRowViewModel> categories)

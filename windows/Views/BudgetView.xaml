@@ -353,9 +353,14 @@
                                     x:Name="CategoryInspectorTypeBox"
                                     Header="Type"
                                     ItemsSource="{x:Bind Vm.CategoryTypes, Mode=OneTime}"
-                                    DisplayMemberPath="DisplayName"
                                     SelectionChanged="CategoryInspectorField_Changed"
-                                    AutomationProperties.AutomationId="CategoryInspectorTypeBox" />
+                                    AutomationProperties.AutomationId="CategoryInspectorTypeBox">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="viewModels:CategoryTypeOption">
+                                            <TextBlock Text="{x:Bind DisplayName}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
                                 <TextBox
                                     x:Name="CategoryInspectorPlannedBox"
                                     Header="Planned"

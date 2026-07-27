@@ -12,7 +12,7 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
         <TextBlock
-            Text="{Binding Model.Title, ElementName=Root}"
+            x:Name="TitleText"
             Style="{StaticResource BodyStrongTextBlockStyle}" />
         <Border
             Grid.Row="1"
@@ -68,8 +68,8 @@
                         x:Name="SummaryItems"
                         Grid.Column="1">
                         <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Margin="0,0,0,3" Text="{Binding}" Style="{StaticResource CaptionTextBlockStyle}" />
+                            <DataTemplate x:DataType="x:String">
+                                <TextBlock Margin="0,0,0,3" Text="{x:Bind}" Style="{StaticResource CaptionTextBlockStyle}" />
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>

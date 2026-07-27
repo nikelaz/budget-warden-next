@@ -30,7 +30,7 @@
         </CommandBar>
         <ScrollViewer Grid.Row="1" Padding="12,15,12,0">
             <StackPanel Spacing="20" Padding="0,0,0,12">
-                <ItemsRepeater ItemsSource="{Binding Data.Metrics, ElementName=Root}">
+                <ItemsRepeater x:Name="MetricItems">
                     <ItemsRepeater.Layout>
                         <UniformGridLayout
                             MinItemWidth="170"

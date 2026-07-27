@@ -138,9 +138,14 @@
                                 x:Name="TransactionInspectorCategoryBox"
                                 Header="Category"
                                 ItemsSource="{x:Bind Vm.Categories, Mode=OneWay}"
-                                DisplayMemberPath="Title"
                                 SelectionChanged="TransactionInspectorField_Changed"
-                                AutomationProperties.AutomationId="TransactionInspectorCategoryBox" />
+                                AutomationProperties.AutomationId="TransactionInspectorCategoryBox">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="viewModels:CategoryRowViewModel">
+                                        <TextBlock Text="{x:Bind Title}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
                             <CalendarDatePicker
                                 x:Name="TransactionInspectorDatePicker"
                                 Header="Date"

@@ -4,7 +4,7 @@ using Windows.Foundation;
 
 namespace BudgetWarden_Windows.Views;
 
-public sealed class ResponsiveGridPanel : Panel
+public sealed partial class ResponsiveGridPanel : Panel
 {
     public static readonly DependencyProperty MinItemWidthProperty = DependencyProperty.Register(
         nameof(MinItemWidth),

@@ -33,19 +33,12 @@
                         MinWidth="300"
                         PlaceholderText="Search by currency name or code"
                         QueryIcon="Find"
-                        TextMemberPath="DisplayName"
                         TextChanged="CurrencyBox_TextChanged"
                         SuggestionChosen="CurrencyBox_SuggestionChosen"
                         QuerySubmitted="CurrencyBox_QuerySubmitted"
                         LostFocus="CurrencyBox_LostFocus"
                         AutomationProperties.Name="Currency"
-                        AutomationProperties.AutomationId="CurrencySearchBox">
-                        <AutoSuggestBox.ItemTemplate>
-                            <DataTemplate x:DataType="viewModels:CurrencyOption">
-                                <TextBlock Text="{x:Bind DisplayName}" />
-                            </DataTemplate>
-                        </AutoSuggestBox.ItemTemplate>
-                    </AutoSuggestBox>
+                        AutomationProperties.AutomationId="CurrencySearchBox" />
                 </Grid>
             </Border>
         </StackPanel>

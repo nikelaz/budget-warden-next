@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using BudgetWarden_Windows.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -12,7 +13,8 @@ public sealed partial class SettingsView : UserControl
     {
         InitializeComponent();
         CurrencyBox.Text = Vm.SelectedCurrency.DisplayName;
-        CurrencyBox.ItemsSource = Vm.CurrencyOptions;
+        CurrencyBox.ItemsSource = new ObservableCollection<string>(
+            Vm.CurrencyOptions.Select(currency => currency.DisplayName));
     }
 
     private void CurrencyBox_TextChanged(
@@ -28,23 +30,25 @@ public sealed partial class SettingsView : UserControl
             ' ',
             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-        sender.ItemsSource = Vm.CurrencyOptions
-            .Where(currency => terms.All(term =>
-                currency.Code.Contains(term, StringComparison.OrdinalIgnoreCase)
-                || currency.Name.Contains(term, StringComparison.OrdinalIgnoreCase)))
-            .OrderByDescending(currency =>
-                currency.Code.Equals(sender.Text.Trim(), StringComparison.OrdinalIgnoreCase))
-            .ThenByDescending(currency =>
-                currency.Name.StartsWith(sender.Text.Trim(), StringComparison.OrdinalIgnoreCase))
-            .Take(25)
-            .ToList();
+        sender.ItemsSource = new ObservableCollection<string>(
+            Vm.CurrencyOptions
+                .Where(currency => terms.All(term =>
+                    currency.Code.Contains(term, StringComparison.OrdinalIgnoreCase)
+                    || currency.Name.Contains(term, StringComparison.OrdinalIgnoreCase)))
+                .OrderByDescending(currency =>
+                    currency.Code.Equals(sender.Text.Trim(), StringComparison.OrdinalIgnoreCase))
+                .ThenByDescending(currency =>
+                    currency.Name.StartsWith(sender.Text.Trim(), StringComparison.OrdinalIgnoreCase))
+                .Take(25)
+                .Select(currency => currency.DisplayName));
     }
 
     private void CurrencyBox_SuggestionChosen(
         AutoSuggestBox sender,
         AutoSuggestBoxSuggestionChosenEventArgs args)
     {
-        if (args.SelectedItem is CurrencyOption currency)
+        if (args.SelectedItem is string displayName
+            && CurrencyFromDisplayName(displayName) is CurrencyOption currency)
         {
             SelectCurrency(sender, currency);
         }
@@ -54,7 +58,8 @@ public sealed partial class SettingsView : UserControl
         AutoSuggestBox sender,
         AutoSuggestBoxQuerySubmittedEventArgs args)
     {
-        if (args.ChosenSuggestion is CurrencyOption chosenCurrency)
+        if (args.ChosenSuggestion is string displayName
+            && CurrencyFromDisplayName(displayName) is CurrencyOption chosenCurrency)
         {
             SelectCurrency(sender, chosenCurrency);
             return;
@@ -85,4 +90,8 @@ public sealed partial class SettingsView : UserControl
         Vm.SelectedCurrency = currency;
         sender.Text = currency.DisplayName;
     }
+
+    private CurrencyOption? CurrencyFromDisplayName(string displayName) =>
+        Vm.CurrencyOptions.FirstOrDefault(currency =>
+            currency.DisplayName.Equals(displayName, StringComparison.Ordinal));
 }

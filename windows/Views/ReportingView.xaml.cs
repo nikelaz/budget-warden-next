@@ -43,6 +43,7 @@ public sealed partial class ReportingView : UserControl
             return;
         }
 
+        MetricItems.ItemsSource = Data.Metrics;
         ChartItems.ItemsSource =
             AmountSelector.SelectedIndex == 1 ? Data.ActualCharts : Data.PlannedCharts;
     }

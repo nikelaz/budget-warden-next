@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Collections.ObjectModel;
 using Bw_core;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
@@ -19,14 +20,14 @@ public enum ReportingChartKind
     Donut,
 }
 
-public sealed record ReportingMetricViewModel(
+public sealed partial record ReportingMetricViewModel(
     string Title,
     string Value,
     ReportingMetricTone Tone);
 
 public readonly record struct ReportingChartColor(Color Light, Color Dark);
 
-public sealed record ReportingChartSegmentViewModel(
+public sealed partial record ReportingChartSegmentViewModel(
     string Title,
     string RowTitle,
     long Amount,
@@ -41,29 +42,29 @@ public sealed record ReportingChartSegmentViewModel(
         Brush.Color = theme == ElementTheme.Dark ? ChartColor.Dark : ChartColor.Light;
 }
 
-public sealed record ReportingChartViewModel(
+public sealed partial record ReportingChartViewModel(
     string Title,
     string EmptyTitle,
     ReportingChartKind Kind,
-    IReadOnlyList<ReportingChartSegmentViewModel> Segments,
-    IReadOnlyList<string> SummaryLines)
+    ObservableCollection<ReportingChartSegmentViewModel> Segments,
+    ObservableCollection<string> SummaryLines)
 {
     public bool HasData => Segments.Count > 0 && Segments.Any(segment => segment.Amount > 0);
 
-    public IReadOnlyList<ReportingChartSegmentViewModel> LegendSegments =>
+    public ObservableCollection<ReportingChartSegmentViewModel> LegendSegments { get; } =
         Kind == ReportingChartKind.Donut
             ? Segments
-            : Segments
-                .GroupBy(segment => segment.Title)
-                .Select(group =>
-                {
-                    ReportingChartSegmentViewModel segment = group.First();
-                    return segment with { FormattedAmount = string.Empty };
-                })
-                .ToArray();
+            : new ObservableCollection<ReportingChartSegmentViewModel>(
+                Segments
+                    .GroupBy(segment => segment.Title)
+                    .Select(group =>
+                    {
+                        ReportingChartSegmentViewModel segment = group.First();
+                        return segment with { FormattedAmount = string.Empty };
+                    }));
 }
 
-public sealed class ReportingPresentation
+public sealed partial class ReportingPresentation
 {
     // Light Palette B / Dark Palette B. Keep the pairs in the same order so a
     // category retains its identity when the app theme changes.
@@ -84,14 +85,14 @@ public sealed class ReportingPresentation
 
     public static ReportingPresentation Empty { get; } = new([], [], []);
 
-    public IReadOnlyList<ReportingMetricViewModel> Metrics { get; }
-    public IReadOnlyList<ReportingChartViewModel> PlannedCharts { get; }
-    public IReadOnlyList<ReportingChartViewModel> ActualCharts { get; }
+    public ObservableCollection<ReportingMetricViewModel> Metrics { get; }
+    public ObservableCollection<ReportingChartViewModel> PlannedCharts { get; }
+    public ObservableCollection<ReportingChartViewModel> ActualCharts { get; }
 
     private ReportingPresentation(
-        IReadOnlyList<ReportingMetricViewModel> metrics,
-        IReadOnlyList<ReportingChartViewModel> plannedCharts,
-        IReadOnlyList<ReportingChartViewModel> actualCharts)
+        ObservableCollection<ReportingMetricViewModel> metrics,
+        ObservableCollection<ReportingChartViewModel> plannedCharts,
+        ObservableCollection<ReportingChartViewModel> actualCharts)
     {
         Metrics = metrics;
         PlannedCharts = plannedCharts;
@@ -108,7 +109,7 @@ public sealed class ReportingPresentation
         long savings = report.Totals.PlannedSavings.Value;
         long leftToBudget = report.Totals.LeftToBudget;
 
-        ReportingMetricViewModel[] metrics =
+        ObservableCollection<ReportingMetricViewModel> metrics =
         [
             new("Income", formatMoney(income), ReportingMetricTone.Normal),
             new(
@@ -133,7 +134,7 @@ public sealed class ReportingPresentation
             ChartsForMode(report, BwReportingAmountMode.Actual, "Actual", comparison, formatMoney));
     }
 
-    private static IReadOnlyList<ReportingChartViewModel> ChartsForMode(
+    private static ObservableCollection<ReportingChartViewModel> ChartsForMode(
         BwReportingSummary report,
         BwReportingAmountMode mode,
         string modeTitle,
@@ -161,17 +162,17 @@ public sealed class ReportingPresentation
         BwReportingSummary report,
         Func<long, string> formatMoney)
     {
-        ReportingChartSegmentViewModel[] segments = report.ComparisonSegments
-            .Select(segment => new ReportingChartSegmentViewModel(
-                ComponentLabel(segment.Component),
-                RowLabel(segment.Row),
-                segment.Amount.Value,
-                formatMoney(segment.Amount.Value),
-                string.Empty,
-                ComponentColor(segment.Component)))
-            .ToArray();
+        ObservableCollection<ReportingChartSegmentViewModel> segments = new(
+            report.ComparisonSegments
+                .Select(segment => new ReportingChartSegmentViewModel(
+                    ComponentLabel(segment.Component),
+                    RowLabel(segment.Row),
+                    segment.Amount.Value,
+                    formatMoney(segment.Amount.Value),
+                    string.Empty,
+                    ComponentColor(segment.Component))));
 
-        string[] totals =
+        ObservableCollection<string> totals =
         [
             $"Income: {formatMoney(report.Totals.Income.Value)}",
             $"Planned: {formatMoney(report.Totals.PlannedAllocation.Value)}",
@@ -212,8 +213,8 @@ public sealed class ReportingPresentation
         (string Title, long Amount, ReportingChartColor Color)[] values =
             source.Where(item => item.Amount > 0).ToArray();
         long total = values.Aggregate(0L, (sum, item) => checked(sum + item.Amount));
-        ReportingChartSegmentViewModel[] segments = values
-            .Select(item => new ReportingChartSegmentViewModel(
+        ObservableCollection<ReportingChartSegmentViewModel> segments = new(
+            values.Select(item => new ReportingChartSegmentViewModel(
                 item.Title,
                 string.Empty,
                 item.Amount,
@@ -221,8 +222,7 @@ public sealed class ReportingPresentation
                 total == 0
                     ? "0%"
                     : ((double)item.Amount / total).ToString("0.#%", CultureInfo.CurrentCulture),
-                item.Color))
-            .ToArray();
+                item.Color)));
         return new(title, emptyTitle, ReportingChartKind.Donut, segments, []);
     }
 

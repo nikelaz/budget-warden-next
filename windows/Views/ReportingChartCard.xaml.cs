@@ -51,6 +51,7 @@ public sealed partial class ReportingChartCard : UserControl
         }
 
         bool hasData = Model?.HasData == true;
+        TitleText.Text = Model?.Title ?? string.Empty;
         ChartCanvas.Visibility = hasData ? Visibility.Visible : Visibility.Collapsed;
         EmptyText.Visibility = hasData ? Visibility.Collapsed : Visibility.Visible;
         EmptyText.Text = Model?.EmptyTitle ?? string.Empty;

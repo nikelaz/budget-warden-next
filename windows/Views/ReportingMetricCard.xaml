@@ -14,11 +14,10 @@
         CornerRadius="{ThemeResource ControlCornerRadius}">
         <StackPanel Spacing="4">
             <TextBlock
-                Text="{Binding Model.Title, ElementName=Root}"
+                x:Name="TitleText"
                 Style="{StaticResource CaptionTextBlockStyle}" />
             <TextBlock
                 x:Name="ValueText"
-                Text="{Binding Model.Value, ElementName=Root}"
                 TextTrimming="CharacterEllipsis"
                 MaxLines="1"
                 FontSize="20"

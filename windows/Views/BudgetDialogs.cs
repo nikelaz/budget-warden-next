@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Collections.ObjectModel;
 using Bw_core;
 using BudgetWarden_Windows.ViewModels;
 using Microsoft.UI.Xaml;
@@ -23,8 +24,8 @@ internal static class BudgetDialogs
         titleBox.Text = DateTime.Now.ToString("MMMM yyyy", CultureInfo.CurrentCulture);
         ComboBox templateBox = new()
         {
-            ItemsSource = templates,
-            DisplayMemberPath = nameof(BudgetTemplate.DisplayName),
+            ItemsSource = new ObservableCollection<string>(
+                templates.Select(template => template.DisplayName)),
             SelectedIndex = 0,
         };
         AutomationProperties.SetAutomationId(templateBox, "BudgetTemplateComboBox");
@@ -37,17 +38,20 @@ internal static class BudgetDialogs
             "Create");
         dialog.IsPrimaryButtonEnabled = true;
         if (await dialog.ShowAsync() != ContentDialogResult.Primary
-            || templateBox.SelectedItem is not BudgetTemplate template)
+            || templateBox.SelectedIndex < 0)
         {
             return;
         }
+        BudgetTemplate template = templates[templateBox.SelectedIndex];
 
         var picker = new FileSavePicker(App.WindowId)
         {
             SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
             SuggestedFileName = SafeFileName(titleBox.Text),
         };
-        picker.FileTypeChoices.Add("Budget Warden budget", [".budget"]);
+        picker.FileTypeChoices.Add(
+            "Budget Warden budget",
+            new ObservableCollection<string> { ".budget" });
         PickFileResult? result = await picker.PickSaveFileAsync();
         if (result is null)
         {
@@ -115,8 +119,8 @@ internal static class BudgetDialogs
         TextBox accumulatedBox = CreateTextBox("0.00", "CategoryAccumulatedAmountBox");
         ComboBox typeBox = new()
         {
-            ItemsSource = viewModel.CategoryTypes,
-            DisplayMemberPath = nameof(CategoryTypeOption.DisplayName),
+            ItemsSource = new ObservableCollection<string>(
+                viewModel.CategoryTypes.Select(type => type.DisplayName)),
             SelectedIndex = 1,
         };
         AutomationProperties.SetAutomationId(typeBox, "CategoryTypeComboBox");
@@ -127,12 +131,13 @@ internal static class BudgetDialogs
             titleBox.Text = category.Title;
             amountBox.Text = CoreApi.FormatMoneyInput(category.Category.AmountPlanned);
             accumulatedBox.Text = CoreApi.FormatMoneyInput(category.Category.AmountAccumulated);
-            typeBox.SelectedItem = viewModel.CategoryTypes.First(item =>
-                item.Value == category.Category.CategoryType);
+            typeBox.SelectedIndex = IndexOfCategoryType(
+                viewModel.CategoryTypes,
+                category.Category.CategoryType);
         }
         else if (initialType is BwCategoryType categoryType)
         {
-            typeBox.SelectedItem = viewModel.CategoryTypes.First(item => item.Value == categoryType);
+            typeBox.SelectedIndex = IndexOfCategoryType(viewModel.CategoryTypes, categoryType);
             typeBox.IsEnabled = false;
         }
 
@@ -150,7 +155,7 @@ internal static class BudgetDialogs
 
         void UpdateAccumulatedField()
         {
-            CategoryTypeOption? selectedType = typeBox.SelectedItem as CategoryTypeOption;
+            CategoryTypeOption? selectedType = SelectedCategoryType(viewModel, typeBox);
             bool show = selectedType?.HasAccumulated == true;
             accumulatedLabel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
             accumulatedBox.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
@@ -167,7 +172,7 @@ internal static class BudgetDialogs
         void Validate(object? _, object __) => dialog.IsPrimaryButtonEnabled =
             !string.IsNullOrWhiteSpace(titleBox.Text)
             && IsMoney(amountBox.Text, true)
-            && typeBox.SelectedItem is CategoryTypeOption selectedType
+            && SelectedCategoryType(viewModel, typeBox) is CategoryTypeOption selectedType
             && (!selectedType.HasAccumulated || IsMoney(accumulatedBox.Text, true));
         titleBox.TextChanged += Validate;
         amountBox.TextChanged += Validate;
@@ -181,7 +186,7 @@ internal static class BudgetDialogs
         Validate(null, new object());
 
         if (await dialog.ShowAsync() != ContentDialogResult.Primary
-            || typeBox.SelectedItem is not CategoryTypeOption type)
+            || SelectedCategoryType(viewModel, typeBox) is not CategoryTypeOption type)
         {
             return;
         }
@@ -219,9 +224,11 @@ internal static class BudgetDialogs
 
         ComboBox categoryBox = new()
         {
-            ItemsSource = viewModel.Categories,
-            DisplayMemberPath = nameof(CategoryRowViewModel.Title),
-            SelectedItem = initialCategory ?? viewModel.Categories[0],
+            ItemsSource = new ObservableCollection<string>(
+                viewModel.Categories.Select(category => category.Title)),
+            SelectedIndex = initialCategory is null
+                ? 0
+                : viewModel.Categories.IndexOf(initialCategory),
         };
         AutomationProperties.SetAutomationId(categoryBox, "TransactionCategoryComboBox");
         AutomationProperties.SetName(categoryBox, "Transaction category");
@@ -243,7 +250,7 @@ internal static class BudgetDialogs
                 ("Description", descriptionBox)),
             "Save");
         void Validate(object? _, object __) => dialog.IsPrimaryButtonEnabled =
-            categoryBox.SelectedItem is not null
+            categoryBox.SelectedIndex >= 0
             && !string.IsNullOrWhiteSpace(titleBox.Text)
             && IsMoney(amountBox.Text, false);
         titleBox.TextChanged += Validate;
@@ -252,10 +259,11 @@ internal static class BudgetDialogs
         Validate(null, new object());
 
         if (await dialog.ShowAsync() != ContentDialogResult.Primary
-            || categoryBox.SelectedItem is not CategoryRowViewModel category)
+            || categoryBox.SelectedIndex < 0)
         {
             return;
         }
+        CategoryRowViewModel category = viewModel.Categories[categoryBox.SelectedIndex];
 
         await viewModel.RunAsync(
             () => viewModel.CreateTransactionAsync(
@@ -366,4 +374,19 @@ internal static class BudgetDialogs
             ? safe[..^7]
             : safe;
     }
+
+    private static CategoryTypeOption? SelectedCategoryType(
+        AppViewModel viewModel,
+        ComboBox typeBox) =>
+        typeBox.SelectedIndex >= 0 && typeBox.SelectedIndex < viewModel.CategoryTypes.Count
+            ? viewModel.CategoryTypes[typeBox.SelectedIndex]
+            : null;
+
+    private static int IndexOfCategoryType(
+        ObservableCollection<CategoryTypeOption> types,
+        BwCategoryType categoryType) =>
+        types
+            .Select((type, index) => (type, index))
+            .First(item => item.type.Value == categoryType)
+            .index;
 }

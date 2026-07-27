@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using BudgetWarden_Windows.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -42,8 +43,10 @@ public sealed partial class AtAGlanceReportingView : UserControl
         {
             return;
         }
-        IReadOnlyList<ReportingChartViewModel> charts =
+        MetricItems.ItemsSource = Data.Metrics;
+        ObservableCollection<ReportingChartViewModel> charts =
             AmountSelector.SelectedIndex == 1 ? Data.ActualCharts : Data.PlannedCharts;
-        ChartRepeater.ItemsSource = charts.Take(2).ToArray();
+        ChartRepeater.ItemsSource =
+            new ObservableCollection<ReportingChartViewModel>(charts.Take(2));
     }
 }

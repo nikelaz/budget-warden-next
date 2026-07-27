@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<linker>
+  <!--
+    WinUI constructs views and resolves several display properties from XAML
+    metadata and string-based bindings. Preserve the small application
+    assembly while NativeAOT still trims the much larger framework graph.
+  -->
+  <assembly fullname="BudgetWarden.Windows" preserve="all" />
+</linker>
