@@ -23,7 +23,7 @@ struct CreateCategoryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("New \(type.toString()) Category")
+            Text("New \(type.title()) Category")
                 .font(.headline)
 
             Form {
@@ -90,7 +90,7 @@ struct CreateGeneralCategoryView: View {
             Form {
                 Picker("Type", selection: $type) {
                     ForEach(BWCategoryType.allCases, id: \.self) { categoryType in
-                        Text(categoryType.toString())
+                        Text(categoryType.title())
                             .tag(categoryType)
                     }
                 }

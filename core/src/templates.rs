@@ -109,7 +109,17 @@ pub fn budget_from_previous_budget(
     let categories = budget.categories;
     let mut new_budget = BWBudget::new(title);
     for category in categories {
-        new_budget = add_category(new_budget, category)?;
+        let template_category = BWCategory {
+            id: Uuid::new_v4(),
+            ordinal: category.ordinal,
+            title: category.title,
+            amount_planned: category.amount_planned,
+            amount_actual: BWMoneyAmount { value: 0 },
+            amount_accumulated: category.amount_accumulated,
+            category_type: category.category_type,
+            transactions: vec![],
+        };
+        new_budget = add_category(new_budget, template_category)?;
     }
 
     validate_budget(&new_budget)?;
@@ -120,7 +130,7 @@ pub fn budget_from_previous_budget(
 mod tests {
     use super::*;
     use crate::app_state::initialize_core;
-    use crate::domain::update_category;
+    use crate::domain::{create_transaction, update_category};
 
     fn initialize_test_core() {
         let _ = initialize_core(Uuid::from_u128(0x7E57));
@@ -167,13 +177,32 @@ mod tests {
     fn previous_budget_initializes_category_changes() {
         initialize_test_core();
 
-        let mut previous_budget = BWBudget::new("Previous Budget".to_string());
-        previous_budget.categories.push(create_category(
+        let previous_category = create_category(
             0,
             "Copied Category".to_string(),
             10000,
             BWCategoryType::Expenses,
-        ));
+        );
+        let previous_category_id = previous_category.id;
+        let previous_budget = add_category(
+            BWBudget::new("Previous Budget".to_string()),
+            previous_category,
+        )
+        .unwrap();
+        let previous_budget = create_transaction(
+            previous_budget,
+            previous_category_id,
+            new_transaction(
+                "Previous transaction".to_string(),
+                None,
+                None,
+                BWMoneyAmount { value: 2500 },
+            )
+            .unwrap(),
+        )
+        .unwrap()
+        .update_actuals()
+        .unwrap();
 
         let budget = budget_from_previous_budget(
             previous_budget,
@@ -182,6 +211,12 @@ mod tests {
         .unwrap();
 
         assert_category_changes_are_initialized(&budget);
+        assert_eq!(budget.categories.len(), 1);
+        assert_ne!(budget.categories[0].id, previous_category_id);
+        assert_eq!(budget.categories[0].amount_planned.value, 10000);
+        assert_eq!(budget.categories[0].amount_actual.value, 0);
+        assert!(budget.categories[0].transactions.is_empty());
+        assert!(budget.changes.transactions.is_empty());
         assert_first_category_can_be_updated(budget);
     }
 }

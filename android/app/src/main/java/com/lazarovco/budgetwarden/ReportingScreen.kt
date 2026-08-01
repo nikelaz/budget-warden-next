@@ -26,8 +26,10 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,6 +38,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.inset
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -46,8 +49,12 @@ import com.lazarovco.budgetwarden.domain.AmountMode
 import com.lazarovco.budgetwarden.domain.Budget
 import com.lazarovco.budgetwarden.domain.CategoryType
 import com.lazarovco.budgetwarden.domain.Money
-import com.lazarovco.budgetwarden.domain.ReportingSummary
-import java.util.Locale
+import com.lazarovco.budgetwarden.domain.title
+import com.lazarovco.budgetwarden.core.BWReportingAmountMode
+import com.lazarovco.budgetwarden.core.BWReportingComparisonRow
+import com.lazarovco.budgetwarden.core.BWReportingComponent
+import com.lazarovco.budgetwarden.core.BWReportingSummary
+import com.lazarovco.budgetwarden.core.buildReportingSummary
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -59,24 +66,37 @@ internal fun ReportingScreen(
     modifier: Modifier = Modifier,
 ) {
     var mode by rememberSaveable { mutableStateOf(AmountMode.PLANNED) }
-    val income = ReportingSummary.incomeTotal(budget)
-    val savings = ReportingSummary.plannedSavingsTotal(budget)
+    val summary = buildReportingSummary(budget)
     val expenseColor = MaterialTheme.colorScheme.error
     val savingsColor = MaterialTheme.colorScheme.tertiary
     val debtColor = MaterialTheme.colorScheme.primary
-    val comparison = listOf(
-        ReportingBar(stringResource(R.string.income), listOf(ReportingSlice(stringResource(R.string.income), income, savingsColor))),
-        ReportingBar(stringResource(R.string.planned), listOf(
-            ReportingSlice(stringResource(R.string.expenses), ReportingSummary.total(budget, setOf(CategoryType.EXPENSES), AmountMode.PLANNED), expenseColor),
-            ReportingSlice(stringResource(R.string.savings), savings, savingsColor),
-            ReportingSlice(stringResource(R.string.debt), ReportingSummary.total(budget, setOf(CategoryType.DEBT), AmountMode.PLANNED), debtColor),
-        )),
-        ReportingBar(stringResource(R.string.actual), listOf(
-            ReportingSlice(stringResource(R.string.expenses), ReportingSummary.total(budget, setOf(CategoryType.EXPENSES), AmountMode.ACTUAL), expenseColor),
-            ReportingSlice(stringResource(R.string.savings), ReportingSummary.total(budget, setOf(CategoryType.SAVINGS), AmountMode.ACTUAL), savingsColor),
-            ReportingSlice(stringResource(R.string.debt), ReportingSummary.total(budget, setOf(CategoryType.DEBT), AmountMode.ACTUAL), debtColor),
-        )),
-    )
+    val comparison = BWReportingComparisonRow.entries.map { row ->
+        ReportingBar(
+            title = when (row) {
+                BWReportingComparisonRow.INCOME -> stringResource(R.string.income)
+                BWReportingComparisonRow.PLANNED -> stringResource(R.string.planned)
+                BWReportingComparisonRow.ACTUAL -> stringResource(R.string.actual)
+            },
+            slices = summary.comparisonSegments
+                .filter { it.row == row && it.amount.value > 0 }
+                .map { segment ->
+                    ReportingSlice(
+                        title = when (segment.component) {
+                            BWReportingComponent.INCOME -> stringResource(R.string.income)
+                            BWReportingComponent.EXPENSES -> stringResource(R.string.expenses)
+                            BWReportingComponent.SAVINGS -> stringResource(R.string.savings)
+                            BWReportingComponent.DEBT -> stringResource(R.string.debt)
+                        },
+                        amount = segment.amount.value,
+                        color = when (segment.component) {
+                            BWReportingComponent.INCOME, BWReportingComponent.SAVINGS -> savingsColor
+                            BWReportingComponent.EXPENSES -> expenseColor
+                            BWReportingComponent.DEBT -> debtColor
+                        },
+                    )
+                },
+        )
+    }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -95,7 +115,7 @@ internal fun ReportingScreen(
                 }
             }
         }
-        MetricGrid(budget, currencyCode)
+        MetricGrid(summary, currencyCode)
         val charts = listOf(ReportingChart.Comparison, ReportingChart.Allocation) +
             CategoryType.entries.map(ReportingChart::CategoryBreakdown)
         ReportingChartGrid(charts = charts) { chart, chartModifier ->
@@ -104,14 +124,22 @@ internal fun ReportingScreen(
                 ReportingChart.Allocation -> DonutChartSection(
                     title = stringResource(R.string.amount_allocation, mode.title),
                     emptyTitle = stringResource(R.string.no_allocation_amounts, mode.title.lowercase()),
-                    segments = ReportingSummary.allocationSegments(budget, mode),
+                    segments = summary.allocationSegments
+                        .filter { it.amountMode == mode.coreMode && it.amount.value > 0 }
+                        .map { it.categoryType.title to it.amount.value },
                     currencyCode = currencyCode,
                     modifier = chartModifier,
                 )
                 is ReportingChart.CategoryBreakdown -> DonutChartSection(
                     title = stringResource(R.string.category_breakdown, chart.type.title),
                     emptyTitle = stringResource(R.string.no_category_amounts, mode.title.lowercase(), chart.type.title.lowercase()),
-                    segments = ReportingSummary.categorySegments(budget, chart.type, mode),
+                    segments = summary.categorySegments
+                        .filter {
+                            it.categoryType == chart.type &&
+                                it.amountMode == mode.coreMode &&
+                                it.amount.value > 0
+                        }
+                        .map { it.title to it.amount.value },
                     currencyCode = currencyCode,
                     modifier = chartModifier,
                 )
@@ -121,16 +149,19 @@ internal fun ReportingScreen(
 }
 
 @Composable
-private fun MetricGrid(budget: Budget, currencyCode: String) {
-    val income = ReportingSummary.incomeTotal(budget)
-    val planned = ReportingSummary.plannedSpendingTotal(budget)
-    val actual = ReportingSummary.actualSpendingTotal(budget)
-    val left = ReportingSummary.leftToBudgetTotal(budget)
+private fun MetricGrid(summary: BWReportingSummary, currencyCode: String) {
+    val income = summary.totals.income.value
+    val planned = summary.totals.plannedSpending.value
+    val actual = summary.totals.actualSpending.value
+    val left = summary.totals.leftToBudget
     val metrics = listOf(
         ReportingMetric(stringResource(R.string.income), Money.format(income, currencyCode)),
         ReportingMetric(stringResource(R.string.planned_spending), Money.format(planned, currencyCode), isError = planned > income),
         ReportingMetric(stringResource(R.string.actual_spending), Money.format(actual, currencyCode), isError = actual > planned, isPositive = actual <= planned),
-        ReportingMetric(stringResource(R.string.savings), Money.format(ReportingSummary.plannedSavingsTotal(budget), currencyCode)),
+        ReportingMetric(
+            stringResource(R.string.savings),
+            Money.format(summary.totals.plannedSavings.value, currencyCode),
+        ),
         ReportingMetric(stringResource(R.string.left_to_budget), Money.formatSigned(left, currencyCode), isError = left < 0),
     )
     BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -150,6 +181,12 @@ private fun MetricGrid(budget: Budget, currencyCode: String) {
         }
     }
 }
+
+private val AmountMode.coreMode: BWReportingAmountMode
+    get() = when (this) {
+        AmountMode.PLANNED -> BWReportingAmountMode.PLANNED
+        AmountMode.ACTUAL -> BWReportingAmountMode.ACTUAL
+    }
 
 private data class ReportingMetric(
     val title: String,
@@ -302,11 +339,12 @@ private fun LegendSwatch(title: String, color: Color) = Row(verticalAlignment = 
 
 @Composable
 private fun LegendRow(slice: ReportingSlice, total: Long, currencyCode: String) {
+    val locale = LocalConfiguration.current.locales[0]
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         LegendSwatch(slice.title, slice.color)
         Spacer(Modifier.weight(1f))
         Text(Money.format(slice.amount, currencyCode), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(String.format(Locale.getDefault(), "%.1f%%", slice.amount * 100.0 / total), Modifier.width(52.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(String.format(locale, "%.1f%%", slice.amount * 100.0 / total), Modifier.width(52.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

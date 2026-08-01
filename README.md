@@ -15,13 +15,13 @@ core/ (Rust domain and FFI)
 
 windows/ (WinUI 3 client using generated C# bindings)
 
-android/ (Kotlin/Compose client with its own domain implementation)
+android/ (Compose client using generated Kotlin/JNI bindings)
 ```
 
 - `core/` is the canonical Rust implementation for models, validation, codec, CRDT, reporting, money, templates, and legacy migration. `boltffi.toml` configures Apple and Android binding generation.
 - `apple-core/` wraps and re-exports the generated `BWCore` Swift package for the Apple apps.
 - `mac/` and `ios/` are Xcode projects that consume `apple-core` as a local Swift package. Open `BudgetWarden.xcworkspace` for the combined Apple workspace.
-- `android/` is a Gradle Android app using Jetpack Compose. Its `domain/` package currently owns Android-side models, CRDT/rebase behavior, and reporting; `data/` handles local files, Room metadata, and Google Drive sync.
+- `android/` is a Gradle Android app using Jetpack Compose and the generated Rust core Kotlin/JNI bindings. Kotlin owns Android document-provider I/O and recent-file preferences; there is no app-managed cloud synchronization.
 - `windows/` is a WinUI 3 app that consumes the generated Rust core directly through a local BoltFFI C# NuGet package. See `windows/README.md` for generation, build, and test commands.
 
 See [AGENTS.md](AGENTS.md) for a compact contributor map and change-routing notes.

@@ -16,6 +16,7 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -26,9 +27,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -36,68 +39,27 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import com.lazarovco.budgetwarden.data.VaultType
 import com.lazarovco.budgetwarden.domain.Budget
 import com.lazarovco.budgetwarden.domain.BudgetDates
 import com.lazarovco.budgetwarden.domain.Category
 import com.lazarovco.budgetwarden.domain.CategoryType
 import com.lazarovco.budgetwarden.domain.Money
 import com.lazarovco.budgetwarden.domain.TemplateSelection
-import java.util.Date
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-internal fun ShareBudgetDialog(
-    budget: Budget,
-    onDismiss: () -> Unit,
-    onShare: (String) -> Unit,
-) {
-    var email by rememberSaveable(budget.id) { mutableStateOf("") }
-    val normalizedEmail = email.trim()
-    val validEmail = android.util.Patterns.EMAIL_ADDRESS.matcher(normalizedEmail).matches()
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.share_budget_title, budget.title)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(stringResource(R.string.share_budget_explanation))
-                OutlinedTextField(
-                    value = email,
-                    onValueChange = { email = it },
-                    label = { Text(stringResource(R.string.share_email)) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(enabled = validEmail, onClick = { onShare(normalizedEmail) }) {
-                Text(stringResource(R.string.share))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
-        },
-    )
-}
+import com.lazarovco.budgetwarden.domain.title
+import com.lazarovco.budgetwarden.core.BWDate
+import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun CreateBudgetDialog(
     budgets: List<Budget>,
-    initialStorage: VaultType,
-    driveConnected: Boolean,
-    onGoogleDriveSelected: () -> Unit,
     onDismiss: () -> Unit,
-    onCreate: (String, TemplateSelection, Budget?, VaultType) -> Unit,
+    onCreate: (String, TemplateSelection, Budget?) -> Unit,
 ) {
     var title by rememberSaveable { mutableStateOf(currentMonthTitle()) }
     var template by rememberSaveable { mutableStateOf(TemplateSelection.BASIC) }
     var previousBudgetId by rememberSaveable { mutableStateOf(budgets.firstOrNull()?.id) }
     var templateExpanded by rememberSaveable { mutableStateOf(false) }
-    var storage by rememberSaveable { mutableStateOf(initialStorage) }
     var submitted by rememberSaveable { mutableStateOf(false) }
     val titleIsValid = title.isNotBlank()
     val showTitleError = submitted && !titleIsValid
@@ -125,20 +87,6 @@ internal fun CreateBudgetDialog(
                         null
                     },
                 )
-                Text("Storage", style = MaterialTheme.typography.labelLarge)
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    listOf(VaultType.GOOGLE_DRIVE to "Google Drive", VaultType.LOCAL to "Local File")
-                        .forEachIndexed { index, (option, label) ->
-                            SegmentedButton(
-                                selected = storage == option,
-                                onClick = {
-                                    storage = option
-                                    if (option == VaultType.GOOGLE_DRIVE && !driveConnected) onGoogleDriveSelected()
-                                },
-                                shape = SegmentedButtonDefaults.itemShape(index, 2),
-                            ) { Text(label) }
-                        }
-                }
                 ExposedDropdownMenuBox(
                     expanded = templateExpanded,
                     onExpandedChange = { templateExpanded = it },
@@ -151,7 +99,7 @@ internal fun CreateBudgetDialog(
                         label = { Text(stringResource(R.string.template)) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(templateExpanded) },
                         modifier = Modifier
-                            .menuAnchor()
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                             .fillMaxWidth(),
                     )
                     ExposedDropdownMenu(
@@ -200,7 +148,7 @@ internal fun CreateBudgetDialog(
             TextButton(
                 onClick = {
                     submitted = true
-                    if (titleIsValid) onCreate(title, template, selectedPreviousBudget, storage)
+                    if (titleIsValid) onCreate(title, template, selectedPreviousBudget)
                 },
             ) {
                 Text(stringResource(R.string.create))
@@ -222,7 +170,9 @@ internal fun CategoryDialog(
     val initial = (editor as? CategoryEditor.Edit)?.category
     val creation = editor as? CategoryEditor.Create
     var title by rememberSaveable(editor.id) { mutableStateOf(initial?.title.orEmpty()) }
-    var amount by rememberSaveable(editor.id) { mutableStateOf(Money.inputText(initial?.amountPlanned ?: 0L)) }
+    var amount by rememberSaveable(editor.id) {
+        mutableStateOf(Money.inputText(initial?.amountPlanned?.value ?: 0L))
+    }
     var type by rememberSaveable(editor.id) { mutableStateOf(initial?.categoryType ?: creation?.categoryType ?: CategoryType.EXPENSES) }
     var submitted by rememberSaveable(editor.id) { mutableStateOf(false) }
     val typeSelectionEnabled = initial != null || creation?.typeSelectionEnabled == true
@@ -297,15 +247,25 @@ internal fun TransactionDialog(
     editor: TransactionEditor,
     categories: List<Category>,
     onDismiss: () -> Unit,
-    onSave: (String, String, String, String, String) -> Unit,
+    onSave: (UUID, String, String, String, String) -> Unit,
     onDelete: () -> Unit,
 ) {
     val item = (editor as? TransactionEditor.Edit)?.item
-    var categoryId by rememberSaveable(editor.id) { mutableStateOf(item?.category?.id ?: (editor as? TransactionEditor.Create)?.initialCategoryId ?: categories.firstOrNull()?.id.orEmpty()) }
+    var categoryId by rememberSaveable(editor.id) {
+        mutableStateOf(
+            (item?.category?.id
+                ?: (editor as? TransactionEditor.Create)?.initialCategoryId
+                ?: categories.firstOrNull()?.id)?.toString().orEmpty(),
+        )
+    }
     var title by rememberSaveable(editor.id) { mutableStateOf(item?.transaction?.title.orEmpty()) }
     var description by rememberSaveable(editor.id) { mutableStateOf(item?.transaction?.description.orEmpty()) }
-    var dateText by rememberSaveable(editor.id) { mutableStateOf(BudgetDates.inputText(item?.transaction?.date ?: Date())) }
-    var amount by rememberSaveable(editor.id) { mutableStateOf(Money.inputText(item?.transaction?.amount ?: 0L)) }
+    var dateText by rememberSaveable(editor.id) {
+        mutableStateOf(BudgetDates.inputText(item?.transaction?.date ?: BWDate.now()))
+    }
+    var amount by rememberSaveable(editor.id) {
+        mutableStateOf(Money.inputText(item?.transaction?.amount?.value ?: 0L))
+    }
     var categoryExpanded by remember { mutableStateOf(false) }
     var detailsExpanded by rememberSaveable(editor.id) { mutableStateOf(false) }
     var datePickerVisible by remember { mutableStateOf(false) }
@@ -313,7 +273,7 @@ internal fun TransactionDialog(
     val titleIsValid = title.isNotBlank()
     val amountValue = Money.parse(amount)
     val amountIsValid = amountValue != null && amountValue > 0L
-    val categoryIsValid = categories.any { it.id == categoryId }
+    val categoryIsValid = categories.any { it.id.toString() == categoryId }
     val dateIsValid = BudgetDates.parseInput(dateText) != null
     val formIsValid = titleIsValid && amountIsValid && categoryIsValid && dateIsValid
     val showTitleError = submitted && !titleIsValid
@@ -322,12 +282,17 @@ internal fun TransactionDialog(
     val showDateError = submitted && !dateIsValid
 
     if (datePickerVisible) {
-        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = BudgetDates.parseInput(dateText)?.time)
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = BudgetDates.parseInput(dateText)
+                ?.let(BudgetDates::toEpochMilliseconds),
+        )
         DatePickerDialog(
             onDismissRequest = { datePickerVisible = false },
             confirmButton = {
                 TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let { dateText = BudgetDates.inputText(Date(it)) }
+                    datePickerState.selectedDateMillis?.let {
+                        dateText = BudgetDates.inputText(BudgetDates.fromEpochMilliseconds(it))
+                    }
                     datePickerVisible = false
                 }) { Text(stringResource(R.string.confirm)) }
             },
@@ -357,7 +322,7 @@ internal fun TransactionDialog(
                 )
                 ExposedDropdownMenuBox(expanded = categoryExpanded, onExpandedChange = { categoryExpanded = it }) {
                     OutlinedTextField(
-                        value = categories.firstOrNull { it.id == categoryId }?.title.orEmpty(),
+                        value = categories.firstOrNull { it.id.toString() == categoryId }?.title.orEmpty(),
                         onValueChange = {},
                         readOnly = true,
                         singleLine = true,
@@ -369,12 +334,14 @@ internal fun TransactionDialog(
                             null
                         },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(categoryExpanded) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth(),
+                        modifier = Modifier
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                            .fillMaxWidth(),
                     )
                     ExposedDropdownMenu(expanded = categoryExpanded, onDismissRequest = { categoryExpanded = false }) {
                         categories.forEach { category ->
                             DropdownMenuItem(text = { Text(category.title) }, onClick = {
-                                categoryId = category.id
+                                categoryId = category.id.toString()
                                 categoryExpanded = false
                             })
                         }
@@ -428,7 +395,7 @@ internal fun TransactionDialog(
         confirmButton = {
             TextButton(onClick = {
                 submitted = true
-                if (formIsValid) onSave(categoryId, title, description, dateText, amount)
+                if (formIsValid) onSave(UUID.fromString(categoryId), title, description, dateText, amount)
             }) { Text(stringResource(R.string.save)) }
         },
         dismissButton = {

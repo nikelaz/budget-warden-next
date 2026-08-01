@@ -627,6 +627,25 @@ pub fn merge(budget_in_memory: BWBudget, budget_on_disk: BWBudget) -> BWBudget {
         return budget_in_memory;
     }
 
+    merge_divergent_budgets(budget_in_memory, budget_on_disk)
+}
+
+pub(crate) fn merge_for_save(
+    budget_in_memory: BWBudget,
+    budget_on_disk: BWBudget,
+) -> BWBudget {
+    // A domain mutation intentionally retains the revision identity of the
+    // snapshot it started from. Saving must still merge the mutated snapshot
+    // with the current file and mint a new identity, even when the file has
+    // not changed since it was opened.
+    merge_divergent_budgets(budget_in_memory, budget_on_disk)
+}
+
+fn merge_divergent_budgets(
+    budget_in_memory: BWBudget,
+    budget_on_disk: BWBudget,
+) -> BWBudget {
+
     let merged_changes = CRDTChanges {
         budget: merge_budget_changes(
             budget_in_memory.changes.budget,

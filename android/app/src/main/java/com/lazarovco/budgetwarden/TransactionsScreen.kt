@@ -26,8 +26,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,6 +42,7 @@ import com.lazarovco.budgetwarden.domain.Budget
 import com.lazarovco.budgetwarden.domain.BudgetDates
 import com.lazarovco.budgetwarden.domain.Money
 import com.lazarovco.budgetwarden.domain.TransactionListItem
+import com.lazarovco.budgetwarden.domain.title
 
 @Composable
 internal fun TransactionsScreen(
@@ -57,8 +60,8 @@ internal fun TransactionsScreen(
             it.transaction.description,
             it.category.title,
             it.category.categoryType.title,
-            Money.inputText(it.transaction.amount),
-            Money.format(it.transaction.amount, currencyCode),
+            Money.inputText(it.transaction.amount.value),
+            Money.format(it.transaction.amount.value, currencyCode),
             BudgetDates.displayText(it.transaction.date),
         ).joinToString(" ")
         searchText.isBlank() || searchable.contains(searchText, ignoreCase = true)
@@ -146,7 +149,10 @@ private fun TransactionRow(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                Text(Money.format(item.transaction.amount, currencyCode), style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    Money.format(item.transaction.amount.value, currencyCode),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
                 Box {
                     IconButton(onClick = { actionsExpanded = true }) {
                         Icon(

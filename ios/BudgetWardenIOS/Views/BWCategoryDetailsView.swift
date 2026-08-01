@@ -79,7 +79,7 @@ struct BWCategoryDetailsView: View {
 
                 Picker("Type", selection: $categoryType) {
                     ForEach(BWCategoryType.allCases, id: \.self) { categoryType in
-                        Text(categoryType.title)
+                        Text(categoryType.title())
                             .tag(categoryType)
                     }
                 }

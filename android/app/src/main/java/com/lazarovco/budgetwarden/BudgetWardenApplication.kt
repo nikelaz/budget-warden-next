@@ -1,25 +1,29 @@
 package com.lazarovco.budgetwarden
 
 import android.app.Application
-import androidx.work.Constraints
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
-import com.lazarovco.budgetwarden.data.VaultDatabase
-import com.lazarovco.budgetwarden.data.VaultPreferences
-import com.lazarovco.budgetwarden.data.VaultSyncWorker
-import java.util.concurrent.TimeUnit
+import com.lazarovco.budgetwarden.core.FfiException
+import com.lazarovco.budgetwarden.core.initializeCore
+import java.util.UUID
 
 class BudgetWardenApplication : Application() {
-    val vaultDatabase by lazy { VaultDatabase.create(this) }
-    val vaultPreferences by lazy { VaultPreferences(this) }
-
     override fun onCreate() {
         super.onCreate()
-        val request = PeriodicWorkRequestBuilder<VaultSyncWorker>(15, TimeUnit.MINUTES)
-            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.UNMETERED).build())
-            .build()
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork("drive-vault-sync", ExistingPeriodicWorkPolicy.UPDATE, request)
+        val preferences = getSharedPreferences(PREFERENCES_NAME, MODE_PRIVATE)
+        val deviceId = preferences.getString(DEVICE_ID_KEY, null)
+            ?.let(UUID::fromString)
+            ?: UUID.randomUUID().also { generated ->
+                preferences.edit().putString(DEVICE_ID_KEY, generated.toString()).apply()
+            }
+
+        try {
+            initializeCore(deviceId)
+        } catch (error: FfiException) {
+            check(error.message == "Rust core is already initialized") { error.message.orEmpty() }
+        }
+    }
+
+    companion object {
+        const val PREFERENCES_NAME = "budget_warden"
+        private const val DEVICE_ID_KEY = "device_id"
     }
 }

@@ -39,10 +39,12 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,13 +59,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.lazarovco.budgetwarden.data.BudgetRepository
-import com.lazarovco.budgetwarden.data.VaultType
 import com.lazarovco.budgetwarden.domain.AmountMode
 import com.lazarovco.budgetwarden.domain.Budget
 import com.lazarovco.budgetwarden.domain.Category
 import com.lazarovco.budgetwarden.domain.CategoryType
 import com.lazarovco.budgetwarden.domain.Money
+import com.lazarovco.budgetwarden.domain.rawValue
+import com.lazarovco.budgetwarden.domain.title
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,20 +75,19 @@ internal fun BudgetListScreen(
     storedBudgets: List<BudgetRepository.StoredBudget>,
     modifier: Modifier = Modifier,
     onCreateBudget: () -> Unit,
-    onImportBudget: () -> Unit,
-    onSelectBudget: (Budget) -> Unit,
-    onDeleteBudget: (Budget, VaultType) -> Unit,
-    onShareBudget: (Budget) -> Unit,
+    onOpenBudget: () -> Unit,
+    onSelectBudget: (BudgetRepository.StoredBudget) -> Unit,
+    onDeleteBudget: (BudgetRepository.StoredBudget) -> Unit,
 ) {
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.budgets)) },
                 actions = {
-                    TextButton(onClick = onImportBudget) {
+                    TextButton(onClick = onOpenBudget) {
                         Icon(painterResource(R.drawable.ic_import), contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.import_budget))
+                        Text(stringResource(R.string.open_budget))
                     }
                 },
             )
@@ -102,7 +105,7 @@ internal fun BudgetListScreen(
         if (storedBudgets.isEmpty()) {
             EmptyState(
                 title = "No Budgets",
-                message = "Create a budget and choose where it should be stored.",
+                message = "Create a budget or open an existing .budget file.",
                 modifier = Modifier.padding(innerPadding),
             )
         } else {
@@ -113,22 +116,12 @@ internal fun BudgetListScreen(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                listOf(VaultType.GOOGLE_DRIVE to "Google Drive", VaultType.LOCAL to "Local").forEach { (storage, heading) ->
-                    val section = storedBudgets.filter { it.storage == storage }
-                    if (section.isNotEmpty()) {
-                        item(key = "heading-$storage") {
-                            Text(heading, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        }
-                        items(section, key = { "${storage.name}-${it.budget.id}" }) { stored ->
-                            BudgetRow(
-                                budget = stored.budget,
-                                canShare = stored.storage == VaultType.GOOGLE_DRIVE,
-                                onSelect = { onSelectBudget(stored.budget) },
-                                onDelete = { onDeleteBudget(stored.budget, stored.storage) },
-                                onShare = { onShareBudget(stored.budget) },
-                            )
-                        }
-                    }
+                items(storedBudgets, key = { it.uri.toString() }) { stored ->
+                    BudgetRow(
+                        stored = stored,
+                        onSelect = { onSelectBudget(stored) },
+                        onDelete = { onDeleteBudget(stored) },
+                    )
                 }
             }
         }
@@ -138,11 +131,9 @@ internal fun BudgetListScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BudgetRow(
-    budget: Budget,
-    canShare: Boolean,
+    stored: BudgetRepository.StoredBudget,
     onSelect: () -> Unit,
     onDelete: () -> Unit,
-    onShare: () -> Unit,
 ) {
     val rowShape = RoundedCornerShape(8.dp)
     val dismissState = rememberSwipeToDismissBoxState()
@@ -191,8 +182,15 @@ private fun BudgetRow(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = budget.title,
+                        text = stored.budget.title,
                         style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = stored.displayName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -205,16 +203,6 @@ private fun BudgetRow(
                         )
                     }
                     DropdownMenu(expanded = actionsExpanded, onDismissRequest = { actionsExpanded = false }) {
-                        if (canShare) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.share_budget)) },
-                                leadingIcon = { Icon(painterResource(R.drawable.ic_share), contentDescription = null) },
-                                onClick = {
-                                    actionsExpanded = false
-                                    onShare()
-                                },
-                            )
-                        }
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.delete_budget)) },
                             leadingIcon = { Icon(painterResource(R.drawable.ic_delete), contentDescription = null) },
@@ -247,7 +235,7 @@ internal fun BudgetDetailScreen(
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     var displayOrders by remember(budget.id) { mutableStateOf<Map<CategoryType, List<Category>>>(emptyMap()) }
-    var draggedCategoryId by remember { mutableStateOf<String?>(null) }
+    var draggedCategoryId by remember { mutableStateOf<UUID?>(null) }
     var draggedCategoryType by remember { mutableStateOf<CategoryType?>(null) }
     var dragOffset by remember { mutableStateOf(0f) }
 

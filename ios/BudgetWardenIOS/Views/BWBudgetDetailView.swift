@@ -39,7 +39,7 @@ struct BWBudgetDetailView: View {
                 .listRowBackground(Color(.systemGroupedBackground))
 
                 ForEach(BWCategoryType.allCases, id: \.self) { categoryType in
-                    Section(categoryType.title) {
+                    Section(categoryType.title()) {
                         ForEach(categories(for: categoryType)) { category in
                             NavigationLink {
                                 categoryEditor(for: category)
@@ -98,7 +98,7 @@ struct BWBudgetDetailView: View {
                         } label: {
                             Label(createLabel(for: categoryType), systemImage: "plus")
                         }
-                        .accessibilityIdentifier("create\(categoryType.title)CategoryButton")
+                        .accessibilityIdentifier("create\(categoryType.title())CategoryButton")
                     }
                 }
             }
@@ -260,7 +260,7 @@ enum BWCategoryEditor: Identifiable {
     var title: String {
         switch self {
             case .create(let categoryType):
-                return "New \(categoryType.title) Category"
+                return "New \(categoryType.title()) Category"
             case .edit:
                 return "Edit Category"
         }

@@ -13,14 +13,14 @@ Budget Warden is a native budgeting app for macOS, iOS, and Android. The portabl
 | `apple-core/` | `BWAppleCore` Swift package: Apple-facing helpers and re-export of generated `BWCore`. |
 | `mac/` | SwiftUI macOS app. `ViewModels/BWStore.swift` owns budget mutations and file persistence. |
 | `ios/` | SwiftUI iOS app. `ViewModels/BWStore.swift` owns document handling and budget mutations. |
-| `android/` | Kotlin/Jetpack Compose app. `data/` contains file, Room, and Drive sync code; `domain/` contains Android models, CRDT/rebase, and reporting. |
+| `android/` | Kotlin/Jetpack Compose app using generated Rust Kotlin/JNI bindings. `data/` owns Android document-provider I/O and recent-file preferences. |
 | `BudgetWarden.xcworkspace` | Combined Apple workspace; open this for macOS/iOS development. |
 
 ## Dependency Direction
 
 ```text
 Rust core -> generated BWCore bindings -> BWAppleCore -> macOS / iOS apps
-Android app -> Android domain + data + Compose UI
+Rust core -> generated Android bindings -> Android platform I/O + Compose UI
 ```
 
 Apple projects reference `../apple-core` as a local Swift package. `apple-core` references the generated package at `../core/dist/apple`.
@@ -30,7 +30,7 @@ Apple projects reference `../apple-core` as a local Swift package. `apple-core` 
 - Budget format, validation, reporting, money, templates, or migration: start in `core/src/`. Regenerate bindings when its exported FFI changes.
 - Apple-only presentation/convenience behavior: `apple-core/src/`, then the relevant app under `mac/` or `ios/`.
 - Apple app flows and persistence: begin in that app’s `ViewModels/BWStore.swift`; UI lives in `Views/`.
-- Android UI: top-level Kotlin screen files and `ui/theme/`; persistence/sync: `android/.../data/`; Android domain logic: `android/.../domain/`.
+- Android UI: top-level Kotlin screen files and `ui/theme/`; document-provider I/O and recent-file persistence: `android/.../data/`; core behavior changes belong in `core/src/`.
 
 ## Generated and Local Files
 
