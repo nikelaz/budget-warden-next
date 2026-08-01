@@ -15,10 +15,39 @@ import com.lazarovco.budgetwarden.core.encodeBudget
 import com.lazarovco.budgetwarden.core.mergeBudgetForSave
 import com.lazarovco.budgetwarden.domain.Budget
 import com.lazarovco.budgetwarden.domain.TemplateSelection
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class BudgetRepository(context: Context) {
+data class StoredBudget(
+    val budget: Budget,
+    val uri: Uri,
+    val displayName: String,
+)
+
+internal interface BudgetDataSource {
+    suspend fun loadStoredBudgets(): List<StoredBudget>
+
+    suspend fun openBudget(uri: Uri): Budget
+
+    suspend fun createBudget(
+        uri: Uri,
+        title: String,
+        template: TemplateSelection,
+        previousBudget: Budget?,
+    ): Budget
+
+    suspend fun saveBudget(budget: Budget): Budget
+
+    suspend fun deleteBudget(budget: Budget)
+
+    fun removeRecent(uri: Uri)
+}
+
+internal class BudgetRepository(
+    context: Context,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+) : BudgetDataSource {
     private val applicationContext = context.applicationContext
     private val resolver = applicationContext.contentResolver
     private val preferences = applicationContext.getSharedPreferences(
@@ -26,13 +55,7 @@ class BudgetRepository(context: Context) {
         Context.MODE_PRIVATE,
     )
 
-    data class StoredBudget(
-        val budget: Budget,
-        val uri: Uri,
-        val displayName: String,
-    )
-
-    suspend fun loadStoredBudgets(): List<StoredBudget> = withContext(Dispatchers.IO) {
+    override suspend fun loadStoredBudgets(): List<StoredBudget> = withContext(ioDispatcher) {
         val valid = recentUriStrings().mapNotNull { value ->
             val uri = Uri.parse(value)
             runCatching {
@@ -47,17 +70,17 @@ class BudgetRepository(context: Context) {
         valid
     }
 
-    suspend fun openBudget(uri: Uri): Budget = withContext(Dispatchers.IO) {
+    override suspend fun openBudget(uri: Uri): Budget = withContext(ioDispatcher) {
         retainAccess(uri)
         readBudget(uri).also { rememberRecent(uri) }
     }
 
-    suspend fun createBudget(
+    override suspend fun createBudget(
         uri: Uri,
         title: String,
         template: TemplateSelection,
         previousBudget: Budget?,
-    ): Budget = withContext(Dispatchers.IO) {
+    ): Budget = withContext(ioDispatcher) {
         val trimmedTitle = title.trim()
         require(trimmedTitle.isNotEmpty()) { "Budget title cannot be empty." }
         retainAccess(uri)
@@ -75,7 +98,7 @@ class BudgetRepository(context: Context) {
         created
     }
 
-    suspend fun saveBudget(budget: Budget): Budget = withContext(Dispatchers.IO) {
+    override suspend fun saveBudget(budget: Budget): Budget = withContext(ioDispatcher) {
         val normalizedInMemory = budget.updateActuals()
         val uri = Uri.parse(normalizedInMemory.url ?: error("Budget has no document URI."))
         val onDisk = readBudget(uri)
@@ -85,7 +108,7 @@ class BudgetRepository(context: Context) {
         merged
     }
 
-    suspend fun deleteBudget(budget: Budget) = withContext(Dispatchers.IO) {
+    override suspend fun deleteBudget(budget: Budget) = withContext(ioDispatcher) {
         val uri = Uri.parse(budget.url ?: error("Budget has no document URI."))
         val deleted = if (DocumentsContract.isDocumentUri(applicationContext, uri)) {
             DocumentsContract.deleteDocument(resolver, uri)
@@ -96,7 +119,7 @@ class BudgetRepository(context: Context) {
         removeRecent(uri)
     }
 
-    fun removeRecent(uri: Uri) {
+    override fun removeRecent(uri: Uri) {
         saveRecentUris(recentUriStrings().filterNot { it == uri.toString() })
     }
 

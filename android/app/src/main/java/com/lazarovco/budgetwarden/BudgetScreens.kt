@@ -58,7 +58,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import com.lazarovco.budgetwarden.data.BudgetRepository
+import com.lazarovco.budgetwarden.data.StoredBudget
 import com.lazarovco.budgetwarden.domain.AmountMode
 import com.lazarovco.budgetwarden.domain.Budget
 import com.lazarovco.budgetwarden.domain.Category
@@ -72,12 +72,12 @@ import java.util.UUID
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun BudgetListScreen(
-    storedBudgets: List<BudgetRepository.StoredBudget>,
+    storedBudgets: List<StoredBudget>,
     modifier: Modifier = Modifier,
     onCreateBudget: () -> Unit,
     onOpenBudget: () -> Unit,
-    onSelectBudget: (BudgetRepository.StoredBudget) -> Unit,
-    onDeleteBudget: (BudgetRepository.StoredBudget) -> Unit,
+    onSelectBudget: (StoredBudget) -> Unit,
+    onDeleteBudget: (StoredBudget) -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -131,7 +131,7 @@ internal fun BudgetListScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BudgetRow(
-    stored: BudgetRepository.StoredBudget,
+    stored: StoredBudget,
     onSelect: () -> Unit,
     onDelete: () -> Unit,
 ) {

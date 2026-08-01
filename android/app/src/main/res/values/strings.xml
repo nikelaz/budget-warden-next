@@ -76,4 +76,9 @@
     <string name="validation_positive_amount_required">Enter an amount greater than zero.</string>
     <string name="validation_category_required">Select a category.</string>
     <string name="validation_date_required">Select a valid date.</string>
+    <string name="error_load_recent_budgets">Could not load recent budgets.</string>
+    <string name="error_open_budget">Could not open budget.</string>
+    <string name="error_create_budget">Could not create budget.</string>
+    <string name="error_save_budget">Could not save budget.</string>
+    <string name="error_delete_budget">Could not delete budget.</string>
 </resources>

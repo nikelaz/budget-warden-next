@@ -31,7 +31,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.lazarovco.budgetwarden.domain.Budget
-import java.util.Currency
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,7 +46,8 @@ internal fun SettingsScreen(
     var titleHadFocus by remember(budget.id) { mutableStateOf(false) }
     var expanded by rememberSaveable { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
-    val currencies = remember { Currency.getAvailableCurrencies().map { it.currencyCode }.sorted() }
+    val currencies = remember { currencyOptions() }
+    val selectedCurrency = currencies.firstOrNull { it.code == currencyCode }
 
     Column(
         modifier = modifier
@@ -80,7 +80,7 @@ internal fun SettingsScreen(
         Text(stringResource(R.string.currency), style = MaterialTheme.typography.titleMedium)
         ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
             OutlinedTextField(
-                value = currencyCode,
+                value = selectedCurrency?.displayName ?: currencyCode,
                 onValueChange = {},
                 readOnly = true,
                 label = { Text(stringResource(R.string.currency)) },
@@ -90,10 +90,13 @@ internal fun SettingsScreen(
                     .fillMaxWidth(),
             )
             ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                currencies.forEach { code ->
+                currencies.forEach { currency ->
                     DropdownMenuItem(
-                        text = { Text(code) },
-                        onClick = { expanded = false; onCurrencyChange(code) },
+                        text = { Text(currency.displayName) },
+                        onClick = {
+                            expanded = false
+                            onCurrencyChange(currency.code)
+                        },
                     )
                 }
             }

@@ -48,9 +48,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -58,6 +59,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -72,7 +74,6 @@ import com.lazarovco.budgetwarden.core.createCategory
 import com.lazarovco.budgetwarden.core.createTransaction
 import com.lazarovco.budgetwarden.core.deleteCategory
 import com.lazarovco.budgetwarden.core.deleteTransaction
-import com.lazarovco.budgetwarden.core.decodeBudget
 import com.lazarovco.budgetwarden.core.encodeBudget
 import com.lazarovco.budgetwarden.core.moveTransaction
 import com.lazarovco.budgetwarden.core.newTransaction
@@ -80,6 +81,7 @@ import com.lazarovco.budgetwarden.core.updateCategory
 import com.lazarovco.budgetwarden.core.updateBudgetTitle
 import com.lazarovco.budgetwarden.core.updateTransaction
 import com.lazarovco.budgetwarden.data.BudgetRepository
+import com.lazarovco.budgetwarden.data.StoredBudget
 import com.lazarovco.budgetwarden.domain.Budget
 import com.lazarovco.budgetwarden.domain.BudgetDates
 import com.lazarovco.budgetwarden.domain.Category
@@ -94,7 +96,6 @@ import java.util.Currency
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
-import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -111,15 +112,19 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun BudgetWardenAndroidApp() {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val repository = remember { BudgetRepository(context) }
+    val sessionViewModel: BudgetSessionViewModel = viewModel(
+        factory = remember(repository) { BudgetSessionViewModel.Factory(repository) },
+    )
+    val sessionState by sessionViewModel.state.collectAsStateWithLifecycle()
     val preferences = remember {
         context.getSharedPreferences(BudgetWardenApplication.PREFERENCES_NAME, Context.MODE_PRIVATE)
     }
     val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
 
-    var storedBudgets by remember { mutableStateOf<List<BudgetRepository.StoredBudget>>(emptyList()) }
-    var currentBudget by remember { mutableStateOf<Budget?>(null) }
+    val storedBudgets = sessionState.storedBudgets
+    val currentBudget = sessionState.currentBudget
     var selectedTab by rememberSaveable { mutableStateOf(AppDestination.BUDGET) }
     var transactionSearchActive by rememberSaveable { mutableStateOf(false) }
     var transactionSearchText by rememberSaveable { mutableStateOf("") }
@@ -134,57 +139,22 @@ fun BudgetWardenAndroidApp() {
     var transactionEditor by remember { mutableStateOf<TransactionEditor?>(null) }
     var categoryPendingDeletion by remember { mutableStateOf<Category?>(null) }
     var transactionPendingDeletion by remember { mutableStateOf<TransactionListItem?>(null) }
-    var budgetPendingDeletion by remember { mutableStateOf<BudgetRepository.StoredBudget?>(null) }
-
-    fun showError(error: Throwable, fallback: String) {
-        scope.launch { snackbarHostState.showSnackbar(error.message ?: fallback) }
-    }
-
-    fun reloadRecents() {
-        scope.launch {
-            runCatching { repository.loadStoredBudgets() }
-                .onSuccess { storedBudgets = it }
-                .onFailure { showError(it, "Could not load recent budgets.") }
-        }
-    }
+    var budgetPendingDeletion by remember { mutableStateOf<StoredBudget?>(null) }
 
     fun openBudget(uri: Uri) {
-        scope.launch {
-            runCatching { repository.openBudget(uri) }
-                .onSuccess {
-                    currentBudget = it
-                    reloadRecents()
-                }
-                .onFailure {
-                    repository.removeRecent(uri)
-                    reloadRecents()
-                    showError(it, "Could not open budget.")
-                }
-        }
-    }
-
-    fun saveBudget(updated: Budget) {
-        scope.launch {
-            runCatching { repository.saveBudget(updated) }
-                .onSuccess {
-                    currentBudget = it
-                    reloadRecents()
-                }
-                .onFailure { showError(it, "Could not save budget.") }
-        }
+        sessionViewModel.openBudget(uri)
     }
 
     fun mutateBudget(operation: (Budget) -> Budget) {
-        val budget = currentBudget ?: return
-        runCatching { operation(budget) }
-            .onSuccess(::saveBudget)
-            .onFailure { showError(it, "Could not update budget.") }
+        sessionViewModel.mutateBudget(operation)
     }
 
-    LaunchedEffect(Unit) {
-        runCatching { repository.loadStoredBudgets() }
-            .onSuccess { storedBudgets = it }
-            .onFailure { showError(it, "Could not load recent budgets.") }
+    LaunchedEffect(sessionViewModel, resources) {
+        sessionViewModel.errors.collect { error ->
+            snackbarHostState.showSnackbar(
+                error.cause.message ?: resources.getString(error.kind.messageResource),
+            )
+        }
     }
 
     val openDocument = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -200,20 +170,12 @@ fun BudgetWardenAndroidApp() {
         pendingCreationTemplate = null
         pendingPreviousBudgetJson = null
         if (uri != null && title != null && template != null) {
-            scope.launch {
-                runCatching {
-                    val previousBudget = previousBudgetJson?.let { decodeBudget(it, "") }
-                    repository.createBudget(
-                        uri = uri,
-                        title = title,
-                        template = template,
-                        previousBudget = previousBudget,
-                    )
-                }.onSuccess {
-                    currentBudget = it
-                    reloadRecents()
-                }.onFailure { showError(it, "Could not create budget.") }
-            }
+            sessionViewModel.createBudget(
+                uri = uri,
+                title = title,
+                template = template,
+                previousBudgetJson = previousBudgetJson,
+            )
         }
     }
 
@@ -272,7 +234,7 @@ fun BudgetWardenAndroidApp() {
                                 if (!active) transactionSearchText = ""
                             },
                             onSearchTextChange = { transactionSearchText = it },
-                            onAllBudgets = { currentBudget = null },
+                            onAllBudgets = sessionViewModel::closeBudget,
                             onCreateBudget = { createBudgetOpen = true },
                             onSelectBudget = { openBudget(it.uri) },
                         )
@@ -336,7 +298,7 @@ fun BudgetWardenAndroidApp() {
                                 mutateBudget { updateBudgetTitle(it, title.trim()) }
                             },
                             onDeleteBudget = {
-                                budgetPendingDeletion = BudgetRepository.StoredBudget(
+                                budgetPendingDeletion = StoredBudget(
                                     budget = budget,
                                     uri = Uri.parse(checkNotNull(budget.url)),
                                     displayName = budget.title,
@@ -513,14 +475,7 @@ fun BudgetWardenAndroidApp() {
             confirmButton = {
                 TextButton(onClick = {
                     budgetPendingDeletion = null
-                    scope.launch {
-                        runCatching { repository.deleteBudget(stored.budget) }
-                            .onSuccess {
-                                if (currentBudget?.id == stored.budget.id) currentBudget = null
-                                reloadRecents()
-                            }
-                            .onFailure { showError(it, "Could not delete budget.") }
-                    }
+                    sessionViewModel.deleteBudget(stored)
                 }) { Text(stringResource(R.string.delete_budget)) }
             },
             dismissButton = {
@@ -559,7 +514,7 @@ private enum class AppDestination(val label: String, val icon: Int) {
 @Composable
 private fun WorkspaceHeader(
     budget: Budget,
-    storedBudgets: List<BudgetRepository.StoredBudget>,
+    storedBudgets: List<StoredBudget>,
     searchAvailable: Boolean,
     searchActive: Boolean,
     searchText: String,
@@ -567,7 +522,7 @@ private fun WorkspaceHeader(
     onSearchTextChange: (String) -> Unit,
     onAllBudgets: () -> Unit,
     onCreateBudget: () -> Unit,
-    onSelectBudget: (BudgetRepository.StoredBudget) -> Unit,
+    onSelectBudget: (StoredBudget) -> Unit,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     val searchFocusRequester = remember { FocusRequester() }
@@ -782,6 +737,15 @@ private fun defaultCurrencyCode(): String =
 
 internal fun currentMonthTitle(now: Date = Date()): String =
     SimpleDateFormat("LLLL yyyy", Locale.getDefault()).format(now)
+
+private val BudgetSessionErrorKind.messageResource: Int
+    get() = when (this) {
+        BudgetSessionErrorKind.LOAD_RECENTS -> R.string.error_load_recent_budgets
+        BudgetSessionErrorKind.OPEN -> R.string.error_open_budget
+        BudgetSessionErrorKind.CREATE -> R.string.error_create_budget
+        BudgetSessionErrorKind.SAVE -> R.string.error_save_budget
+        BudgetSessionErrorKind.DELETE -> R.string.error_delete_budget
+    }
 
 @Preview(showBackground = true)
 @Composable
