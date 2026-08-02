@@ -99,6 +99,7 @@ import java.util.UUID
 
 private const val BUDGET_MIME_TYPE = "application/vnd.lazarovco.budgetwarden.budget"
 private const val JSON_MIME_TYPE = "application/json"
+private const val OCTET_STREAM_MIME_TYPE = "application/octet-stream"
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -164,7 +165,7 @@ fun BudgetWardenAndroidApp() {
         uri?.let(::openBudget)
     }
     val createDocument = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument(BUDGET_MIME_TYPE),
+        ActivityResultContracts.CreateDocument(OCTET_STREAM_MIME_TYPE),
     ) { uri ->
         val title = pendingCreationTitle
         val template = pendingCreationTemplate?.let(TemplateSelection::valueOf)
