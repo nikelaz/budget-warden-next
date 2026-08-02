@@ -39,3 +39,7 @@ pub fn app_state() -> &'static AppState {
     // without initializing the app
     APP_STATE.get().unwrap()
 }
+
+pub(crate) fn initialized_app_state() -> Option<&'static AppState> {
+    APP_STATE.get()
+}

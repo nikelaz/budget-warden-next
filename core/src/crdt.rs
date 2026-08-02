@@ -46,6 +46,24 @@ impl HlcTimestamp {
         *last = ts.clone();
         ts
     }
+
+    pub(crate) fn observe(observed: &Self) {
+        let Some(state) = initialized_app_state() else {
+            return;
+        };
+        let mut last = state.last_hlc.lock().unwrap();
+
+        if observed.physical_ms > last.physical_ms {
+            last.physical_ms = observed.physical_ms;
+            last.logical = observed.logical;
+        } else if observed.physical_ms == last.physical_ms {
+            last.logical = last.logical.max(observed.logical);
+        }
+
+        // The local clock advances from the observed physical/logical value,
+        // but locally-created changes must retain this device's identity.
+        last.device_id = state.device_id;
+    }
 }
 
 #[data]
@@ -383,6 +401,28 @@ pub struct CRDTChanges {
     pub transactions: HashMap<Uuid, HashMap<TransactionField, TransactionChange>>,
     pub category_tombstones: HashMap<Uuid, HlcTimestamp>,
     pub transaction_tombstones: HashMap<Uuid, HlcTimestamp>,
+}
+
+pub(crate) fn observe_budget_timestamps(budget: &BWBudget) {
+    for change in &budget.changes.budget {
+        HlcTimestamp::observe(&change.timestamp);
+    }
+    for fields in budget.changes.categories.values() {
+        for change in fields.values() {
+            HlcTimestamp::observe(&change.timestamp);
+        }
+    }
+    for fields in budget.changes.transactions.values() {
+        for change in fields.values() {
+            HlcTimestamp::observe(&change.timestamp);
+        }
+    }
+    for timestamp in budget.changes.category_tombstones.values() {
+        HlcTimestamp::observe(timestamp);
+    }
+    for timestamp in budget.changes.transaction_tombstones.values() {
+        HlcTimestamp::observe(timestamp);
+    }
 }
 
 fn merge_tombstones(

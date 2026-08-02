@@ -17,6 +17,8 @@ import com.lazarovco.budgetwarden.android.domain.Budget
 import com.lazarovco.budgetwarden.android.domain.TemplateSelection
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 data class StoredBudget(
@@ -54,9 +56,11 @@ internal class BudgetRepository(
         BudgetWardenApplication.PREFERENCES_NAME,
         Context.MODE_PRIVATE,
     )
+    private val recoveryStore = BudgetRecoveryStore(applicationContext)
+    private val saveMutex = Mutex()
 
     override suspend fun loadStoredBudgets(): List<StoredBudget> = withContext(ioDispatcher) {
-        val valid = recentUriStrings().mapNotNull { value ->
+        recentUriStrings().mapNotNull { value ->
             val uri = Uri.parse(value)
             runCatching {
                 StoredBudget(
@@ -66,8 +70,6 @@ internal class BudgetRepository(
                 )
             }.getOrNull()
         }
-        saveRecentUris(valid.map { it.uri.toString() })
-        valid
     }
 
     override suspend fun openBudget(uri: Uri): Budget = withContext(ioDispatcher) {
@@ -99,13 +101,43 @@ internal class BudgetRepository(
     }
 
     override suspend fun saveBudget(budget: Budget): Budget = withContext(ioDispatcher) {
-        val normalizedInMemory = budget.updateActuals()
-        val uri = Uri.parse(normalizedInMemory.url ?: error("Budget has no document URI."))
-        val onDisk = readBudget(uri)
-        val merged = mergeBudgetForSave(normalizedInMemory, onDisk).updateActuals()
-        writeBudget(merged)
-        rememberRecent(uri)
-        merged
+        saveMutex.withLock {
+            var pending = budget.updateActuals()
+            val uri = Uri.parse(pending.url ?: error("Budget has no document URI."))
+
+            repeat(MAX_SAVE_ATTEMPTS) {
+                val onDisk = readBudget(uri)
+                val merged = mergeBudgetForSave(pending, onDisk).updateActuals()
+
+                // Narrow the provider's check/write race by confirming that
+                // the revision used for the merge is still current directly
+                // before replacement. A changed revision is merged on the
+                // next bounded attempt instead of being overwritten.
+                val latestBeforeWrite = runCatching { readProviderBudget(uri) }.getOrNull()
+                if (latestBeforeWrite != null && latestBeforeWrite.revisionId != onDisk.revisionId) {
+                    pending = merged
+                    return@repeat
+                }
+
+                writeBudget(merged)
+
+                // Providers do not expose a portable compare-and-swap API.
+                // Re-read after replacement and retry the CRDT merge if a
+                // concurrent provider update became visible during this save.
+                val observed = runCatching { readProviderBudget(uri) }.getOrNull()
+                if (observed == null) {
+                    rememberRecent(uri)
+                    return@withLock merged
+                }
+                if (observed.revisionId == merged.revisionId) {
+                    rememberRecent(uri)
+                    return@withLock merged
+                }
+                pending = merged
+            }
+
+            error("The budget kept changing while it was being saved. Please try again.")
+        }
     }
 
     override suspend fun deleteBudget(budget: Budget) = withContext(ioDispatcher) {
@@ -116,6 +148,7 @@ internal class BudgetRepository(
             resolver.delete(uri, null, null) != 0
         }
         check(deleted) { "The document provider could not delete this budget." }
+        recoveryStore.delete(uri)
         removeRecent(uri)
     }
 
@@ -133,11 +166,14 @@ internal class BudgetRepository(
     }
 
     private fun readBudget(uri: Uri): BWBudget {
-        val json = resolver.openInputStream(uri)
-            ?.bufferedReader()
-            ?.use { it.readText() }
-            ?: error("Could not read the selected budget file.")
-        var budget = decodeBudget(json = json, url = uri.toString())
+        val providerResult = runCatching { readProviderBudget(uri) }
+        var budget = providerResult.getOrElse { providerError ->
+            readRecoveryBudget(uri) ?: throw providerError
+        }
+
+        if (providerResult.isSuccess) {
+            runCatching { recoveryStore.write(uri, encodeBudget(budget)) }
+        }
 
         // TEMPORARY LEGACY MIGRATION: remove this writeback together with the
         // Rust schema-v1 fallback after live files have been upgraded.
@@ -148,9 +184,27 @@ internal class BudgetRepository(
         return budget
     }
 
+    private fun readProviderBudget(uri: Uri): BWBudget {
+        val json = resolver.openInputStream(uri)
+            ?.bufferedReader()
+            ?.use { it.readText() }
+            ?: error("Could not read the selected budget file.")
+        return decodeBudget(json = json, url = uri.toString())
+    }
+
+    private fun readRecoveryBudget(uri: Uri): BWBudget? {
+        val json = recoveryStore.read(uri) ?: return null
+        return decodeBudget(json = json, url = uri.toString())
+    }
+
     private fun writeBudget(budget: Budget) {
         val uri = Uri.parse(budget.url ?: error("Budget has no document URI."))
         val json = encodeBudget(budget)
+        // A SAF URI does not expose a portable atomic-replace primitive. Keep
+        // a complete, atomically-written recovery snapshot before asking the
+        // provider to replace its copy so an interrupted provider write never
+        // destroys the only valid budget.
+        recoveryStore.write(uri, json)
         resolver.openOutputStream(uri, "rwt")
             ?.bufferedWriter()
             ?.use { it.write(json) }
@@ -190,5 +244,6 @@ internal class BudgetRepository(
     companion object {
         private const val RECENT_FILES_KEY = "recent_budget_uris_v1"
         private const val MAX_RECENT_FILES = 20
+        private const val MAX_SAVE_ATTEMPTS = 3
     }
 }

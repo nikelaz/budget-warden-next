@@ -8,6 +8,7 @@
  */
 
 use boltffi::*;
+use crate::crdt::observe_budget_timestamps;
 use crate::legacy_migration::migrate_legacy_budget;
 use crate::models::{BWBudget, CURRENT_SCHEMA_VERSION};
 use crate::validation::validate_budget;
@@ -29,6 +30,7 @@ pub fn decode_budget(json: &str, url: String) -> Result<BWBudget, String> {
     let Some(schema_version) = value.get("schema_version") else {
         let budget = migrate_legacy_budget(value, url)?;
         validate_budget(&budget)?;
+        observe_budget_timestamps(&budget);
         return Ok(budget);
     };
     let schema_version = schema_version.as_i64().ok_or_else(|| {
@@ -44,6 +46,7 @@ pub fn decode_budget(json: &str, url: String) -> Result<BWBudget, String> {
 
     budget.url = Some(url);
     validate_budget(&budget)?;
+    observe_budget_timestamps(&budget);
 
     Ok(budget)
 }
@@ -131,6 +134,33 @@ mod tests {
             .expect("malformed JSON should be rejected");
 
         assert!(error.starts_with("Failed to decode budget from JSON:"));
+    }
+
+    #[test]
+    fn test_decode_budget_advances_hlc_past_loaded_future_changes() {
+        use crate::app_state::initialize_core;
+        use crate::domain::update_budget_title;
+
+        let _ = initialize_core(Uuid::from_u128(0xC10C));
+        let future_timestamp = HlcTimestamp {
+            physical_ms: chrono::Utc::now().timestamp_millis() + 60_000,
+            logical: 7,
+            device_id: Uuid::from_u128(0xF07E),
+        };
+        let mut budget = BWBudget::new("Original".to_string());
+        budget.changes.budget = vec![BudgetChange {
+            change_id: Uuid::new_v4(),
+            timestamp: future_timestamp.clone(),
+            payload: Some(BudgetChangePayload {
+                title: Some("Original".to_string()),
+            }),
+        }];
+        let json = encode_budget(&budget).unwrap();
+
+        let decoded = decode_budget(&json, "/tmp/future.budget".to_string()).unwrap();
+        let updated = update_budget_title(decoded, "Renamed".to_string()).unwrap();
+
+        assert!(updated.changes.budget[0].timestamp > future_timestamp);
     }
 
     #[test]

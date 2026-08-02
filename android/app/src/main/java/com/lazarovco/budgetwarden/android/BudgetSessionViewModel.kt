@@ -125,18 +125,6 @@ internal class BudgetSessionViewModel(
             throw error
         } catch (error: Exception) {
             _errors.send(BudgetSessionError(error, command.errorKind))
-            if (command is Command.Open) {
-                try {
-                    repository.removeRecent(command.uri)
-                } catch (cleanupError: CancellationException) {
-                    throw cleanupError
-                } catch (cleanupError: Exception) {
-                    _errors.send(
-                        BudgetSessionError(cleanupError, BudgetSessionErrorKind.LOAD_RECENTS),
-                    )
-                }
-                refreshRecents()
-            }
         }
     }
 

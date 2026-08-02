@@ -21,5 +21,6 @@ After generation, Android Studio can sync and run the `app` configuration normal
 
 - Create uses Android's `CreateDocument` contract and writes a portable `.budget` file at the location chosen by the user.
 - Open uses `OpenDocument` and retains the provider-granted URI permission when supported.
-- Recent files are URI references only; the app has no private vault, Room database, background sync, or Google Drive API integration.
+- Recent files are URI references only; the app has no browsable private vault, Room database, background sync, or Google Drive API integration.
+- Each save reads and CRDT-merges the provider copy, atomically commits a private recovery snapshot, writes the provider URI, and re-reads it to reconcile a concurrently visible provider update. Recovery snapshots are safety copies, not the primary document store.
 - Files placed in Drive, OneDrive, Dropbox, or another document provider are synchronized by that provider.
