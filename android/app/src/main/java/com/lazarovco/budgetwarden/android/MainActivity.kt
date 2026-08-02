@@ -97,6 +97,9 @@ import java.util.Date
 import java.util.Locale
 import java.util.UUID
 
+private const val BUDGET_MIME_TYPE = "application/vnd.lazarovco.budgetwarden.budget"
+private const val JSON_MIME_TYPE = "application/json"
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -161,7 +164,7 @@ fun BudgetWardenAndroidApp() {
         uri?.let(::openBudget)
     }
     val createDocument = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json"),
+        ActivityResultContracts.CreateDocument(BUDGET_MIME_TYPE),
     ) { uri ->
         val title = pendingCreationTitle
         val template = pendingCreationTemplate?.let(TemplateSelection::valueOf)
@@ -189,7 +192,9 @@ fun BudgetWardenAndroidApp() {
                 storedBudgets = storedBudgets,
                 modifier = Modifier.padding(outerPadding),
                 onCreateBudget = { createBudgetOpen = true },
-                onOpenBudget = { openDocument.launch(arrayOf("application/json", "*/*")) },
+                onOpenBudget = {
+                    openDocument.launch(arrayOf(BUDGET_MIME_TYPE, JSON_MIME_TYPE, "*/*"))
+                },
                 onSelectBudget = { openBudget(it.uri) },
                 onDeleteBudget = { budgetPendingDeletion = it },
             )
