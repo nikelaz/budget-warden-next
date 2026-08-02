@@ -1,14 +1,14 @@
-package com.lazarovco.budgetwarden
+package com.lazarovco.budgetwarden.android
 
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.lazarovco.budgetwarden.core.decodeBudget
-import com.lazarovco.budgetwarden.data.BudgetDataSource
-import com.lazarovco.budgetwarden.data.StoredBudget
-import com.lazarovco.budgetwarden.domain.Budget
-import com.lazarovco.budgetwarden.domain.TemplateSelection
+import com.lazarovco.budgetwarden.android.data.BudgetDataSource
+import com.lazarovco.budgetwarden.android.data.StoredBudget
+import com.lazarovco.budgetwarden.android.domain.Budget
+import com.lazarovco.budgetwarden.android.domain.TemplateSelection
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow

@@ -1,4 +1,4 @@
-package com.lazarovco.budgetwarden.ui.theme
+package com.lazarovco.budgetwarden.android.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

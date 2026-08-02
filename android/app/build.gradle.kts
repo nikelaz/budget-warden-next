@@ -11,14 +11,14 @@ val generatedCoreJniLibs = rootProject.layout.projectDirectory
     .asFile
 
 android {
-    namespace = "com.lazarovco.budgetwarden"
+    namespace = "com.lazarovco.budgetwarden.android"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.lazarovco.budgetwarden"
+        applicationId = "com.lazarovco.budgetwarden.android"
         minSdk = 24
         targetSdk = 37
-        versionCode = 10
+        versionCode = 3
         versionName = "3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -26,9 +26,11 @@ android {
 
     buildTypes {
         release {
-            optimization {
-                enable = false
-            }
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+            )
         }
     }
     compileOptions {

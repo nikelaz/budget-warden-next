@@ -1,4 +1,4 @@
-package com.lazarovco.budgetwarden
+package com.lazarovco.budgetwarden.android
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
@@ -45,11 +45,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
-import com.lazarovco.budgetwarden.domain.AmountMode
-import com.lazarovco.budgetwarden.domain.Budget
-import com.lazarovco.budgetwarden.domain.CategoryType
-import com.lazarovco.budgetwarden.domain.Money
-import com.lazarovco.budgetwarden.domain.title
+import com.lazarovco.budgetwarden.android.domain.AmountMode
+import com.lazarovco.budgetwarden.android.domain.Budget
+import com.lazarovco.budgetwarden.android.domain.CategoryType
+import com.lazarovco.budgetwarden.android.domain.Money
+import com.lazarovco.budgetwarden.android.domain.title
 import com.lazarovco.budgetwarden.core.BWReportingAmountMode
 import com.lazarovco.budgetwarden.core.BWReportingComparisonRow
 import com.lazarovco.budgetwarden.core.BWReportingComponent

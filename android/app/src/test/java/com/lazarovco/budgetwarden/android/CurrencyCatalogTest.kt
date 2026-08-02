@@ -1,4 +1,4 @@
-package com.lazarovco.budgetwarden
+package com.lazarovco.budgetwarden.android
 
 import com.google.common.truth.Truth.assertThat
 import java.util.Locale

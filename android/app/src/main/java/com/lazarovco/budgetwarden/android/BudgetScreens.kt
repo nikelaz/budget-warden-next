@@ -1,4 +1,4 @@
-package com.lazarovco.budgetwarden
+package com.lazarovco.budgetwarden.android
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -58,14 +58,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import com.lazarovco.budgetwarden.data.StoredBudget
-import com.lazarovco.budgetwarden.domain.AmountMode
-import com.lazarovco.budgetwarden.domain.Budget
-import com.lazarovco.budgetwarden.domain.Category
-import com.lazarovco.budgetwarden.domain.CategoryType
-import com.lazarovco.budgetwarden.domain.Money
-import com.lazarovco.budgetwarden.domain.rawValue
-import com.lazarovco.budgetwarden.domain.title
+import com.lazarovco.budgetwarden.android.data.StoredBudget
+import com.lazarovco.budgetwarden.android.domain.AmountMode
+import com.lazarovco.budgetwarden.android.domain.Budget
+import com.lazarovco.budgetwarden.android.domain.Category
+import com.lazarovco.budgetwarden.android.domain.CategoryType
+import com.lazarovco.budgetwarden.android.domain.Money
+import com.lazarovco.budgetwarden.android.domain.rawValue
+import com.lazarovco.budgetwarden.android.domain.title
 import kotlinx.coroutines.launch
 import java.util.UUID
 

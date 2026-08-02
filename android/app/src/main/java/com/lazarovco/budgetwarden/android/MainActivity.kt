@@ -1,4 +1,4 @@
-package com.lazarovco.budgetwarden
+package com.lazarovco.budgetwarden.android
 
 import android.net.Uri
 import android.os.Bundle
@@ -80,17 +80,17 @@ import com.lazarovco.budgetwarden.core.newTransaction
 import com.lazarovco.budgetwarden.core.updateCategory
 import com.lazarovco.budgetwarden.core.updateBudgetTitle
 import com.lazarovco.budgetwarden.core.updateTransaction
-import com.lazarovco.budgetwarden.data.BudgetRepository
-import com.lazarovco.budgetwarden.data.StoredBudget
-import com.lazarovco.budgetwarden.domain.Budget
-import com.lazarovco.budgetwarden.domain.BudgetDates
-import com.lazarovco.budgetwarden.domain.Category
-import com.lazarovco.budgetwarden.domain.CategoryType
-import com.lazarovco.budgetwarden.domain.Money
-import com.lazarovco.budgetwarden.domain.TemplateSelection
-import com.lazarovco.budgetwarden.domain.TransactionListItem
-import com.lazarovco.budgetwarden.domain.rawValue
-import com.lazarovco.budgetwarden.ui.theme.BudgetWardenAndroidTheme
+import com.lazarovco.budgetwarden.android.data.BudgetRepository
+import com.lazarovco.budgetwarden.android.data.StoredBudget
+import com.lazarovco.budgetwarden.android.domain.Budget
+import com.lazarovco.budgetwarden.android.domain.BudgetDates
+import com.lazarovco.budgetwarden.android.domain.Category
+import com.lazarovco.budgetwarden.android.domain.CategoryType
+import com.lazarovco.budgetwarden.android.domain.Money
+import com.lazarovco.budgetwarden.android.domain.TemplateSelection
+import com.lazarovco.budgetwarden.android.domain.TransactionListItem
+import com.lazarovco.budgetwarden.android.domain.rawValue
+import com.lazarovco.budgetwarden.android.ui.theme.BudgetWardenAndroidTheme
 import java.text.SimpleDateFormat
 import java.util.Currency
 import java.util.Date

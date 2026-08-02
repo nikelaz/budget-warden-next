@@ -1,4 +1,4 @@
-package com.lazarovco.budgetwarden
+package com.lazarovco.budgetwarden.android
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -30,7 +30,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import com.lazarovco.budgetwarden.domain.Budget
+import com.lazarovco.budgetwarden.android.domain.Budget
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

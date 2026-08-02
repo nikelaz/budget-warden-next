@@ -1,11 +1,11 @@
-package com.lazarovco.budgetwarden.data
+package com.lazarovco.budgetwarden.android.data
 
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
-import com.lazarovco.budgetwarden.BudgetWardenApplication
+import com.lazarovco.budgetwarden.android.BudgetWardenApplication
 import com.lazarovco.budgetwarden.core.BWBudget
 import com.lazarovco.budgetwarden.core.BWTemplateType
 import com.lazarovco.budgetwarden.core.budgetFromPreviousBudget
@@ -13,8 +13,8 @@ import com.lazarovco.budgetwarden.core.budgetFromTemplate
 import com.lazarovco.budgetwarden.core.decodeBudget
 import com.lazarovco.budgetwarden.core.encodeBudget
 import com.lazarovco.budgetwarden.core.mergeBudgetForSave
-import com.lazarovco.budgetwarden.domain.Budget
-import com.lazarovco.budgetwarden.domain.TemplateSelection
+import com.lazarovco.budgetwarden.android.domain.Budget
+import com.lazarovco.budgetwarden.android.domain.TemplateSelection
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

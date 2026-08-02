@@ -1,4 +1,4 @@
-package com.lazarovco.budgetwarden
+package com.lazarovco.budgetwarden.android
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -38,11 +38,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.lazarovco.budgetwarden.domain.Budget
-import com.lazarovco.budgetwarden.domain.BudgetDates
-import com.lazarovco.budgetwarden.domain.Money
-import com.lazarovco.budgetwarden.domain.TransactionListItem
-import com.lazarovco.budgetwarden.domain.title
+import com.lazarovco.budgetwarden.android.domain.Budget
+import com.lazarovco.budgetwarden.android.domain.BudgetDates
+import com.lazarovco.budgetwarden.android.domain.Money
+import com.lazarovco.budgetwarden.android.domain.TransactionListItem
+import com.lazarovco.budgetwarden.android.domain.title
 
 @Composable
 internal fun TransactionsScreen(

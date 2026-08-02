@@ -1,13 +1,13 @@
-package com.lazarovco.budgetwarden
+package com.lazarovco.budgetwarden.android
 
 import android.net.Uri
 import com.google.common.truth.Truth.assertThat
 import com.lazarovco.budgetwarden.core.BWBudget
 import com.lazarovco.budgetwarden.core.CRDTChanges
-import com.lazarovco.budgetwarden.data.BudgetDataSource
-import com.lazarovco.budgetwarden.data.StoredBudget
-import com.lazarovco.budgetwarden.domain.Budget
-import com.lazarovco.budgetwarden.domain.TemplateSelection
+import com.lazarovco.budgetwarden.android.data.BudgetDataSource
+import com.lazarovco.budgetwarden.android.data.StoredBudget
+import com.lazarovco.budgetwarden.android.domain.Budget
+import com.lazarovco.budgetwarden.android.domain.TemplateSelection
 import java.util.UUID
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi

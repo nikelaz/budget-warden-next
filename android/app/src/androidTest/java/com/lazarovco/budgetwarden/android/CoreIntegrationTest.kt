@@ -1,4 +1,4 @@
-package com.lazarovco.budgetwarden
+package com.lazarovco.budgetwarden.android
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.lazarovco.budgetwarden.core.BWDate

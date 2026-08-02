@@ -1,4 +1,4 @@
-package com.lazarovco.budgetwarden
+package com.lazarovco.budgetwarden.android
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -39,13 +39,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import com.lazarovco.budgetwarden.domain.Budget
-import com.lazarovco.budgetwarden.domain.BudgetDates
-import com.lazarovco.budgetwarden.domain.Category
-import com.lazarovco.budgetwarden.domain.CategoryType
-import com.lazarovco.budgetwarden.domain.Money
-import com.lazarovco.budgetwarden.domain.TemplateSelection
-import com.lazarovco.budgetwarden.domain.title
+import com.lazarovco.budgetwarden.android.domain.Budget
+import com.lazarovco.budgetwarden.android.domain.BudgetDates
+import com.lazarovco.budgetwarden.android.domain.Category
+import com.lazarovco.budgetwarden.android.domain.CategoryType
+import com.lazarovco.budgetwarden.android.domain.Money
+import com.lazarovco.budgetwarden.android.domain.TemplateSelection
+import com.lazarovco.budgetwarden.android.domain.title
 import com.lazarovco.budgetwarden.core.BWDate
 import java.util.UUID
 

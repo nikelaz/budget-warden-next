@@ -1,4 +1,4 @@
-package com.lazarovco.budgetwarden.domain
+package com.lazarovco.budgetwarden.android.domain
 
 import com.lazarovco.budgetwarden.core.BWBudget
 import com.lazarovco.budgetwarden.core.BWCategory

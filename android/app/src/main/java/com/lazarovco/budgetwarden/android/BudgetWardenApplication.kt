@@ -1,4 +1,4 @@
-package com.lazarovco.budgetwarden
+package com.lazarovco.budgetwarden.android
 
 import android.app.Application
 import com.lazarovco.budgetwarden.core.FfiException
