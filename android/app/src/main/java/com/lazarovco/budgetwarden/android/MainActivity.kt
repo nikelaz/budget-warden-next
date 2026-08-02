@@ -68,7 +68,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.lazarovco.budgetwarden.core.BWCategory
-import com.lazarovco.budgetwarden.core.BWDate
 import com.lazarovco.budgetwarden.core.BWMoneyAmount
 import com.lazarovco.budgetwarden.core.BWTransaction
 import com.lazarovco.budgetwarden.core.createCategory
