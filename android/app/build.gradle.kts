@@ -18,7 +18,7 @@ android {
         applicationId = "com.lazarovco.budgetwarden.android"
         minSdk = 24
         targetSdk = 37
-        versionCode = 3
+        versionCode = 4
         versionName = "3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
