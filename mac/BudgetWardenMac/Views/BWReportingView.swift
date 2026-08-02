@@ -293,7 +293,7 @@ struct BWBudgetReportingContent: View {
     ) -> [BWReportingSegment] {
         summary.allocationSegments(amountMode: amountMode).map { segment in
             BWReportingSegment(
-                title: segment.categoryType.title,
+                title: segment.categoryType.title(),
                 amount: segment.amount.unsignedValue,
                 tint: tint(for: segment.categoryType)
             )

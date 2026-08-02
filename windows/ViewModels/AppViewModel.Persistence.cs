@@ -240,6 +240,8 @@ public sealed partial class AppViewModel
         BwBudget updated = mutation(current).UpdateActuals();
         string path = ValidateBudgetPath(updated.Url ?? current.Url ?? string.Empty);
         updated = updated with { Url = path };
+        BwBudget onDisk = await ReadBudgetAsync(path);
+        updated = CoreApi.MergeBudgetForSave(updated, onDisk).UpdateActuals();
         await WriteBudgetAsync(updated, path);
         CurrentBudget = updated;
         RememberRecent(path);

@@ -197,7 +197,7 @@ struct BudgetView: View {
                             )
                             .foregroundColor(.accentColor)
                         }
-                        .accessibilityIdentifier("create\(tableRow.categoryType.toString())CategoryFooterButton")
+                        .accessibilityIdentifier("create\(tableRow.categoryType.title())CategoryFooterButton")
                 }
             }
 

@@ -232,7 +232,7 @@ struct BWTransactionsView: View {
             item.transaction.title,
             item.transaction.description,
             item.category.title,
-            item.category.categoryType.title,
+            item.category.categoryType.title(),
             item.transaction.amount.formattedMoneyAmount(currency: currency),
             item.transaction.amount.moneyInputText,
             item.transaction.date.foundationDate.formatted(date: .abbreviated, time: .omitted)

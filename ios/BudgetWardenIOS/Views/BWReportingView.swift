@@ -67,8 +67,8 @@ struct BWReportingView: View {
 
                         ForEach(BWCategoryType.allCases, id: \.self) { categoryType in
                             BWAllocationBreakdownChart(
-                                title: "\(categoryType.title) Breakdown",
-                                emptyTitle: "No \(amountMode.title.lowercased()) \(categoryType.title.lowercased()) amounts yet",
+                                title: "\(categoryType.title()) Breakdown",
+                                emptyTitle: "No \(amountMode.title.lowercased()) \(categoryType.title().lowercased()) amounts yet",
                                 segments: categorySegments(
                                     for: categoryType,
                                     summary: summary
@@ -95,7 +95,7 @@ struct BWReportingView: View {
     ) -> [BWReportingSegment] {
         summary.allocationSegments(amountMode: amountMode).map { segment in
             BWReportingSegment(
-                title: segment.categoryType.title,
+                title: segment.categoryType.title(),
                 amount: segment.amount.unsignedValue,
                 tint: tint(for: segment.categoryType)
             )

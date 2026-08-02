@@ -281,6 +281,12 @@ final class BWStore: ObservableObject {
             }
             updated.url = path
             let url = URL(fileURLWithPath: path)
+            let onDisk = try readBudget(at: url)
+            updated = try BWCore.mergeBudgetForSave(
+                budgetInMemory: updated,
+                budgetOnDisk: onDisk
+            )
+            updated = try updated.updateActuals()
             try writeBudget(updated, to: url)
             currentBudget = updated
             rememberRecent(url)

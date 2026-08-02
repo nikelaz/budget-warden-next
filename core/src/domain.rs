@@ -7,7 +7,6 @@
  * See the LICENSE file in the project root for full terms.
  */
 
-use std::fs;
 use boltffi::*;
 use uuid::Uuid;
 use crate::models::*;
@@ -20,11 +19,43 @@ fn validated_budget(budget: BWBudget) -> Result<BWBudget, String> {
 }
 
 #[export]
-pub fn delete_budget(path: String) -> Result<(), String> {
-    fs::remove_file(&path)
-        .map_err(|err| format!("Failed to delete file: {err}"))?;
+pub fn merge_budget_for_save(
+    budget_in_memory: BWBudget,
+    budget_on_disk: BWBudget,
+) -> Result<BWBudget, String> {
+    validate_budget(&budget_in_memory)?;
+    validate_budget(&budget_on_disk)?;
 
-    Ok(())
+    if budget_in_memory.id != budget_on_disk.id {
+        return Err("Cannot merge different budgets".to_string());
+    }
+
+    validated_budget(merge_for_save(budget_in_memory, budget_on_disk))
+}
+
+#[export]
+pub fn update_budget_title(
+    mut budget: BWBudget,
+    title: String,
+) -> Result<BWBudget, String> {
+    validate_budget(&budget)?;
+
+    if title.trim().is_empty() {
+        return Err("Budget title cannot be empty".to_string());
+    }
+
+    if budget.title == title {
+        return Ok(budget);
+    }
+
+    budget.title = title.clone();
+    budget.changes.budget = vec![BudgetChange {
+        change_id: Uuid::new_v4(),
+        timestamp: HlcTimestamp::now(),
+        payload: Some(BudgetChangePayload { title: Some(title) }),
+    }];
+
+    validated_budget(budget)
 }
 
 #[export]
@@ -492,4 +523,80 @@ pub fn delete_category(
         .insert(category_id, HlcTimestamp::now());
 
     validated_budget(budget)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app_state::initialize_core;
+
+    #[test]
+    fn update_budget_title_records_the_crdt_change() {
+        let _ = initialize_core(Uuid::from_u128(0xD0A1));
+        let budget = BWBudget::new("Original".to_string());
+
+        let updated = update_budget_title(budget, "Renamed".to_string()).unwrap();
+
+        assert_eq!(updated.title, "Renamed");
+        assert_eq!(updated.changes.budget.len(), 1);
+        assert_eq!(
+            updated.changes.budget[0]
+                .payload
+                .as_ref()
+                .and_then(|payload| payload.title.as_deref()),
+            Some("Renamed"),
+        );
+    }
+
+    #[test]
+    fn update_budget_title_rejects_a_blank_title() {
+        let budget = BWBudget::new("Original".to_string());
+
+        let error = update_budget_title(budget, "   ".to_string())
+            .err()
+            .expect("blank titles must be rejected");
+
+        assert_eq!(error, "Budget title cannot be empty");
+    }
+
+    #[test]
+    fn merge_budget_for_save_merges_same_revision_changes_and_advances_revision() {
+        let _ = initialize_core(Uuid::from_u128(0xD0A2));
+        let base = BWBudget::new("Original".to_string());
+        let base_revision_id = base.revision_id;
+        let memory = update_budget_title(base.clone(), "Renamed".to_string()).unwrap();
+        let disk = create_category(
+            base,
+            BWCategory {
+                id: Uuid::new_v4(),
+                ordinal: 0,
+                title: "Food".to_string(),
+                amount_planned: BWMoneyAmount { value: 10000 },
+                amount_actual: BWMoneyAmount { value: 0 },
+                amount_accumulated: BWMoneyAmount { value: 0 },
+                category_type: BWCategoryType::Expenses,
+                transactions: vec![],
+            },
+        )
+        .unwrap();
+
+        let merged = merge_budget_for_save(memory, disk).unwrap();
+
+        assert_eq!(merged.title, "Renamed");
+        assert_eq!(merged.categories.len(), 1);
+        assert_eq!(merged.revision, 1);
+        assert_ne!(merged.revision_id, base_revision_id);
+    }
+
+    #[test]
+    fn merge_budget_for_save_rejects_different_budgets() {
+        let memory = BWBudget::new("Memory".to_string());
+        let disk = BWBudget::new("Disk".to_string());
+
+        let error = merge_budget_for_save(memory, disk)
+            .err()
+            .expect("different budgets must not be merged");
+
+        assert_eq!(error, "Cannot merge different budgets");
+    }
 }

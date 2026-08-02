@@ -148,7 +148,7 @@ pub enum BWCategoryType {
 
 #[data(impl)]
 impl BWCategoryType {
-    pub fn to_string(&self) -> String {
+    pub fn title(&self) -> String {
         match self {
             BWCategoryType::Income => "Income",
             BWCategoryType::Expenses => "Expenses",

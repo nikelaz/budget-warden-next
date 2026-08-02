@@ -247,9 +247,7 @@ final class BWStore {
     func updateBudgetTitle(_ title: String, for budgetID: UUID) async -> Bool {
         guard currentBudget?.id == budgetID else { return false }
         return mutate { budget in
-            var updated = budget
-            updated.title = title
-            return updated
+            try BWCore.updateBudgetTitle(budget: budget, title: title)
         }
     }
 
@@ -384,6 +382,12 @@ final class BWStore {
             updated = try updated.updateActuals()
             updated.url = path
             let url = URL(fileURLWithPath: path)
+            let onDisk = try readBudget(at: url)
+            updated = try BWCore.mergeBudgetForSave(
+                budgetInMemory: updated,
+                budgetOnDisk: onDisk
+            )
+            updated = try updated.updateActuals()
             try writeBudget(updated, to: url)
             currentBudget = updated
             errorMessage = nil

@@ -46,6 +46,24 @@ impl HlcTimestamp {
         *last = ts.clone();
         ts
     }
+
+    pub(crate) fn observe(observed: &Self) {
+        let Some(state) = initialized_app_state() else {
+            return;
+        };
+        let mut last = state.last_hlc.lock().unwrap();
+
+        if observed.physical_ms > last.physical_ms {
+            last.physical_ms = observed.physical_ms;
+            last.logical = observed.logical;
+        } else if observed.physical_ms == last.physical_ms {
+            last.logical = last.logical.max(observed.logical);
+        }
+
+        // The local clock advances from the observed physical/logical value,
+        // but locally-created changes must retain this device's identity.
+        last.device_id = state.device_id;
+    }
 }
 
 #[data]
@@ -385,6 +403,28 @@ pub struct CRDTChanges {
     pub transaction_tombstones: HashMap<Uuid, HlcTimestamp>,
 }
 
+pub(crate) fn observe_budget_timestamps(budget: &BWBudget) {
+    for change in &budget.changes.budget {
+        HlcTimestamp::observe(&change.timestamp);
+    }
+    for fields in budget.changes.categories.values() {
+        for change in fields.values() {
+            HlcTimestamp::observe(&change.timestamp);
+        }
+    }
+    for fields in budget.changes.transactions.values() {
+        for change in fields.values() {
+            HlcTimestamp::observe(&change.timestamp);
+        }
+    }
+    for timestamp in budget.changes.category_tombstones.values() {
+        HlcTimestamp::observe(timestamp);
+    }
+    for timestamp in budget.changes.transaction_tombstones.values() {
+        HlcTimestamp::observe(timestamp);
+    }
+}
+
 fn merge_tombstones(
     mut mem: HashMap<Uuid, HlcTimestamp>,
     disk: HashMap<Uuid, HlcTimestamp>,
@@ -626,6 +666,25 @@ pub fn merge(budget_in_memory: BWBudget, budget_on_disk: BWBudget) -> BWBudget {
     if budget_in_memory.revision_id == budget_on_disk.revision_id {
         return budget_in_memory;
     }
+
+    merge_divergent_budgets(budget_in_memory, budget_on_disk)
+}
+
+pub(crate) fn merge_for_save(
+    budget_in_memory: BWBudget,
+    budget_on_disk: BWBudget,
+) -> BWBudget {
+    // A domain mutation intentionally retains the revision identity of the
+    // snapshot it started from. Saving must still merge the mutated snapshot
+    // with the current file and mint a new identity, even when the file has
+    // not changed since it was opened.
+    merge_divergent_budgets(budget_in_memory, budget_on_disk)
+}
+
+fn merge_divergent_budgets(
+    budget_in_memory: BWBudget,
+    budget_on_disk: BWBudget,
+) -> BWBudget {
 
     let merged_changes = CRDTChanges {
         budget: merge_budget_changes(

@@ -22,10 +22,6 @@ public extension BWReportingAmountMode {
     }
 }
 
-public extension BWCategoryType {
-    var title: String { toString() }
-}
-
 public extension BWReportingComparisonRow {
     var title: String {
         switch self {

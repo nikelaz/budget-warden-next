@@ -104,7 +104,7 @@ struct BWTransactionDetailsView: View {
                         let typeCategories = categories.filter { $0.categoryType == type }
 
                         if !typeCategories.isEmpty {
-                            Text(type.title)
+                            Text(type.title())
                                 .selectionDisabled(true)
 
                             ForEach(typeCategories) { category in
