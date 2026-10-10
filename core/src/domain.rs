@@ -11,7 +11,9 @@ use boltffi::*;
 use uuid::Uuid;
 use crate::models::*;
 use crate::crdt::*;
-use crate::validation::{validate_budget, validate_category, validate_money_amount};
+use crate::validation::{
+    validate_budget, validate_category, validate_derived_totals, validate_money_amount,
+};
 
 fn validated_budget(budget: BWBudget) -> Result<BWBudget, String> {
     validate_budget(&budget)?;
@@ -30,7 +32,9 @@ pub fn merge_budget_for_save(
         return Err("Cannot merge different budgets".to_string());
     }
 
-    validated_budget(merge_for_save(budget_in_memory, budget_on_disk))
+    let merged = merge_for_save(budget_in_memory, budget_on_disk)?;
+    validate_derived_totals(&merged)?;
+    validated_budget(merged)
 }
 
 #[export]
@@ -39,6 +43,7 @@ pub fn update_budget_title(
     title: String,
 ) -> Result<BWBudget, String> {
     validate_budget(&budget)?;
+    budget = normalize_budget_changes(budget);
 
     if title.trim().is_empty() {
         return Err("Budget title cannot be empty".to_string());
@@ -51,7 +56,7 @@ pub fn update_budget_title(
     budget.title = title.clone();
     budget.changes.budget = vec![BudgetChange {
         change_id: Uuid::new_v4(),
-        timestamp: HlcTimestamp::now(),
+        timestamp: HlcTimestamp::now()?,
         payload: Some(BudgetChangePayload { title: Some(title) }),
     }];
 
@@ -65,6 +70,7 @@ pub fn create_transaction(
     transaction: BWTransaction
 ) -> Result<BWBudget, String> {
     validate_budget(&budget)?;
+    budget = normalize_budget_changes(budget);
     validate_money_amount(transaction.amount, "Transaction amount")?;
 
     let category = budget.categories
@@ -75,8 +81,9 @@ pub fn create_transaction(
         })?;
 
     category.transactions.push(transaction.clone());
+    category.update_actuals()?;
     
-    let change = new_change_transaction_create(category_id, transaction.clone()); 
+    let change = new_change_transaction_create(category_id, transaction.clone())?;
 
     budget.changes.transactions.insert(transaction.id, change);
 
@@ -90,6 +97,7 @@ pub fn update_transaction(
     transaction: BWTransaction
 ) -> Result<BWBudget, String> {
     validate_budget(&budget)?;
+    budget = normalize_budget_changes(budget);
     validate_money_amount(transaction.amount, "Transaction amount")?;
 
     let category = budget.categories
@@ -108,7 +116,7 @@ pub fn update_transaction(
 
     if transaction_in_budget.title != transaction.title {
         transaction_in_budget.title = transaction.title.clone();
-        let change = new_change_transaction_update(category_id, transaction.clone(), TransactionField::Title);
+        let change = new_change_transaction_update(category_id, transaction.clone(), TransactionField::Title)?;
         let transaction_changes = budget.changes.transactions.get_mut(&transaction.id);
 
         let transaction_changes = transaction_changes
@@ -121,7 +129,7 @@ pub fn update_transaction(
 
     if transaction_in_budget.description != transaction.description {
         transaction_in_budget.description = transaction.description.clone();
-        let change = new_change_transaction_update(category_id, transaction.clone(), TransactionField::Description);
+        let change = new_change_transaction_update(category_id, transaction.clone(), TransactionField::Description)?;
         let transaction_changes = budget.changes.transactions.get_mut(&transaction.id);
 
         let transaction_changes = transaction_changes
@@ -134,7 +142,7 @@ pub fn update_transaction(
 
     if transaction_in_budget.date != transaction.date {
         transaction_in_budget.date = transaction.date.clone();
-        let change = new_change_transaction_update(category_id, transaction.clone(), TransactionField::Date);
+        let change = new_change_transaction_update(category_id, transaction.clone(), TransactionField::Date)?;
         let transaction_changes = budget.changes.transactions.get_mut(&transaction.id);
 
         let transaction_changes = transaction_changes
@@ -147,7 +155,7 @@ pub fn update_transaction(
 
     if transaction_in_budget.amount != transaction.amount {
         transaction_in_budget.amount = transaction.amount.clone();
-        let change = new_change_transaction_update(category_id, transaction.clone(), TransactionField::Amount);
+        let change = new_change_transaction_update(category_id, transaction.clone(), TransactionField::Amount)?;
         let transaction_changes = budget.changes.transactions.get_mut(&transaction.id);
 
         let transaction_changes = transaction_changes
@@ -157,6 +165,8 @@ pub fn update_transaction(
 
         transaction_changes.insert(TransactionField::Amount, change);
     }
+
+    category.update_actuals()?;
 
     validated_budget(budget)
 }
@@ -168,6 +178,7 @@ pub fn delete_transaction(
     transaction_id: Uuid
 ) -> Result<BWBudget, String> {
     validate_budget(&budget)?;
+    budget = normalize_budget_changes(budget);
 
     let category = budget.categories
         .iter_mut()
@@ -184,8 +195,9 @@ pub fn delete_transaction(
         })?;
 
     category.transactions.remove(position);
+    category.update_actuals()?;
 
-    budget.changes.transaction_tombstones.insert(transaction_id, HlcTimestamp::now());
+    budget.changes.transaction_tombstones.insert(transaction_id, HlcTimestamp::now()?);
 
     validated_budget(budget)
 }
@@ -198,6 +210,7 @@ pub fn move_transaction(
     transaction_id: Uuid,
 ) -> Result<BWBudget, String> {
     validate_budget(&budget)?;
+    budget = normalize_budget_changes(budget);
 
     let origin_category_index = budget.categories
         .iter()
@@ -232,7 +245,7 @@ pub fn move_transaction(
         target_category_id,
         transaction,
         TransactionField::Category,
-    );
+    )?;
     let transaction_changes = budget.changes.transactions
         .get_mut(&transaction_id)
         .ok_or_else(|| {
@@ -247,6 +260,8 @@ pub fn move_transaction(
     budget.categories[target_category_index]
         .transactions
         .push(transaction);
+    budget.categories[origin_category_index].update_actuals()?;
+    budget.categories[target_category_index].update_actuals()?;
 
     validated_budget(budget)
 }
@@ -257,11 +272,12 @@ pub fn create_category(
     category: BWCategory
 ) -> Result<BWBudget, String> {
     validate_budget(&budget)?;
+    budget = normalize_budget_changes(budget);
     validate_category(&category)?;
 
     budget.categories.push(category.clone());
 
-    let change = new_change_category_create(category.clone());
+    let change = new_change_category_create(category.clone())?;
 
     budget.changes.categories.insert(category.id, change);
 
@@ -272,16 +288,15 @@ fn ordered_category_ids(
     categories: &[BWCategory],
     category_type: BWCategoryType,
 ) -> Vec<Uuid> {
-    let mut categories_of_type: Vec<(usize, &BWCategory)> = categories
+    let mut categories_of_type: Vec<&BWCategory> = categories
         .iter()
-        .enumerate()
-        .filter(|(_, category)| category.category_type == category_type)
+        .filter(|category| category.category_type == category_type)
         .collect();
 
-    categories_of_type.sort_by_key(|(index, category)| (category.ordinal, *index));
+    categories_of_type.sort_by_key(|category| (category.ordinal, category.id));
     categories_of_type
         .into_iter()
-        .map(|(_, category)| category.id)
+        .map(|category| category.id)
         .collect()
 }
 
@@ -303,6 +318,7 @@ fn sort_categories(categories: &mut [BWCategory]) {
     categories.sort_by_key(|category| (
         category.category_type as i32,
         category.ordinal,
+        category.id,
     ));
 }
 
@@ -312,6 +328,7 @@ pub fn update_category(
     category: BWCategory
 ) -> Result<BWBudget, String> {
     validate_budget(&budget)?;
+    budget = normalize_budget_changes(budget);
     validate_category(&category)?;
 
     let original_category = budget.categories
@@ -437,7 +454,7 @@ pub fn update_category(
             let change = new_change_category_update(
                 updated_category.clone(),
                 field.clone(),
-            );
+            )?;
             changes.insert(field, change);
         }
     }
@@ -451,6 +468,7 @@ pub fn delete_category(
     category_id: Uuid
 ) -> Result<BWBudget, String> {
     validate_budget(&budget)?;
+    budget = normalize_budget_changes(budget);
 
     let deleted_category = budget.categories
         .iter()
@@ -509,7 +527,7 @@ pub fn delete_category(
         let change = new_change_category_update(
             changed_category,
             CategoryField::Ordinal,
-        );
+        )?;
         let category_changes = budget.changes.categories
             .get_mut(&changed_category_id)
             .ok_or_else(|| {
@@ -519,8 +537,13 @@ pub fn delete_category(
         category_changes.insert(CategoryField::Ordinal, change);
     }
 
+    let tombstone = HlcTimestamp::now()?;
     budget.changes.category_tombstones
-        .insert(category_id, HlcTimestamp::now());
+        .insert(category_id, tombstone.clone());
+    for transaction in &deleted_category.transactions {
+        budget.changes.transaction_tombstones
+            .insert(transaction.id, tombstone.clone());
+    }
 
     validated_budget(budget)
 }
@@ -599,4 +622,24 @@ mod tests {
 
         assert_eq!(error, "Cannot merge different budgets");
     }
+    #[test]
+    fn imported_entities_without_history_can_be_edited_and_deleted() {
+        let _ = initialize_core(Uuid::from_u128(0xD0A1));
+        let mut budget = BWBudget::new("Imported".to_string());
+        let category = BWCategory {
+            id: Uuid::from_u128(101), ordinal: 0, title: "Food".to_string(),
+            amount_planned: BWMoneyAmount { value: 0 },
+            amount_actual: BWMoneyAmount { value: 0 },
+            amount_accumulated: BWMoneyAmount { value: 0 },
+            category_type: BWCategoryType::Expenses, transactions: vec![],
+        };
+        budget.categories.push(category.clone());
+        let mut updated = category.clone();
+        updated.title = "Groceries".to_string();
+        let budget = update_category(budget, updated).unwrap();
+        assert_eq!(budget.categories[0].title, "Groceries");
+        assert_eq!(budget.changes.categories[&category.id].len(), 5);
+        assert!(delete_category(budget, category.id).unwrap().categories.is_empty());
+    }
+
 }

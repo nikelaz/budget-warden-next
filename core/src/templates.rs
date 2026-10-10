@@ -149,13 +149,13 @@ mod tests {
         }
     }
 
-    fn assert_first_category_can_be_updated(mut budget: BWBudget) {
+    fn assert_first_category_can_be_updated(budget: BWBudget) {
         let category = budget
             .categories
-            .first_mut()
+            .first()
             .expect("template must contain a category");
-        category.title = "Updated Category".to_string();
-        let updated_category = category.clone();
+        let mut updated_category = category.clone();
+        updated_category.title = "Updated Category".to_string();
 
         let updated_budget = update_category(budget, updated_category)
             .expect("template category update must succeed");

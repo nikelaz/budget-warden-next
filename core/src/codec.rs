@@ -1,19 +1,137 @@
-/* 
+/*
  * Budget Warden
  * Copyright (c) 2026 Lazarov & Co EOOD
  * Author: Nikola Lazarov
  *
- * Licensed under the Source-Available Educational License. 
+ * Licensed under the Source-Available Educational License.
  * See the LICENSE file in the project root for full terms.
  */
 
-use boltffi::*;
 use crate::crdt::observe_budget_timestamps;
 use crate::legacy_migration::migrate_legacy_budget;
 use crate::models::{BWBudget, CURRENT_SCHEMA_VERSION};
 use crate::validation::validate_budget;
+use boltffi::*;
+use serde::de::{self, MapAccess, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer};
 
 const NEWER_SCHEMA_ERROR: &str = "This budget was created with a newer version of Budget Warden. Please update Budget Warden to open it.";
+
+enum UniqueJsonValue {
+    Json(serde_json::Value),
+}
+
+impl UniqueJsonValue {
+    fn into_json(self) -> serde_json::Value {
+        match self {
+            Self::Json(value) => value,
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for UniqueJsonValue {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct UniqueJsonVisitor;
+
+        impl<'de> Visitor<'de> for UniqueJsonVisitor {
+            type Value = UniqueJsonValue;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("a JSON value without duplicate object keys")
+            }
+
+            fn visit_bool<E>(self, value: bool) -> Result<Self::Value, E> {
+                Ok(UniqueJsonValue::Json(serde_json::Value::Bool(value)))
+            }
+
+            fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E> {
+                Ok(UniqueJsonValue::Json(serde_json::Value::Number(
+                    value.into(),
+                )))
+            }
+
+            fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E> {
+                Ok(UniqueJsonValue::Json(serde_json::Value::Number(
+                    value.into(),
+                )))
+            }
+
+            fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                let number = serde_json::Number::from_f64(value)
+                    .ok_or_else(|| E::custom("JSON number is not finite"))?;
+                Ok(UniqueJsonValue::Json(serde_json::Value::Number(number)))
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(UniqueJsonValue::Json(serde_json::Value::String(
+                    value.to_string(),
+                )))
+            }
+
+            fn visit_string<E>(self, value: String) -> Result<Self::Value, E> {
+                Ok(UniqueJsonValue::Json(serde_json::Value::String(value)))
+            }
+
+            fn visit_none<E>(self) -> Result<Self::Value, E> {
+                Ok(UniqueJsonValue::Json(serde_json::Value::Null))
+            }
+
+            fn visit_unit<E>(self) -> Result<Self::Value, E> {
+                Ok(UniqueJsonValue::Json(serde_json::Value::Null))
+            }
+
+            fn visit_seq<A>(self, mut sequence: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let mut values = Vec::new();
+                while let Some(value) = sequence.next_element::<UniqueJsonValue>()? {
+                    values.push(value.into_json());
+                }
+                Ok(UniqueJsonValue::Json(serde_json::Value::Array(values)))
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut values = serde_json::Map::new();
+                while let Some(key) = map.next_key::<String>()? {
+                    if values.contains_key(&key) {
+                        return Err(de::Error::custom(format!(
+                            "duplicate JSON object key: {key}"
+                        )));
+                    }
+                    let value = map.next_value::<UniqueJsonValue>()?.into_json();
+                    values.insert(key, value);
+                }
+                Ok(UniqueJsonValue::Json(serde_json::Value::Object(values)))
+            }
+        }
+
+        deserializer.deserialize_any(UniqueJsonVisitor)
+    }
+}
+
+fn parse_unique_json(json: &str) -> Result<serde_json::Value, String> {
+    let mut deserializer = serde_json::Deserializer::from_str(json);
+    let value = UniqueJsonValue::deserialize(&mut deserializer)
+        .map_err(|error| format!("Failed to decode budget from JSON: {error}"))?
+        .into_json();
+    deserializer
+        .end()
+        .map_err(|error| format!("Failed to decode budget from JSON: {error}"))?;
+    Ok(value)
+}
 
 #[export]
 pub fn encode_budget(budget: &BWBudget) -> Result<String, String> {
@@ -24,13 +142,12 @@ pub fn encode_budget(budget: &BWBudget) -> Result<String, String> {
 
 #[export]
 pub fn decode_budget(json: &str, url: String) -> Result<BWBudget, String> {
-    let value: serde_json::Value = serde_json::from_str(json)
-        .map_err(|e| format!("Failed to decode budget from JSON: {e}"))?;
+    let value = parse_unique_json(json)?;
 
     let Some(schema_version) = value.get("schema_version") else {
         let budget = migrate_legacy_budget(value, url)?;
         validate_budget(&budget)?;
-        observe_budget_timestamps(&budget);
+        observe_budget_timestamps(&budget)?;
         return Ok(budget);
     };
     let schema_version = schema_version.as_i64().ok_or_else(|| {
@@ -40,22 +157,67 @@ pub fn decode_budget(json: &str, url: String) -> Result<BWBudget, String> {
     if schema_version > i64::from(CURRENT_SCHEMA_VERSION) {
         return Err(NEWER_SCHEMA_ERROR.to_string());
     }
+    if schema_version != i64::from(CURRENT_SCHEMA_VERSION) {
+        return Err(format!(
+            "Failed to decode budget from JSON: unsupported schema version {schema_version}"
+        ));
+    }
 
     let mut budget: BWBudget = serde_json::from_value(value)
         .map_err(|e| format!("Failed to decode budget from JSON: {e}"))?;
 
     budget.url = Some(url);
     validate_budget(&budget)?;
-    observe_budget_timestamps(&budget);
+    observe_budget_timestamps(&budget)?;
 
     Ok(budget)
+}
+
+/// Decode and validate a portable current-schema snapshot without reading or
+/// advancing process-global client clock state. This is suitable for service
+/// request validation and other headless callers.
+#[export]
+pub fn decode_portable_budget(json: &str) -> Result<BWBudget, String> {
+    let value = parse_unique_json(json)?;
+    let schema_version = value
+        .get("schema_version")
+        .and_then(serde_json::Value::as_i64)
+        .ok_or_else(|| "schema_version must be an integer".to_string())?;
+    if schema_version != i64::from(CURRENT_SCHEMA_VERSION) {
+        return Err(format!(
+            "Unsupported portable budget schema version {schema_version}; supported version is {CURRENT_SCHEMA_VERSION}"
+        ));
+    }
+    if value.get("url").is_some() || value.get("requires_migration_writeback").is_some() {
+        return Err("Portable budget contains app-local fields".to_string());
+    }
+
+    let mut budget: BWBudget = serde_json::from_value(value)
+        .map_err(|error| format!("Failed to decode budget from JSON: {error}"))?;
+    budget.url = None;
+    budget.requires_migration_writeback = false;
+    validate_budget(&budget)?;
+    crate::validation::validate_derived_totals(&budget)?;
+    Ok(budget)
+}
+
+/// Advance the initialized client clock past timestamps in a downloaded
+/// snapshot before the caller creates a local mutation.
+#[export]
+pub fn observe_budget_clock(budget: &BWBudget) -> Result<(), String> {
+    validate_budget(budget)?;
+    if crate::app_state::initialized_app_state().is_none() {
+        return Err("Rust core is not initialized".to_string());
+    }
+    observe_budget_timestamps(budget)?;
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::*;
     use crate::crdt::*;
+    use crate::models::*;
     use chrono::{Datelike, Local};
     use uuid::Uuid;
 
@@ -67,26 +229,26 @@ mod tests {
             revision_id: Uuid::new_v4(),
             schema_version: 2,
             title: "Test Budget".to_string(),
-            categories: vec![
-                BWCategory {
+            categories: vec![BWCategory {
+                id: Uuid::new_v4(),
+                ordinal: 0,
+                title: "Salary".to_string(),
+                amount_planned: BWMoneyAmount { value: 480000 },
+                amount_actual: BWMoneyAmount { value: 0 },
+                amount_accumulated: BWMoneyAmount { value: 0 },
+                category_type: BWCategoryType::Income,
+                transactions: vec![BWTransaction {
                     id: Uuid::new_v4(),
-                    ordinal: 0,
-                    title: "Salary".to_string(),
-                    amount_planned: BWMoneyAmount { value: 480000 },
-                    amount_actual: BWMoneyAmount { value: 0 },
-                    amount_accumulated: BWMoneyAmount { value: 0 },
-                    category_type: BWCategoryType::Income,
-                    transactions: vec![
-                        BWTransaction {
-                            id: Uuid::new_v4(),
-                            title: "July Paycheck".to_string(),
-                            description: String::new(),
-                            date: BWDate { year: 2026, month: 7, day: 1 },
-                            amount: BWMoneyAmount { value: 480000 },
-                        }
-                    ],
-                }
-            ],
+                    title: "July Paycheck".to_string(),
+                    description: String::new(),
+                    date: BWDate {
+                        year: 2026,
+                        month: 7,
+                        day: 1,
+                    },
+                    amount: BWMoneyAmount { value: 480000 },
+                }],
+            }],
             changes: CRDTChanges {
                 budget: Vec::new(),
                 categories: std::collections::HashMap::new(),
@@ -166,8 +328,7 @@ mod tests {
     #[test]
     fn test_decode_budget_migrates_live_legacy_fixture() {
         let json = include_str!("../tests/fixtures/legacy_budget.json");
-        let legacy_revision_id =
-            Uuid::parse_str("FD966378-22B3-4C83-A7E9-11D6F239AB5C").unwrap();
+        let legacy_revision_id = Uuid::parse_str("FD966378-22B3-4C83-A7E9-11D6F239AB5C").unwrap();
 
         let migrated = decode_budget(json, "/tmp/legacy.budget".to_string()).unwrap();
 
@@ -188,10 +349,7 @@ mod tests {
         assert!(migrated.requires_migration_writeback);
 
         assert_eq!(migrated.changes.budget.len(), 1);
-        assert_eq!(
-            migrated.changes.categories.len(),
-            migrated.categories.len()
-        );
+        assert_eq!(migrated.changes.categories.len(), migrated.categories.len());
         assert!(migrated.changes.transactions.is_empty());
         assert!(migrated.changes.category_tombstones.is_empty());
         assert!(migrated.changes.transaction_tombstones.is_empty());
@@ -377,4 +535,17 @@ mod tests {
             );
         }
     }
+    #[test]
+    fn portable_decoder_rejects_duplicates_metadata_and_unknown_fields() {
+        let budget = BWBudget::new("Portable".to_string());
+        let json = encode_budget(&budget).unwrap();
+        assert!(decode_portable_budget(&json).is_ok());
+        for extra in [r#""title":"Duplicate","#, r#""url":null,"#, r#""unknown":true,"#] {
+            let invalid = json.replacen('{', &format!("{{{extra}"), 1);
+            assert!(decode_portable_budget(&invalid).is_err());
+        }
+        assert!(parse_unique_json(r#"{"title":1,"\u0074itle":2}"#).is_err());
+        assert!(parse_unique_json(r#"{"nested":{"a":1,"a":2}}"#).is_err());
+    }
+
 }

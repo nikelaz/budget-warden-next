@@ -16,14 +16,11 @@ use chrono::{Datelike, Local};
 use crate::crdt::*;
 use crate::validation::{checked_money_sum, validate_money_amount};
 
-pub(crate) const CURRENT_SCHEMA_VERSION: i32 = 2;
-
-fn always_skip_migration_writeback(_: &bool) -> bool {
-    true
-}
+pub const CURRENT_SCHEMA_VERSION: i32 = 2;
 
 #[data]
 #[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BWBudget {
     pub id: Uuid,
     pub revision: i64,
@@ -33,10 +30,10 @@ pub struct BWBudget {
     pub categories: Vec<BWCategory>,
     pub changes: CRDTChanges, 
 
-    #[serde(skip_serializing)]
+    #[serde(skip)]
     pub url: Option<String>,
 
-    #[serde(default, skip_serializing_if = "always_skip_migration_writeback")]
+    #[serde(skip)]
     pub requires_migration_writeback: bool,
 }
 
@@ -81,13 +78,16 @@ impl BWBudget {
             .cloned()
             .collect();
 
-        categories.sort_by_key(|category| (category.category_type as i32, category.ordinal));
+        categories.sort_by_key(|category| {
+            (category.category_type as i32, category.ordinal, category.id)
+        });
         categories
     }
 }
 
 #[data]
 #[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BWCategory {
     pub id: Uuid,
     pub ordinal: i32,
@@ -111,6 +111,7 @@ impl BWCategory {
 
 #[data]
 #[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BWTransaction {
     pub id: Uuid,
     pub title: String,
@@ -160,6 +161,7 @@ impl BWCategoryType {
 
 #[data]
 #[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(deny_unknown_fields)]
 pub struct BWDate {
     pub year: i32,
     pub month: i32,
@@ -180,6 +182,7 @@ impl BWDate {
 
 #[data]
 #[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 #[serde(transparent)]
 pub struct BWMoneyAmount {
     pub value: i64,
