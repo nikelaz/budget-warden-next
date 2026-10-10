@@ -76,7 +76,9 @@ public sealed partial class AppViewModel
 
         BwBudget budget = template.PreviousBudget is BwBudget previous
             ? CoreApi.BudgetFromPreviousBudget(previous, trimmedTitle)
-            : CoreApi.BudgetFromTemplate(template.TemplateType, trimmedTitle);
+            : CoreApi.BudgetFromTemplateId(
+                template.TemplateId ?? throw new InvalidOperationException("Choose a budget template."),
+                trimmedTitle);
 
         string normalizedPath = ValidateBudgetPath(path);
         budget = budget with { Url = normalizedPath };
@@ -377,4 +379,8 @@ public sealed partial class RecentBudget(string title, string folder, string pat
         path);
 }
 
-public sealed record BudgetTemplate(string DisplayName, BwTemplateType TemplateType, BwBudget? PreviousBudget = null);
+public sealed record BudgetTemplate(
+    string DisplayName,
+    string? TemplateId,
+    string Description,
+    BwBudget? PreviousBudget = null);

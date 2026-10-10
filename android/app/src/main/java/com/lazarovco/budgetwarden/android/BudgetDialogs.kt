@@ -47,27 +47,29 @@ import com.lazarovco.budgetwarden.android.domain.Money
 import com.lazarovco.budgetwarden.android.domain.TemplateSelection
 import com.lazarovco.budgetwarden.android.domain.title
 import com.lazarovco.budgetwarden.core.BWDate
+import com.lazarovco.budgetwarden.core.BWTemplateCatalogEntry
 import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun CreateBudgetDialog(
     budgets: List<Budget>,
+    templates: List<BWTemplateCatalogEntry>,
     onDismiss: () -> Unit,
     onCreate: (String, TemplateSelection, Budget?) -> Unit,
 ) {
     var title by rememberSaveable { mutableStateOf(currentMonthTitle()) }
-    var template by rememberSaveable { mutableStateOf(TemplateSelection.BASIC) }
+    var templateId by rememberSaveable { mutableStateOf(TemplateSelection.BASIC.templateId) }
     var previousBudgetId by rememberSaveable { mutableStateOf(budgets.firstOrNull()?.id) }
     var templateExpanded by rememberSaveable { mutableStateOf(false) }
     var submitted by rememberSaveable { mutableStateOf(false) }
     val titleIsValid = title.isNotBlank()
     val showTitleError = submitted && !titleIsValid
     val selectedPreviousBudget = budgets.firstOrNull { it.id == previousBudgetId }
-    val templateTitle = when (template) {
-        TemplateSelection.BASIC -> stringResource(R.string.basic_budget)
-        TemplateSelection.BLANK -> stringResource(R.string.blank_budget)
-        TemplateSelection.PREVIOUS -> selectedPreviousBudget?.title ?: stringResource(R.string.previous_budget)
+    val selectedTemplate = templates.firstOrNull { it.id == templateId }
+    val templateTitle = when {
+        selectedTemplate != null -> "${selectedTemplate.family} · ${selectedTemplate.title}"
+        else -> selectedPreviousBudget?.title ?: stringResource(R.string.previous_budget)
     }
 
     AlertDialog(
@@ -106,20 +108,23 @@ internal fun CreateBudgetDialog(
                         expanded = templateExpanded,
                         onDismissRequest = { templateExpanded = false },
                     ) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.basic_budget)) },
-                            onClick = {
-                                template = TemplateSelection.BASIC
-                                templateExpanded = false
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.blank_budget)) },
-                            onClick = {
-                                template = TemplateSelection.BLANK
-                                templateExpanded = false
-                            },
-                        )
+                        templates.forEach { entry ->
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text("${entry.family} · ${entry.title}")
+                                        Text(
+                                            text = entry.description,
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    }
+                                },
+                                onClick = {
+                                    templateId = entry.id
+                                    templateExpanded = false
+                                },
+                            )
+                        }
                         DropdownMenuItem(
                             text = {
                                 Text(
@@ -135,12 +140,19 @@ internal fun CreateBudgetDialog(
                                 text = { Text(budget.title) },
                                 onClick = {
                                     previousBudgetId = budget.id
-                                    template = TemplateSelection.PREVIOUS
+                                    templateId = null
                                     templateExpanded = false
                                 },
                             )
                         }
                     }
+                }
+                selectedTemplate?.let { entry ->
+                    Text(
+                        text = entry.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         },
@@ -148,7 +160,9 @@ internal fun CreateBudgetDialog(
             TextButton(
                 onClick = {
                     submitted = true
-                    if (titleIsValid) onCreate(title, template, selectedPreviousBudget)
+                    if (titleIsValid) {
+                        onCreate(title, TemplateSelection(templateId), selectedPreviousBudget)
+                    }
                 },
             ) {
                 Text(stringResource(R.string.create))

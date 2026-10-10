@@ -19,7 +19,8 @@ struct CreateBudgetView: View {
     @Environment(\.dismissWindow) private var dismissWindow
 
     @State private var title: Swift.String
-    @State private var selectedTemplate: BWBudgetTemplateSelection = .basicMonthly
+    @State private var selectedTemplate: BWBudgetTemplateSelection = .builtIn("basic-monthly")
+    @State private var templateCatalog: [BWTemplateCatalogEntry] = []
     @State private var recentTemplates: [BWBudgetTemplateSelection] = []
 
     let onCreateSuccess: () -> Void
@@ -45,27 +46,34 @@ struct CreateBudgetView: View {
                     .accessibilityIdentifier("titleTextField")
 
                 Picker(selection: $selectedTemplate, content: {
-                    Text("Templates")
+                    Text("Built-in templates")
                         .selectionDisabled(true)
 
-                    Text("Monthly Budget")
-                        .tag(BWBudgetTemplateSelection.basicMonthly)
+                    ForEach(templateCatalog, id: \.id) { template in
+                        Text("\(template.family) · \(template.title)")
+                            .tag(BWBudgetTemplateSelection.builtIn(template.id))
+                    }
 
-                    Text("Empty Budget")
-                        .tag(BWBudgetTemplateSelection.empty)
+                    if !recentTemplates.isEmpty {
+                        Text("Previous budgets")
+                            .selectionDisabled(true)
 
-                    Text("Previous budget")
-                        .selectionDisabled(true)
-
-                    ForEach(recentTemplates, id: \.self) { template in
-                        if case .previousBudget(let budget) = template {
-                            Text(budget.title)
-                                .tag(template)
+                        ForEach(recentTemplates, id: \.self) { template in
+                            if case .previousBudget(let budget) = template {
+                                Text(budget.title)
+                                    .tag(template)
+                            }
                         }
                     }
                 }, label: {
                     Text("Template")
                 })
+
+                if let description = selectedTemplateDescription {
+                    Text(description)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             HStack {
@@ -93,8 +101,14 @@ struct CreateBudgetView: View {
         }
         .padding(20)
         .task(id: store.recentFiles) {
+            templateCatalog = BWCore.templateCatalog()
             recentTemplates = store.recentBudgetTemplates()
         }
+    }
+
+    private var selectedTemplateDescription: String? {
+        guard case .builtIn(let id) = selectedTemplate else { return nil }
+        return templateCatalog.first(where: { $0.id == id })?.description
     }
 
     private static func currentMonthTitle(calendar: Calendar = .current, now: Date = Date()) -> Swift.String {

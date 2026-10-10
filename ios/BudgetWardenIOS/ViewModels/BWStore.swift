@@ -21,8 +21,7 @@ extension UTType {
 }
 
 enum BWTemplateSelection: Hashable {
-    case basic
-    case blank
+    case builtIn(String)
     case previous(URL)
 }
 
@@ -181,10 +180,8 @@ final class BWStore {
 
         let budget: BWBudget
         switch template {
-        case .basic:
-            budget = BWCore.budgetFromTemplate(template: .basicMonthly, title: trimmedTitle)
-        case .blank:
-            budget = BWCore.budgetFromTemplate(template: .empty, title: trimmedTitle)
+        case .builtIn(let id):
+            budget = try BWCore.budgetFromTemplateId(templateId: id, title: trimmedTitle)
         case .previous(let url):
             let scoped = url.startAccessingSecurityScopedResource()
             defer {

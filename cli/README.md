@@ -38,6 +38,8 @@ Every command that reads or changes a budget takes an explicit `--file` path.
 ```sh
 budget-warden capabilities
 budget-warden budget create --file ./october.budget --title October --template basic-monthly
+budget-warden template list
+budget-warden template show vacation
 budget-warden budget show --file ./october.budget
 budget-warden category list --file ./october.budget --type expenses
 budget-warden transaction create --file ./october.budget --category-id CATEGORY_UUID \
@@ -52,6 +54,8 @@ The alternative `transaction create --today` uses the host's local calendar date
 `budget migrate` requires either `--in-place` or `--to PATH`. In-place migration supports `--if-revision UUID`; a destination write is no-clobber unless its existing budget ID is supplied using `--overwrite-budget-id`. Validation and ordinary reads never rewrite or upgrade the source file.
 
 Category types are `income`, `expenses`, `savings`, and `debt`. Category ordering is ordinal within type. Category list sorting and transaction list sorting are ascending, with UUID as the deterministic tie breaker. Text matching lowercases Unicode text without host-locale collation. Transaction `--after` and `--before` filters include their boundary dates. Pagination uses zero-based `--offset` and `--limit` (1 through 1000).
+
+`template list` and `template show ID` read the same built-in catalog used by the native apps. Pass a stable catalog ID to `budget create --template ID`; use `template list` to discover available IDs and descriptions. New presets start with zero planned amounts. Weekly and biweekly labels do not filter reports by date, travel presets use the current income-allocation reports, and business presets are cash-planning categories rather than accounting profit.
 
 Reports are derived only from `bw_core::reporting::build_reporting_summary`. The summary returns every total and all allocation, category, and comparison segments. `report allocation` and `report categories` accept `--mode planned|actual` filters.
 

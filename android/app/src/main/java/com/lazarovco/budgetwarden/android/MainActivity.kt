@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import com.lazarovco.budgetwarden.core.BWCategory
 import com.lazarovco.budgetwarden.core.BWMoneyAmount
 import com.lazarovco.budgetwarden.core.BWTransaction
+import com.lazarovco.budgetwarden.core.templateCatalog as loadTemplateCatalog
 import com.lazarovco.budgetwarden.core.createCategory
 import com.lazarovco.budgetwarden.core.createTransaction
 import com.lazarovco.budgetwarden.core.deleteCategory
@@ -129,6 +130,7 @@ fun BudgetWardenAndroidApp() {
 
     val storedBudgets = sessionState.storedBudgets
     val currentBudget = sessionState.currentBudget
+    val templateCatalog = remember { loadTemplateCatalog() }
     var selectedTab by rememberSaveable { mutableStateOf(AppDestination.BUDGET) }
     var transactionSearchActive by rememberSaveable { mutableStateOf(false) }
     var transactionSearchText by rememberSaveable { mutableStateOf("") }
@@ -138,6 +140,7 @@ fun BudgetWardenAndroidApp() {
     var createBudgetOpen by rememberSaveable { mutableStateOf(false) }
     var pendingCreationTitle by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingCreationTemplate by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingCreationUsesPrevious by rememberSaveable { mutableStateOf(false) }
     var pendingPreviousBudgetJson by rememberSaveable { mutableStateOf<String?>(null) }
     var categoryEditor by remember { mutableStateOf<CategoryEditor?>(null) }
     var transactionEditor by remember { mutableStateOf<TransactionEditor?>(null) }
@@ -168,10 +171,16 @@ fun BudgetWardenAndroidApp() {
         ActivityResultContracts.CreateDocument(OCTET_STREAM_MIME_TYPE),
     ) { uri ->
         val title = pendingCreationTitle
-        val template = pendingCreationTemplate?.let(TemplateSelection::valueOf)
+        val templateId = pendingCreationTemplate
+        val template = when {
+            pendingCreationUsesPrevious -> TemplateSelection.PREVIOUS
+            templateId != null -> TemplateSelection(templateId)
+            else -> null
+        }
         val previousBudgetJson = pendingPreviousBudgetJson
         pendingCreationTitle = null
         pendingCreationTemplate = null
+        pendingCreationUsesPrevious = false
         pendingPreviousBudgetJson = null
         if (uri != null && title != null && template != null) {
             sessionViewModel.createBudget(
@@ -320,11 +329,13 @@ fun BudgetWardenAndroidApp() {
     if (createBudgetOpen) {
         CreateBudgetDialog(
             budgets = storedBudgets.map { it.budget },
+            templates = templateCatalog,
             onDismiss = { createBudgetOpen = false },
             onCreate = { title, template, previous ->
                 createBudgetOpen = false
                 pendingCreationTitle = title
-                pendingCreationTemplate = template.name
+                pendingCreationTemplate = template.templateId
+                pendingCreationUsesPrevious = template.templateId == null
                 pendingPreviousBudgetJson = previous?.let(::encodeBudget)
                 createDocument.launch(repository.normalizedFileName(title))
             },

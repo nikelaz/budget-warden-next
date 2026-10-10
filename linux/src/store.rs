@@ -8,7 +8,9 @@ use bw_core::codec::{decode_budget, encode_budget};
 use bw_core::domain;
 use bw_core::models::{BWBudget, BWCategory, BWCategoryType, BWDate, BWMoneyAmount, BWTransaction};
 use bw_core::reporting::{BWReportingSummary, build_reporting_summary};
-use bw_core::templates::{BWTemplateType, budget_from_previous_budget, budget_from_template};
+use bw_core::templates::{
+    BWTemplateType, budget_from_previous_budget, budget_from_template, budget_from_template_id,
+};
 use chrono::{Datelike, Local, NaiveDate};
 use iso_currency::{Country, Currency, IntoEnumIterator};
 use uuid::Uuid;
@@ -48,6 +50,7 @@ pub fn supported_currencies() -> &'static [CurrencyInfo] {
 pub enum BudgetTemplate {
     BasicMonthly,
     Empty,
+    BuiltIn(String),
     Previous(PathBuf),
 }
 
@@ -165,6 +168,9 @@ impl AppState {
                 budget_from_template(BWTemplateType::BasicMonthly, title.to_string())
             }
             BudgetTemplate::Empty => budget_from_template(BWTemplateType::Empty, title.to_string()),
+            BudgetTemplate::BuiltIn(template_id) => {
+                budget_from_template_id(template_id.clone(), title.to_string())?
+            }
             BudgetTemplate::Previous(previous_path) => {
                 let previous = read_budget(previous_path)?;
                 budget_from_previous_budget(previous, title.to_string())?

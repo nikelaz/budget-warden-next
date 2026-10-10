@@ -171,10 +171,10 @@ fn capabilities() -> Result<Outcome, ApiError> {
         "recent remove",
         "apply",
     ];
-    let templates = json!([
-        {"id":"empty", "title":"Empty", "semantics":"A new budget with no categories"},
-        {"id":"basic-monthly", "title":"Basic Monthly", "semantics":"The standard monthly income, expense, and savings categories"}
-    ]);
+    let templates = bw_core::templates::template_catalog()
+        .iter()
+        .map(template_summary_value)
+        .collect::<Vec<_>>();
     let schema: Value = serde_json::from_str(include_str!("../protocol/v1.schema.json"))
         .map_err(|error| ApiError::new("internal_error", error.to_string(), 1))?;
     let envelope_schema: Value =
@@ -292,7 +292,7 @@ fn run_budget(mut context: Context, command: BudgetCommand) -> Result<Outcome, A
 fn budget_create(context: &mut Context, args: BudgetCreateArgs) -> Result<Outcome, ApiError> {
     if args.template.is_none() && args.from.is_none() {
         return Err(usage_error(
-            "Choose --template empty|basic-monthly or --from PATH",
+            "Choose --template TEMPLATE_ID or --from PATH; list available IDs with `template list`",
         ));
     }
     if args.template.is_some() && args.from.is_some() {
@@ -301,9 +301,19 @@ fn budget_create(context: &mut Context, args: BudgetCreateArgs) -> Result<Outcom
     if args.title.trim().is_empty() {
         return Err(usage_error("Budget title cannot be empty"));
     }
+    if let Some(template_id) = &args.template
+        && !bw_core::templates::template_catalog()
+            .iter()
+            .any(|template| template.id == *template_id)
+    {
+        return Err(usage_error(format!(
+            "Unknown budget template ID '{template_id}'. List available IDs with `template list`."
+        )));
+    }
     context.ensure_core(!args.dry_run)?;
-    let budget = if let Some(template_choice) = args.template {
-        bw_core::templates::budget_from_template(template(template_choice), args.title.clone())
+    let budget = if let Some(template_id) = args.template {
+        bw_core::templates::budget_from_template_id(template_id, args.title.clone())
+            .map_err(|message| core_error("mutation_failed", message))?
     } else {
         let source = storage::load(args.from.as_ref().expect("checked above"))?;
         bw_core::templates::budget_from_previous_budget(source.budget, args.title.clone())
@@ -637,25 +647,58 @@ fn budget_list(args: BudgetListArgs) -> Result<Outcome, ApiError> {
     ))
 }
 
+fn template_summary_value(template: &bw_core::templates::BWTemplateCatalogEntry) -> Value {
+    json!({
+        "id": template.id,
+        "title": template.title,
+        "family": template.family,
+        "description": template.description,
+        "semantics": template.description,
+        "default_reporting_mode": template.default_reporting_mode,
+        "setup_kind": template.setup_kind,
+    })
+}
+
+fn template_detail_value(template: &bw_core::templates::BWTemplateCatalogEntry) -> Value {
+    let budget = bw_core::templates::budget_from_template(
+        template.template_type,
+        "Template preview".to_string(),
+    );
+    let categories = budget
+        .categories
+        .iter()
+        .map(category_value)
+        .collect::<Vec<_>>();
+    let mut value = template_summary_value(template);
+    value["categories"] = json!(categories);
+    value
+}
+
 fn run_template(mut context: Context, command: TemplateCommand) -> Result<Outcome, ApiError> {
     match command {
         TemplateCommand::List => Ok(success(
             "template list",
-            json!([
-                {"id":"empty", "title":"Empty", "description":"Start with no categories"},
-                {"id":"basic-monthly", "title":"Basic Monthly", "description":"Common monthly income, expense, and savings categories"}
-            ]),
+            json!(
+                bw_core::templates::template_catalog()
+                    .iter()
+                    .map(template_summary_value)
+                    .collect::<Vec<_>>()
+            ),
             Some(Meta::command("template list")),
         )),
-        TemplateCommand::Show { template: choice } => {
+        TemplateCommand::Show { template: id } => {
+            let template = bw_core::templates::template_catalog()
+                .into_iter()
+                .find(|template| template.id == id)
+                .ok_or_else(|| {
+                    usage_error(format!(
+                        "Unknown budget template ID '{id}'. List available IDs with `template list`."
+                    ))
+                })?;
             context.ensure_core(false)?;
-            let budget = bw_core::templates::budget_from_template(
-                template(choice),
-                "Template preview".to_string(),
-            );
             Ok(success(
                 "template show",
-                json!({"id": match choice { TemplateChoice::Empty => "empty", TemplateChoice::BasicMonthly => "basic-monthly" }, "title": match choice { TemplateChoice::Empty => "Empty", TemplateChoice::BasicMonthly => "Basic Monthly" }, "categories": budget.categories.iter().map(category_value).collect::<Vec<_>>()}),
+                template_detail_value(&template),
                 Some(Meta::command("template show")),
             ))
         }
