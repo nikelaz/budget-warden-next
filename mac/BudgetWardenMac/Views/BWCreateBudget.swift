@@ -20,7 +20,7 @@ struct CreateBudgetView: View {
 
     @State private var title: Swift.String
     @State private var selectedTemplate: BWBudgetTemplateSelection = .builtIn("basic-monthly")
-    @State private var templateCatalog: [BWTemplateCatalogEntry] = []
+    private let templateCatalog = BWCore.templateCatalog()
     @State private var recentTemplates: [BWBudgetTemplateSelection] = []
 
     let onCreateSuccess: () -> Void
@@ -101,7 +101,6 @@ struct CreateBudgetView: View {
         }
         .padding(20)
         .task(id: store.recentFiles) {
-            templateCatalog = BWCore.templateCatalog()
             recentTemplates = store.recentBudgetTemplates()
         }
     }

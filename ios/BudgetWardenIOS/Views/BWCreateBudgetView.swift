@@ -16,7 +16,7 @@ struct BWCreateBudgetView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var title = Self.currentMonthTitle()
     @State private var selectedTemplate: BWTemplateSelection = .builtIn("basic-monthly")
-    @State private var templateCatalog: [BWTemplateCatalogEntry] = []
+    private let templateCatalog = BWCore.templateCatalog()
     @State private var document: BWBudgetFileDocument?
     @State private var isExporterPresented = false
     @State private var errorMessage: String?
@@ -97,9 +97,6 @@ struct BWCreateBudgetView: View {
             }
         } message: {
             Text(errorMessage ?? "")
-        }
-        .task {
-            templateCatalog = BWCore.templateCatalog()
         }
     }
 
