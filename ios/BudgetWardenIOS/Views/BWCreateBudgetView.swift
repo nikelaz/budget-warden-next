@@ -7,6 +7,7 @@
  * See the LICENSE file in the project root for full terms.
  */
 
+import BWAppleCore
 import SwiftUI
 
 struct BWCreateBudgetView: View {
@@ -14,7 +15,8 @@ struct BWCreateBudgetView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var title = Self.currentMonthTitle()
-    @State private var selectedTemplate: BWTemplateSelection = .basic
+    @State private var selectedTemplate: BWTemplateSelection = .builtIn("basic-monthly")
+    private let templateCatalog = BWCore.templateCatalog()
     @State private var document: BWBudgetFileDocument?
     @State private var isExporterPresented = false
     @State private var errorMessage: String?
@@ -33,22 +35,27 @@ struct BWCreateBudgetView: View {
 
                 Section("Start From") {
                     Picker("Template", selection: $selectedTemplate) {
-                        Text("Monthly Budget")
-                            .tag(BWTemplateSelection.basic)
-
-                        Text("Empty Budget")
-                            .tag(BWTemplateSelection.blank)
+                        ForEach(templateCatalog, id: \.id) { template in
+                            Text("\(template.family) · \(template.title)")
+                                .tag(BWTemplateSelection.builtIn(template.id))
+                        }
 
                         if !store.recentFiles.isEmpty {
                             Divider()
 
                             ForEach(store.recentFiles, id: \.self) { url in
-                                Text(url.deletingPathExtension().lastPathComponent)
+                                Text("Previous · \(url.deletingPathExtension().lastPathComponent)")
                                     .tag(BWTemplateSelection.previous(url))
                             }
                         }
                     }
                     .accessibilityIdentifier("createBudgetTemplatePicker")
+
+                    if let description = selectedTemplateDescription {
+                        Text(description)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             .navigationTitle("New Budget")
@@ -103,6 +110,11 @@ struct BWCreateBudgetView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private var selectedTemplateDescription: String? {
+        guard case .builtIn(let id) = selectedTemplate else { return nil }
+        return templateCatalog.first(where: { $0.id == id })?.description
     }
 
     private var errorIsPresented: Binding<Bool> {

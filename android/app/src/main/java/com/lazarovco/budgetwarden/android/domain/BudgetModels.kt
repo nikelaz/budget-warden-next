@@ -28,10 +28,12 @@ val CategoryType.rawValue: Int
 val CategoryType.title: String
     get() = this.title()
 
-enum class TemplateSelection(val title: String) {
-    BASIC("Monthly Budget"),
-    BLANK("Empty Budget"),
-    PREVIOUS("Previous budget"),
+data class TemplateSelection(val templateId: String?) {
+    companion object {
+        val BASIC = TemplateSelection("basic-monthly")
+        val BLANK = TemplateSelection("empty")
+        val PREVIOUS = TemplateSelection(null)
+    }
 }
 
 enum class AmountMode(val title: String) {

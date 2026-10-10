@@ -1602,11 +1602,25 @@ impl AppUi {
         let title = entry_row("Title", &Local::now().format("%B %Y").to_string());
         title.set_widget_name("budget-title");
         group.add(&title);
-        let mut templates = vec![BudgetTemplate::BasicMonthly, BudgetTemplate::Empty];
-        let mut names = vec!["Monthly Budget".to_string(), "Empty Budget".to_string()];
+        let catalog = bw_core::templates::template_catalog();
+        let mut templates = catalog
+            .iter()
+            .map(|template| BudgetTemplate::BuiltIn(template.id.clone()))
+            .collect::<Vec<_>>();
+        let mut names = catalog
+            .iter()
+            .map(|template| format!("{} · {}", template.family, template.title))
+            .collect::<Vec<_>>();
+        let mut descriptions = catalog
+            .iter()
+            .map(|template| template.description.clone())
+            .collect::<Vec<_>>();
         for path in self.state.borrow().recent_files.clone() {
             if let Ok(budget) = read_budget(&path) {
                 names.push(format!("Previous · {}", budget.title));
+                descriptions.push(
+                    "Copy the previous budget's planned and accumulated amounts.".to_string(),
+                );
                 templates.push(BudgetTemplate::Previous(path));
             }
         }
@@ -1614,10 +1628,17 @@ impl AppUi {
         let template = combo_row("Template", &refs);
         template.set_selected(0);
         template.set_widget_name("budget-template");
+        let description = descriptions.first().map(String::as_str).unwrap_or_default();
+        group.set_description(Some(description));
+        let description_group = group.downgrade();
+        template.connect_selected_notify(move |row| {
+            if let Some(description_group) = description_group.upgrade()
+                && let Some(description) = descriptions.get(row.selected() as usize)
+            {
+                description_group.set_description(Some(description));
+            }
+        });
         group.add(&template);
-        group.set_description(Some(
-            "Choose where to save your .budget file in the next step.",
-        ));
         form.body.append(&group);
         require_title(&title, &form.save);
         let ui = self.clone();

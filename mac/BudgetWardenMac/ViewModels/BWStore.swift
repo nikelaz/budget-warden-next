@@ -14,8 +14,7 @@ import UniformTypeIdentifiers
 import BWAppleCore
 
 enum BWBudgetTemplateSelection: Hashable {
-    case basicMonthly
-    case empty
+    case builtIn(String)
     case previousBudget(BWBudget)
 }
 
@@ -71,14 +70,9 @@ final class BWStore: ObservableObject {
         do {
             var newBudget: BWBudget
             switch template {
-            case .basicMonthly:
-                newBudget = BWCore.budgetFromTemplate(
-                    template: .basicMonthly,
-                    title: title
-                )
-            case .empty:
-                newBudget = BWCore.budgetFromTemplate(
-                    template: .empty,
+            case .builtIn(let id):
+                newBudget = try BWCore.budgetFromTemplateId(
+                    templateId: id,
                     title: title
                 )
             case .previousBudget(let budget):

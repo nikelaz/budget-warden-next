@@ -128,18 +128,23 @@ public sealed partial class AppViewModel : ObservableObject
 
     public async Task<IReadOnlyList<BudgetTemplate>> GetBudgetTemplatesAsync()
     {
-        List<BudgetTemplate> templates =
-        [
-            new("Monthly Budget", BwTemplateType.BasicMonthly),
-            new("Empty Budget", BwTemplateType.Empty),
-        ];
+        List<BudgetTemplate> templates = CoreApi.TemplateCatalog()
+            .Select(template => new BudgetTemplate(
+                $"{template.Family} · {template.Title}",
+                template.Id,
+                template.Description))
+            .ToList();
 
         foreach (RecentBudget recent in RecentFiles.Take(5))
         {
             try
             {
                 BwBudget previous = await ReadBudgetAsync(recent.Path);
-                templates.Add(new($"Previous: {previous.Title}", BwTemplateType.Empty, previous));
+                templates.Add(new(
+                    $"Previous: {previous.Title}",
+                    null,
+                    "Copy the previous budget's planned and accumulated amounts.",
+                    previous));
             }
             catch (Exception error) when (error is BoltException or IOException or UnauthorizedAccessException)
             {

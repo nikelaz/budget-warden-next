@@ -37,7 +37,7 @@ when launched with `cargo run`.
 ## Included workflows
 
 - Welcome screen with recent budgets and open/create actions
-- Monthly, empty, and previous-budget templates
+- Core catalog templates and previous-budget reuse
 - Budget category groups, planned/actual totals, accumulated balances, category
   ordering, editing, deletion, and per-category transaction windows
 - Reporting overview cards, stacked income/allocation bars, and planned/actual

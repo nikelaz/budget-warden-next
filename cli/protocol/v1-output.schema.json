@@ -2,6 +2,20 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Budget Warden CLI response data schemas v1",
   "$defs": {
+    "template": {
+      "type": "object",
+      "required": ["id", "title", "family", "description", "default_reporting_mode", "setup_kind"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+        "title": {"type": "string"},
+        "family": {"type": "string"},
+        "description": {"type": "string"},
+        "semantics": {"type": "string"},
+        "default_reporting_mode": {"type": "string"},
+        "setup_kind": {"type": "string"},
+        "categories": {"type": "array", "items": {"$ref": "#/$defs/category"}}
+      }
+    },
     "category": {
       "type": "object",
       "required": ["id", "ordinal", "title", "type", "planned_amount", "actual_amount", "accumulated_amount", "transaction_count"],

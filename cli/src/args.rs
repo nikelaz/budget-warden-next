@@ -86,20 +86,14 @@ pub struct BudgetCreateArgs {
     pub file: PathBuf,
     #[arg(long)]
     pub title: String,
-    #[arg(long, value_enum, conflicts_with = "from")]
-    pub template: Option<TemplateChoice>,
+    #[arg(long, value_name = "ID", conflicts_with = "from")]
+    pub template: Option<String>,
     #[arg(long, value_name = "PATH", conflicts_with = "template")]
     pub from: Option<PathBuf>,
     #[arg(long, value_name = "UUID")]
     pub overwrite_budget_id: Option<Uuid>,
     #[arg(long)]
     pub dry_run: bool,
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum TemplateChoice {
-    Empty,
-    BasicMonthly,
 }
 
 #[derive(Debug, clap::Args)]
@@ -192,8 +186,8 @@ pub struct BudgetListArgs {
 pub enum TemplateCommand {
     List,
     Show {
-        #[arg(value_enum)]
-        template: TemplateChoice,
+        #[arg(value_name = "ID")]
+        template: String,
     },
 }
 

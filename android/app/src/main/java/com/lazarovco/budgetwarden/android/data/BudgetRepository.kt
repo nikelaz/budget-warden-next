@@ -7,9 +7,8 @@ import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import com.lazarovco.budgetwarden.android.BudgetWardenApplication
 import com.lazarovco.budgetwarden.core.BWBudget
-import com.lazarovco.budgetwarden.core.BWTemplateType
 import com.lazarovco.budgetwarden.core.budgetFromPreviousBudget
-import com.lazarovco.budgetwarden.core.budgetFromTemplate
+import com.lazarovco.budgetwarden.core.budgetFromTemplateId
 import com.lazarovco.budgetwarden.core.decodeBudget
 import com.lazarovco.budgetwarden.core.encodeBudget
 import com.lazarovco.budgetwarden.core.mergeBudgetForSave
@@ -87,13 +86,12 @@ internal class BudgetRepository(
         require(trimmedTitle.isNotEmpty()) { "Budget title cannot be empty." }
         retainAccess(uri)
 
-        val created = when (template) {
-            TemplateSelection.BASIC -> budgetFromTemplate(BWTemplateType.BASIC_MONTHLY, trimmedTitle)
-            TemplateSelection.BLANK -> budgetFromTemplate(BWTemplateType.EMPTY, trimmedTitle)
-            TemplateSelection.PREVIOUS -> previousBudget
-                ?.let { budgetFromPreviousBudget(it, trimmedTitle) }
-                ?: budgetFromTemplate(BWTemplateType.BASIC_MONTHLY, trimmedTitle)
-        }.copy(url = uri.toString())
+        val created = (
+            template.templateId?.let { templateId ->
+                budgetFromTemplateId(templateId, trimmedTitle)
+            } ?: previousBudget?.let { budgetFromPreviousBudget(it, trimmedTitle) }
+                ?: budgetFromTemplateId("basic-monthly", trimmedTitle)
+            ).copy(url = uri.toString())
 
         writeBudget(created)
         rememberRecent(uri)

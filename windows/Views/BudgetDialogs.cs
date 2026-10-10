@@ -30,11 +30,26 @@ internal static class BudgetDialogs
         };
         AutomationProperties.SetAutomationId(templateBox, "BudgetTemplateComboBox");
         AutomationProperties.SetName(templateBox, "Budget template");
+        TextBlock templateDescription = new()
+        {
+            Text = templates[0].Description,
+            TextWrapping = TextWrapping.Wrap,
+            Style = Application.Current.Resources["BodyTextBlockStyle"] as Style,
+        };
+        StackPanel form = CreateForm(("Title", titleBox), ("Template", templateBox));
+        form.Children.Add(templateDescription);
+        templateBox.SelectionChanged += (_, _) =>
+        {
+            if (templateBox.SelectedIndex >= 0)
+            {
+                templateDescription.Text = templates[templateBox.SelectedIndex].Description;
+            }
+        };
 
         ContentDialog dialog = CreateDialog(
             owner,
             "New budget",
-            CreateForm(("Title", titleBox), ("Template", templateBox)),
+            form,
             "Create");
         dialog.IsPrimaryButtonEnabled = true;
         if (await dialog.ShowAsync() != ContentDialogResult.Primary

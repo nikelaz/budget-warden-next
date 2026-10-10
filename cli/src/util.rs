@@ -2,7 +2,7 @@ use chrono::{Datelike, NaiveDate};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-use crate::args::{CategoryTypeArg, TemplateChoice};
+use crate::args::CategoryTypeArg;
 use crate::error::{ApiError, usage_error};
 use crate::protocol::MoneyInput;
 use bw_core::models::{BWCategory, BWCategoryType, BWDate, BWMoneyAmount, BWTransaction};
@@ -143,13 +143,6 @@ pub fn transaction_value(transaction: &BWTransaction, category: &BWCategory) -> 
         "date": date_text(transaction.date),
         "amount": format_money(transaction.amount.value),
     })
-}
-
-pub fn template(value: TemplateChoice) -> bw_core::templates::BWTemplateType {
-    match value {
-        TemplateChoice::Empty => bw_core::templates::BWTemplateType::Empty,
-        TemplateChoice::BasicMonthly => bw_core::templates::BWTemplateType::BasicMonthly,
-    }
 }
 
 pub fn parse_uuid_ref(

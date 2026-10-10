@@ -258,7 +258,7 @@ fn budget_lifecycle_covers_templates_reuse_copy_move_list_and_delete() {
     let moved_arg = moved.to_str().unwrap();
 
     let templates = run_success(&sandbox, &["template", "list"]);
-    assert_eq!(templates["data"].as_array().unwrap().len(), 2);
+    assert_eq!(templates["data"].as_array().unwrap().len(), 9);
     let template = run_success(&sandbox, &["template", "show", "basic-monthly"]);
     assert_eq!(template["data"]["categories"].as_array().unwrap().len(), 13);
 
