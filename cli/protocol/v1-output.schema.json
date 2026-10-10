@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Budget Warden CLI response data schemas v1",
+  "$defs": {
+    "category": {
+      "type": "object",
+      "required": ["id", "ordinal", "title", "type", "planned_amount", "actual_amount", "accumulated_amount", "transaction_count"],
+      "properties": {
+        "id": {"type": "string", "format": "uuid"},
+        "ordinal": {"type": "integer"},
+        "title": {"type": "string"},
+        "type": {"enum": ["income", "expenses", "savings", "debt"]},
+        "planned_amount": {"type": "string", "pattern": "^-?[0-9]+\\.[0-9]{2}$"},
+        "actual_amount": {"type": "string", "pattern": "^-?[0-9]+\\.[0-9]{2}$"},
+        "accumulated_amount": {"type": "string", "pattern": "^-?[0-9]+\\.[0-9]{2}$"},
+        "transaction_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "transaction": {
+      "type": "object",
+      "required": ["id", "category_id", "category_title", "title", "description", "date", "amount"],
+      "properties": {
+        "id": {"type": "string", "format": "uuid"},
+        "category_id": {"type": "string", "format": "uuid"},
+        "category_title": {"type": "string"},
+        "title": {"type": "string"},
+        "description": {"type": "string"},
+        "date": {"type": "string", "format": "date"},
+        "amount": {"type": "string", "pattern": "^-?[0-9]+\\.[0-9]{2}$"}
+      }
+    },
+    "report_summary": {
+      "type": "object",
+      "required": ["totals", "allocation_segments", "category_segments", "comparison_segments"],
+      "properties": {
+        "totals": {"type": "object", "required": ["income", "planned_spending", "actual_spending", "planned_savings", "planned_allocation", "actual_allocation", "left_to_budget"], "additionalProperties": {"type": "string", "pattern": "^-?[0-9]+\\.[0-9]{2}$"}},
+        "allocation_segments": {"type": "array", "items": {"type": "object", "required": ["mode", "category_type", "amount"]}},
+        "category_segments": {"type": "array", "items": {"type": "object", "required": ["mode", "category_id", "category_type", "title", "amount"]}},
+        "comparison_segments": {"type": "array", "items": {"type": "object", "required": ["row", "component", "amount"]}}
+      }
+    }
+  }
+}

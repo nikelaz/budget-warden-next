@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Budget Warden is a native budgeting app for macOS, iOS, and Android. The portable data format is a local JSON-based `.budget` file.
+Budget Warden is a native budgeting app for macOS, iOS, Android, and Windows, with a standalone desktop Rust CLI. The portable data format is a local JSON-based `.budget` file.
 
 ## Map
 
@@ -14,6 +14,7 @@ Budget Warden is a native budgeting app for macOS, iOS, and Android. The portabl
 | `mac/` | SwiftUI macOS app. `ViewModels/BWStore.swift` owns budget mutations and file persistence. |
 | `ios/` | SwiftUI iOS app. `ViewModels/BWStore.swift` owns document handling and budget mutations. |
 | `android/` | Kotlin/Jetpack Compose app using generated Rust Kotlin/JNI bindings. `data/` owns Android document-provider I/O and recent-file preferences. |
+| `cli/` | Standalone `budget-warden` Rust executable; owns command orchestration, JSON protocol, local file I/O, batching, and CLI settings while depending directly on `bw_core`. |
 | `BudgetWarden.xcworkspace` | Combined Apple workspace; open this for macOS/iOS development. |
 
 ## Dependency Direction
@@ -21,6 +22,7 @@ Budget Warden is a native budgeting app for macOS, iOS, and Android. The portabl
 ```text
 Rust core -> generated BWCore bindings -> BWAppleCore -> macOS / iOS apps
 Rust core -> generated Android bindings -> Android platform I/O + Compose UI
+Rust core -> bw_cli (`cli/`) -> command line and JSON protocol
 ```
 
 Apple projects reference `../apple-core` as a local Swift package. `apple-core` references the generated package at `../core/dist/apple`.
@@ -31,16 +33,20 @@ Apple projects reference `../apple-core` as a local Swift package. `apple-core` 
 - Apple-only presentation/convenience behavior: `apple-core/src/`, then the relevant app under `mac/` or `ios/`.
 - Apple app flows and persistence: begin in that app’s `ViewModels/BWStore.swift`; UI lives in `Views/`.
 - Android UI: top-level Kotlin screen files and `ui/theme/`; document-provider I/O and recent-file persistence: `android/.../data/`; core behavior changes belong in `core/src/`.
+- CLI commands, protocol, configuration, batching, and local persistence: `cli/`; budgeting rules continue to use the existing APIs in `core/src/`.
 
 ## Generated and Local Files
 
 - `core/dist/`, `core/target/`, and package `.build/` directories are generated and ignored. Do not hand-edit generated bindings.
+- Build the CLI independently with `cargo build --manifest-path cli/Cargo.toml --release`; its direct dependency on `../core` does not require generated bindings.
+- `cli/target/` is generated build output; keep the CLI lockfile committed.
 - `.swiftpm/`, `xcuserdata/`, `DerivedData/`, and IDE state are local-only and ignored.
 - The previously tracked `apple-core/.swiftpm` scheme is intentionally removed from version control.
 
 ## Tests
 
 - Rust: run Cargo tests from `core/`.
+- CLI: run `cargo test --manifest-path cli/Cargo.toml` from the repository root.
 - Swift package: run Swift tests from `apple-core/` after generated Apple bindings exist.
 - Android: use the Gradle wrapper in `android/` for unit tests.
 

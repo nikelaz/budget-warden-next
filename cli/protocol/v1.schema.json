@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://budget-warden.example/protocol/v1.schema.json",
+  "title": "Budget Warden apply request v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "file", "operations"],
+  "properties": {
+    "version": {"const": 1},
+    "file": {"type": "string", "minLength": 1, "description": "Local .budget path, resolved from the process working directory"},
+    "expected_revision_id": {"type": "string", "format": "uuid"},
+    "operations": {"type": "array", "minItems": 1, "maxItems": 1000, "items": {"oneOf": [
+      {"$ref": "#/$defs/rename_budget"},
+      {"$ref": "#/$defs/create_category"},
+      {"$ref": "#/$defs/update_category"},
+      {"$ref": "#/$defs/delete_category"},
+      {"$ref": "#/$defs/move_category"},
+      {"$ref": "#/$defs/create_transaction"},
+      {"$ref": "#/$defs/update_transaction"},
+      {"$ref": "#/$defs/delete_transaction"},
+      {"$ref": "#/$defs/move_transaction"}
+    ]}}
+  },
+  "$defs": {
+    "money": {"description": "A decimal string with scale two, or an object with integer-string minor_units", "oneOf": [
+      {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]{1,2})?$"},
+      {"type": "object", "additionalProperties": false, "required": ["minor_units"], "properties": {"minor_units": {"type": "string", "pattern": "^[0-9]+$"}}}
+    ]},
+    "reference": {"type": "string", "description": "UUID or a local reference prefixed with $, such as $food"},
+    "rename_budget": {"type": "object", "additionalProperties": false, "required": ["op", "title"], "properties": {"op": {"const": "rename_budget"}, "title": {"type": "string"}}},
+    "create_category": {"type": "object", "additionalProperties": false, "required": ["op", "title", "category_type", "planned_amount"], "properties": {"op": {"const": "create_category"}, "local_ref": {"type": "string", "minLength": 1}, "title": {"type": "string"}, "category_type": {"enum": ["income", "expenses", "savings", "debt"]}, "planned_amount": {"$ref": "#/$defs/money"}, "accumulated_amount": {"$ref": "#/$defs/money"}, "ordinal": {"type": "integer", "minimum": 0}}},
+    "update_category": {"type": "object", "additionalProperties": false, "required": ["op", "id"], "properties": {"op": {"const": "update_category"}, "id": {"$ref": "#/$defs/reference"}, "title": {"type": "string"}, "category_type": {"enum": ["income", "expenses", "savings", "debt"]}, "planned_amount": {"$ref": "#/$defs/money"}, "accumulated_amount": {"$ref": "#/$defs/money"}, "ordinal": {"type": "integer", "minimum": 0}}},
+    "delete_category": {"type": "object", "additionalProperties": false, "required": ["op", "id"], "properties": {"op": {"const": "delete_category"}, "id": {"$ref": "#/$defs/reference"}}},
+    "move_category": {"type": "object", "additionalProperties": false, "required": ["op", "id", "ordinal"], "properties": {"op": {"const": "move_category"}, "id": {"$ref": "#/$defs/reference"}, "ordinal": {"type": "integer", "minimum": 0}}},
+    "create_transaction": {"type": "object", "additionalProperties": false, "required": ["op", "category_id", "title", "date", "amount"], "properties": {"op": {"const": "create_transaction"}, "local_ref": {"type": "string", "minLength": 1}, "category_id": {"$ref": "#/$defs/reference"}, "title": {"type": "string"}, "description": {"type": "string"}, "date": {"type": "string", "format": "date"}, "amount": {"$ref": "#/$defs/money"}}},
+    "update_transaction": {"type": "object", "additionalProperties": false, "required": ["op", "id"], "properties": {"op": {"const": "update_transaction"}, "id": {"$ref": "#/$defs/reference"}, "title": {"type": "string"}, "description": {"type": "string"}, "date": {"type": "string", "format": "date"}, "amount": {"$ref": "#/$defs/money"}}},
+    "delete_transaction": {"type": "object", "additionalProperties": false, "required": ["op", "id"], "properties": {"op": {"const": "delete_transaction"}, "id": {"$ref": "#/$defs/reference"}}},
+    "move_transaction": {"type": "object", "additionalProperties": false, "required": ["op", "id", "category_id"], "properties": {"op": {"const": "move_transaction"}, "id": {"$ref": "#/$defs/reference"}, "category_id": {"$ref": "#/$defs/reference"}}}
+  }
+}

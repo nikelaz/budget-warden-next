@@ -2,6 +2,7 @@
 .vs/
 xcuserdata/
 .build/
+/cli/target/
 DerivedData/
 .swiftpm/
 bin/
