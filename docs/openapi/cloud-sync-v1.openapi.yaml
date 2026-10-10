@@ -1,0 +1,1754 @@
+openapi: 3.1.0
+info:
+  title: Budget Warden Cloud API
+  version: 1.0.0
+  description: |
+    Phase 1 contract for account, entitlement, and whole-snapshot cloud-budget sync.
+    See ../cloud-sync-phase-1.md for state-machine, cursor-ordering, retention,
+    idempotency, and policy requirements that are not expressible in OpenAPI.
+servers:
+  - url: https://api.budgetwarden.example
+    description: Reserved placeholder; deployment configuration supplies the environment URL.
+security:
+  - bearerAuth: []
+paths:
+  /v1/capabilities:
+    get:
+      operationId: getCapabilities
+      security: []
+      responses:
+        '200':
+          description: Supported protocol and portable schemas.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Capabilities'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/auth/{provider}/start:
+    post:
+      operationId: startAuthentication
+      description: Sign-in may be anonymous. Other purposes require a current bearer session and bind the challenge to that account/session. Redirects must match configured allowlists.
+      security:
+        - {}
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProtocolVersion'
+        - name: provider
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/IdentityProvider'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthStartRequest'
+      responses:
+        '200':
+          description: Short-lived one-time provider challenge.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthChallenge'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '426':
+          $ref: '#/components/responses/UnsupportedProtocol'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/auth/{provider}/complete:
+    post:
+      operationId: completeAuthentication
+      description: Completes sign-in or session-bound reauthentication/deletion challenges. Link challenges must use /v1/account/identities/link. PKCE is required only when required by the stored challenge.
+      security:
+        - {}
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProtocolVersion'
+        - name: provider
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/IdentityProvider'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthCompleteRequest'
+      responses:
+        '200':
+          description: Verified sign-in or reauthentication result.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthCompleteResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '426':
+          $ref: '#/components/responses/UnsupportedProtocol'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/sessions/refresh:
+    post:
+      operationId: refreshSession
+      description: Single-use refresh rotation. Serialize calls and persist new credentials atomically. An uncertain rotation requires provider sign-in; do not automatically replay the old refresh token.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ProtocolVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Rotated session tokens.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionTokens'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '426':
+          $ref: '#/components/responses/UnsupportedProtocol'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/sessions/revoke:
+    post:
+      operationId: revokeSession
+      parameters:
+        - $ref: '#/components/parameters/ProtocolVersion'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                revoke_all_sessions:
+                  type: boolean
+                  default: false
+      responses:
+        '204':
+          description: Current session, or all account sessions, revoked.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '426':
+          $ref: '#/components/responses/UnsupportedProtocol'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me:
+    get:
+      operationId: getCurrentAccount
+      parameters:
+        - $ref: '#/components/parameters/ProtocolVersion'
+      responses:
+        '200':
+          description: Authenticated account and linked sign-in providers.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '426':
+          $ref: '#/components/responses/UnsupportedProtocol'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/entitlement:
+    get:
+      operationId: getEntitlement
+      parameters:
+        - $ref: '#/components/parameters/ProtocolVersion'
+      responses:
+        '200':
+          description: Server-verified effective account entitlement.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entitlement'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '426':
+          $ref: '#/components/responses/UnsupportedProtocol'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/account/identities/link:
+    post:
+      operationId: linkIdentity
+      parameters:
+        - $ref: '#/components/parameters/ProtocolVersion'
+        - $ref: '#/components/parameters/RecentAuthentication'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkIdentityRequest'
+      responses:
+        '200':
+          description: Separately verified provider identity is now linked.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '426':
+          $ref: '#/components/responses/UnsupportedProtocol'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/account:
+    delete:
+      operationId: deleteAccount
+      parameters:
+        - $ref: '#/components/parameters/ProtocolVersion'
+        - $ref: '#/components/parameters/RecentAuthentication'
+      responses:
+        '202':
+          description: Access revoked and account data deletion scheduled.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletionSchedule'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: An auto-renewing desktop subscription must be canceled before deletion can be scheduled.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '426':
+          $ref: '#/components/responses/UnsupportedProtocol'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/budgets:
+    get:
+      operationId: listBudgets
+      description: |
+        Returns account-owned live cloud resources in immutable cloud ID order.
+        The first page captures a bootstrap change cursor; finish all pages before
+        reconciling removals or committing that cursor.
+      parameters:
+        - $ref: '#/components/parameters/ProtocolVersion'
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: page_token
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: One page of the account catalog.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetCatalogPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '410':
+          description: Page token expired; restart the complete catalog scan.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '426':
+          $ref: '#/components/responses/UnsupportedProtocol'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createBudget
+      description: |
+        Creates one new cloud resource. The client generates and durably stores
+        cloud_budget_id before this request. Retries use identical request bytes
+        and Idempotency-Key. PUT never creates resources.
+      parameters:
+        - $ref: '#/components/parameters/ProtocolVersion'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBudgetRequest'
+      responses:
+        '201':
+          description: Content-free receipt for the accepted create. A replay describes the original commit, not necessarily current resource state.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloudBudgetReceipt'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/InvalidSnapshot'
+        '426':
+          $ref: '#/components/responses/UnsupportedProtocol'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/budgets/{budgetId}:
+    parameters:
+      - $ref: '#/components/parameters/ProtocolVersion'
+      - name: budgetId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getBudget
+      parameters:
+        - name: If-None-Match
+          in: header
+          required: false
+          description: Exact strong ETag previously returned by this resource.
+          schema:
+            type: string
+            pattern: '^"[A-Za-z0-9_-]+"$'
+      responses:
+        '200':
+          description: Current complete snapshot and cloud metadata.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloudBudget'
+        '304':
+          description: The supplied ETag is still current.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '426':
+          $ref: '#/components/responses/UnsupportedProtocol'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: replaceBudget
+      description: |
+        Conditionally replaces the full snapshot. On version conflict, download
+        current state, reconcile locally, and retry using a new mutation ID.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplaceBudgetRequest'
+      responses:
+        '200':
+          description: Content-free receipt for the accepted replacement. A replay describes the original commit, not necessarily current resource state.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloudBudgetReceipt'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/InvalidSnapshot'
+        '426':
+          $ref: '#/components/responses/UnsupportedProtocol'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteBudget
+      description: Signed-in owners may delete a resource even after subscription expiry.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204':
+          description: Resource deleted and tombstone/change entry committed.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '426':
+          $ref: '#/components/responses/UnsupportedProtocol'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/sync/changes:
+    get:
+      operationId: getChanges
+      description: |
+        Reads replayable account changes after a committed cursor. An expired
+        cursor returns 410 and requires a full paginated catalog reconciliation.
+      parameters:
+        - $ref: '#/components/parameters/ProtocolVersion'
+        - name: cursor
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: Ordered replayable changes and next durable cursor.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangePage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '410':
+          $ref: '#/components/responses/CursorExpired'
+        '426':
+          $ref: '#/components/responses/UnsupportedProtocol'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/billing/paddle/checkout:
+    post:
+      operationId: createPaddleCheckout
+      description: Creates a Paddle transaction for the configured monthly price with this account in custom_data and returns its hosted checkout URL. Checkout does not grant access; entitlement comes only from verified Paddle webhooks.
+      parameters:
+        - $ref: '#/components/parameters/ProtocolVersion'
+      responses:
+        '200':
+          description: Hosted checkout URL for the signed-in account.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaddleCheckoutSession'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: The account already has effective access.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '426':
+          $ref: '#/components/responses/UnsupportedProtocol'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/billing/apple/verify:
+    post:
+      operationId: verifyAppleTransaction
+      description: Verifies a StoreKit 2 signed transaction. Its x5c chain must end at the pinned Apple Root CA - G3, and its appAccountToken must equal the signed-in account ID. Also used for restore purchases.
+      parameters:
+        - $ref: '#/components/parameters/ProtocolVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [signed_transaction]
+              additionalProperties: false
+              properties:
+                signed_transaction:
+                  type: string
+                  description: The JWS from Transaction.jsonRepresentation or the signed transaction value.
+      responses:
+        '200':
+          description: Transaction recorded. Read GET /v1/entitlement for the effective access.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingVerificationResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: The transaction is bound to a different account.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '409':
+          description: The subscription is linked to another account.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '422':
+          $ref: '#/components/responses/InvalidSnapshot'
+        '426':
+          $ref: '#/components/responses/UnsupportedProtocol'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/billing/google/verify:
+    post:
+      operationId: verifyGooglePurchase
+      description: Verifies a Google Play subscription purchase token with the Play Developer API. The purchase's obfuscatedAccountId must equal the signed-in account ID.
+      parameters:
+        - $ref: '#/components/parameters/ProtocolVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [purchase_token]
+              additionalProperties: false
+              properties:
+                purchase_token:
+                  type: string
+      responses:
+        '200':
+          description: Purchase recorded. Read GET /v1/entitlement for the effective access.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingVerificationResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: The purchase is bound to a different account.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '409':
+          description: The subscription is linked to another account.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '422':
+          description: Google does not recognize the token, or the purchase has no obfuscatedAccountId.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '426':
+          $ref: '#/components/responses/UnsupportedProtocol'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/billing/paddle/webhook:
+    post:
+      operationId: receivePaddleWebhook
+      description: Paddle notification. Verified with the Paddle-Signature header (HMAC-SHA256 over "<ts>:<raw body>", five-minute tolerance) before any state change. Redelivered events are acknowledged without reprocessing.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Paddle event envelope; preserve the raw body for signature verification.
+              additionalProperties: true
+      responses:
+        '200':
+          description: Event processed or already processed.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/billing/apple/notifications:
+    post:
+      operationId: receiveAppStoreNotification
+      description: App Store Server Notifications V2. The signedPayload JWS and its nested signed transaction and renewal JWS are verified against the pinned Apple Root CA - G3 before processing.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [signedPayload]
+              properties:
+                signedPayload:
+                  type: string
+      responses:
+        '200':
+          description: Notification processed or already processed.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/InvalidSnapshot'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/billing/google/notifications:
+    post:
+      operationId: receiveGooglePlayNotification
+      description: Google Play real-time developer notifications delivered as Pub/Sub push. The bearer OIDC token must name the configured push audience and service account. Current state is read from the Play Developer API, not trusted from the message.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message:
+                  type: object
+                  required: [messageId]
+                  properties:
+                    data:
+                      type: string
+                      contentEncoding: base64
+                    messageId:
+                      type: string
+      responses:
+        '200':
+          description: Notification processed or already processed.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/auth/apple/server-notifications:
+    post:
+      operationId: receiveSignInWithAppleNotification
+      description: Sign in with Apple server-to-server events (consent-revoked, account-delete, email-disabled, email-enabled). The JWT is verified against Apple's published keys. consent-revoked ends the linked account's sessions; account-delete schedules account deletion.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [payload]
+              properties:
+                payload:
+                  type: string
+      responses:
+        '200':
+          description: Event processed.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Opaque Budget Warden access token. The service stores and checks only its hash.
+  parameters:
+    RecentAuthentication:
+      name: X-Reauthentication-Token
+      in: header
+      required: true
+      description: One-time proof no older than five minutes, bound to the current account/session and requested link or deletion action.
+      schema:
+        type: string
+    ProtocolVersion:
+      name: Budget-Warden-Protocol
+      in: header
+      required: true
+      description: Negotiated application protocol version; v1 clients send 1.
+      schema:
+        type: integer
+        const: 1
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: UUID identifying this logical mutation, exact body bytes, concrete resource route, and semantic headers including If-Match. Replay committed receipts before rechecking write preconditions.
+      schema:
+        type: string
+        format: uuid
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Exact strong ETag returned by the last successful read/write; wildcard, weak, and multiple validators are rejected.
+      schema:
+        type: string
+        pattern: '^"[A-Za-z0-9_-]+"$'
+  headers:
+    NoStore:
+      description: Prevent HTTP caching of account data, credentials, snapshots, and billing links.
+      schema:
+        type: string
+        const: no-store
+    ETag:
+      description: Strong opaque server version; return it verbatim in If-Match.
+      schema:
+        type: string
+        pattern: '^"[A-Za-z0-9_-]+"$'
+  responses:
+    Error:
+      description: Additional request or service error, including invalid_request (400), internal_error (500), or service_unavailable (503). Use the stable code and preserve pending work on transient failures.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ApiProblem'
+    BadRequest:
+      description: Invalid request, expired challenge, or malformed provider token.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ApiProblem'
+    Unauthorized:
+      description: Missing/expired session, invalid provider proof, or invalid refresh token.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ApiProblem'
+    Forbidden:
+      description: Entitlement required, account action disallowed, or recent reauthentication required.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ApiProblem'
+    NotFound:
+      description: Resource is unknown or not owned by the authenticated account.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ApiProblem'
+    Conflict:
+      description: Version conflict, idempotency reuse, quota exceeded, or identity ownership conflict.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ApiProblem'
+    Gone:
+      description: Deleted resource or cloud data beyond the retention window.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ApiProblem'
+    CursorExpired:
+      description: Cursor predates retained feed history; perform a full catalog scan.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ApiProblem'
+    TooLarge:
+      description: Decompressed request body exceeds the advertised snapshot limit.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ApiProblem'
+    InvalidSnapshot:
+      description: Malformed encrypted envelope; preserve edits and upgrade if the envelope version or suite is unsupported.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ApiProblem'
+    UnsupportedProtocol:
+      description: Requested protocol is not supported; use an advertised protocol/app version.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ApiProblem'
+    RateLimited:
+      description: Request rate limit exceeded. Honor Retry-After.
+      headers:
+        Retry-After:
+          description: Minimum number of seconds before retrying.
+          schema:
+            type: integer
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ApiProblem'
+  schemas:
+    IdentityProvider:
+      type: string
+      enum: [google, apple]
+    Capabilities:
+      type: object
+      required: [protocol_versions, budget_schema_versions, minimum_client_version, limits]
+      properties:
+        protocol_versions:
+          type: array
+          items:
+            type: integer
+        budget_schema_versions:
+          type: array
+          items:
+            type: integer
+        minimum_client_version:
+          type: string
+        limits:
+          type: object
+          required: [snapshot_bytes, request_body_bytes, account_storage_bytes, budget_count_cap, catalog_page_size, change_page_size]
+          properties:
+            snapshot_bytes:
+              type: integer
+              minimum: 1
+              description: Maximum compact UTF-8 JSON bytes for one encrypted envelope, with exact integers.
+            request_body_bytes:
+              type: integer
+              minimum: 1
+              description: Maximum decompressed create/replace request body; snapshot_bytes plus 64 KiB for the request wrapper.
+            account_storage_bytes:
+              type: integer
+              minimum: 1
+              description: Combined current snapshots and retained recovery history allowed per account.
+            budget_count_cap:
+              type: [integer, 'null']
+              minimum: 1
+              description: Null means no fixed cloud-budget count cap; storage and fair-use limits still apply.
+            catalog_page_size:
+              type: integer
+              minimum: 1
+              maximum: 100
+            change_page_size:
+              type: integer
+              minimum: 1
+              maximum: 100
+    AuthStartRequest:
+      type: object
+      required: [purpose, platform, flow, device_id]
+      properties:
+        purpose:
+          type: string
+          enum: [sign_in, link_identity, reauthenticate, delete_account]
+        platform:
+          type: string
+          enum: [macos, ios, android, windows, web]
+        flow:
+          type: string
+          enum: [native, browser]
+        redirect_uri:
+          type: string
+          format: uri
+          description: Required for browser flows; must exactly match a configured redirect allowlist for this provider/platform.
+        device_id:
+          type: string
+          format: uuid
+          description: Client-generated durable device UUID; not a credential.
+        pkce_challenge:
+          type: string
+          minLength: 43
+          maxLength: 128
+          description: S256 challenge for authorization-code flows that support PKCE.
+        pkce_method:
+          type: string
+          const: S256
+      allOf:
+        - if:
+            properties:
+              flow:
+                const: browser
+          then:
+            required: [redirect_uri, pkce_challenge]
+      dependentRequired:
+        pkce_challenge: [pkce_method]
+        pkce_method: [pkce_challenge]
+      additionalProperties: false
+    AuthChallenge:
+      type: object
+      required: [challenge_id, state, nonce, expires_at, authorization_url, credential_mode, pkce_required]
+      properties:
+        challenge_id:
+          type: string
+          format: uuid
+        state:
+          type: string
+        nonce:
+          type: string
+          description: One-time provider nonce; Apple Authentication Services clients send its SHA-256 hex form.
+        credential_mode:
+          type: string
+          enum: [authorization_code, identity_token]
+          description: Credential accepted by the configured provider/platform flow.
+        pkce_required:
+          type: boolean
+          description: Server enforces this stored requirement on completion; false for code flows without PKCE support.
+        authorization_url:
+          type: [string, 'null']
+          format: uri
+        expires_at:
+          type: string
+          format: date-time
+    AuthCompleteRequest:
+      type: object
+      required: [challenge_id, state]
+      properties:
+        challenge_id:
+          type: string
+          format: uuid
+        state:
+          type: string
+        authorization_code:
+          type: string
+          writeOnly: true
+        pkce_verifier:
+          type: string
+          writeOnly: true
+          minLength: 43
+          maxLength: 128
+          description: Required only if the stored challenge requires PKCE; cannot substitute for provider support.
+        identity_token:
+          type: string
+          writeOnly: true
+          description: Exactly one supported provider credential is required.
+      oneOf:
+        - required: [authorization_code]
+          not:
+            required: [identity_token]
+        - required: [identity_token]
+          not:
+            anyOf:
+              - required: [authorization_code]
+              - required: [pkce_verifier]
+    AuthCompleteResponse:
+      type: object
+      required: [purpose]
+      properties:
+        purpose:
+          type: string
+          enum: [sign_in, reauthenticate, delete_account]
+        account:
+          $ref: '#/components/schemas/Account'
+        tokens:
+          $ref: '#/components/schemas/SessionTokens'
+        reauthentication_token:
+          type: string
+          description: One-time current-session proof. reauthenticate authorizes identity linking; delete_account authorizes deletion. Maximum lifetime five minutes.
+        expires_at:
+          type: string
+          format: date-time
+      oneOf:
+        - properties:
+            purpose:
+              const: sign_in
+          required: [account, tokens]
+        - properties:
+            purpose:
+              enum: [reauthenticate, delete_account]
+          required: [reauthentication_token, expires_at]
+          not:
+            required: [tokens]
+    SessionTokens:
+      type: object
+      required: [account_id, session_id, access_token, access_expires_at, refresh_token]
+      properties:
+        account_id:
+          type: string
+          format: uuid
+        session_id:
+          type: string
+          format: uuid
+        access_token:
+          type: string
+        access_expires_at:
+          type: string
+          format: date-time
+        refresh_token:
+          type: string
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+          writeOnly: true
+    Account:
+      type: object
+      required: [account_id, identities, created_at]
+      properties:
+        account_id:
+          type: string
+          format: uuid
+        identities:
+          type: array
+          items:
+            type: object
+            required: [provider, linked_at]
+            properties:
+              provider:
+                $ref: '#/components/schemas/IdentityProvider'
+              display_email:
+                type: [string, 'null']
+              linked_at:
+                type: string
+                format: date-time
+        created_at:
+          type: string
+          format: date-time
+    LinkIdentityRequest:
+      type: object
+      required: [provider, challenge_id, state]
+      properties:
+        provider:
+          $ref: '#/components/schemas/IdentityProvider'
+        challenge_id:
+          type: string
+          format: uuid
+        state:
+          type: string
+        authorization_code:
+          type: string
+          writeOnly: true
+        pkce_verifier:
+          type: string
+          writeOnly: true
+          minLength: 43
+          maxLength: 128
+          description: Required when the stored link challenge requires PKCE.
+        identity_token:
+          type: string
+          writeOnly: true
+      oneOf:
+        - required: [authorization_code]
+          not:
+            required: [identity_token]
+        - required: [identity_token]
+          not:
+            anyOf:
+              - required: [authorization_code]
+              - required: [pkce_verifier]
+    Entitlement:
+      type: object
+      description: Effective access is the union of verified subscription access intervals. Permission flags describe subscription access; writes still require quota and validation checks.
+      required: [plan_id, state, can_create, can_write, can_read, storage, subscriptions, effective_expires_at, read_access_until]
+      properties:
+        plan_id:
+          type: [string, 'null']
+          enum: [cloud_monthly, null]
+        state:
+          type: string
+          enum: [none, active, grace, expired, revoked]
+        subscriptions:
+          type: array
+          description: All linked billing subscriptions, including accidental overlaps; never expose purchase credentials.
+          items:
+            $ref: '#/components/schemas/Subscription'
+        can_create:
+          type: boolean
+        can_write:
+          type: boolean
+        can_read:
+          type: boolean
+          description: Snapshot download access. Catalog/change-feed access remains available to signed-in accounts.
+        effective_expires_at:
+          type: [string, 'null']
+          format: date-time
+          description: End of effective account access including verified grace; null if the account never had access.
+        read_access_until:
+          type: [string, 'null']
+          format: date-time
+          description: Export deadline 90 days after effective access ends; null if the account never had access.
+        storage:
+          type: object
+          required: [used_bytes, limit_bytes]
+          properties:
+            used_bytes:
+              type: integer
+              minimum: 0
+              description: Current snapshots plus retained recovery history counted against the account allowance.
+            limit_bytes:
+              type: integer
+              minimum: 1
+          additionalProperties: false
+    Subscription:
+      type: object
+      required: [subscription_id, billing_provider, state, access_until, auto_renews, management_url]
+      properties:
+        subscription_id:
+          type: string
+          format: uuid
+          description: Internal subscription identifier, never a provider purchase token.
+        billing_provider:
+          $ref: '#/components/schemas/BillingProvider'
+        state:
+          type: string
+          enum: [pending, active, grace, payment_retry, paused, expired, revoked]
+          description: Grace means provider-confirmed continued access. Payment retry/account hold or pause does not extend the verified paid/grace access interval.
+        access_until:
+          type: [string, 'null']
+          format: date-time
+        auto_renews:
+          type: boolean
+        management_url:
+          type: [string, 'null']
+          format: uri
+          description: Store management destination where permitted; direct merchant portal URLs are generated on demand for eligible clients.
+      additionalProperties: false
+    DeletionSchedule:
+      type: object
+      required: [access_revoked_at, data_purge_after, backup_purge_by, store_subscription_management_urls]
+      properties:
+        access_revoked_at:
+          type: string
+          format: date-time
+        data_purge_after:
+          type: string
+          format: date-time
+          description: Scheduled live purge, no later than 30 days after acceptance.
+        backup_purge_by:
+          type: string
+          format: date-time
+          description: Maximum backup removal deadline, no later than 65 days after acceptance.
+        store_subscription_management_urls:
+          type: array
+          description: All applicable store management destinations; empty if none. Account deletion does not itself cancel store subscriptions.
+          items:
+            type: string
+            format: uri
+    CreateBudgetRequest:
+      type: object
+      required: [cloud_budget_id, envelope]
+      properties:
+        cloud_budget_id:
+          type: string
+          format: uuid
+        envelope:
+          $ref: '#/components/schemas/BudgetEnvelope'
+    ReplaceBudgetRequest:
+      type: object
+      required: [envelope]
+      properties:
+        envelope:
+          $ref: '#/components/schemas/BudgetEnvelope'
+    CloudBudgetReceipt:
+      type: object
+      description: Content-free acknowledgement of the original commit, safe to retain independently of snapshot deletion. GET current state separately; replay does not imply that this resource/version still exists.
+      required: [cloud_budget_id, portable_budget_id, server_version, updated_at]
+      properties:
+        cloud_budget_id:
+          type: string
+          format: uuid
+        portable_budget_id:
+          type: string
+          format: uuid
+        server_version:
+          type: string
+          pattern: '^[A-Za-z0-9_-]+$'
+          description: Original commit version, without ETag quotes; response ETag is its quoted strong form.
+        updated_at:
+          type: string
+          format: date-time
+      additionalProperties: false
+    CloudBudget:
+      type: object
+      required: [cloud_budget_id, portable_budget_id, server_version, updated_at, envelope]
+      properties:
+        cloud_budget_id:
+          type: string
+          format: uuid
+        portable_budget_id:
+          type: string
+          format: uuid
+        server_version:
+          type: string
+          pattern: '^[A-Za-z0-9_-]+$'
+          description: Opaque value corresponding to response ETag without quotes.
+        updated_at:
+          type: string
+          format: date-time
+        envelope:
+          $ref: '#/components/schemas/BudgetEnvelope'
+    CloudBudgetSummary:
+      type: object
+      required: [cloud_budget_id, portable_budget_id, schema_version, server_version, updated_at]
+      properties:
+        cloud_budget_id:
+          type: string
+          format: uuid
+        portable_budget_id:
+          type: string
+          format: uuid
+        schema_version:
+          type: integer
+        server_version:
+          type: string
+          pattern: '^[A-Za-z0-9_-]+$'
+        updated_at:
+          type: string
+          format: date-time
+    BudgetCatalogPage:
+      type: object
+      required: [items, bootstrap_cursor, next_page_token]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CloudBudgetSummary'
+        bootstrap_cursor:
+          type: [string, 'null']
+          description: Non-null on the first page. After durably completing the catalog, save as the feed starting cursor and replay changes after it. Null on continuation pages.
+        next_page_token:
+          type: [string, 'null']
+    ChangePage:
+      type: object
+      required: [changes, next_cursor, has_more]
+      properties:
+        changes:
+          type: array
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/BudgetUpsertChange'
+              - $ref: '#/components/schemas/BudgetDeletedChange'
+        next_cursor:
+          type: string
+        has_more:
+          type: boolean
+    BudgetUpsertChange:
+      type: object
+      required: [kind, cloud_budget_id, cursor, server_version, schema_version, changed_at]
+      properties:
+        kind:
+          type: string
+          const: upsert
+        cloud_budget_id:
+          type: string
+          format: uuid
+        cursor:
+          type: string
+        server_version:
+          type: string
+          pattern: '^[A-Za-z0-9_-]+$'
+          description: Version at this event; GET may already return a newer snapshot or deletion.
+        schema_version:
+          type: integer
+        changed_at:
+          type: string
+          format: date-time
+    BudgetDeletedChange:
+      type: object
+      required: [kind, cloud_budget_id, cursor, deleted_at, reason]
+      properties:
+        kind:
+          type: string
+          const: deleted
+        cloud_budget_id:
+          type: string
+          format: uuid
+        cursor:
+          type: string
+        deleted_at:
+          type: string
+          format: date-time
+        reason:
+          type: string
+          enum: [user_deleted, retention_expired]
+    PaddleCheckoutSession:
+      type: object
+      required: [checkout_url, transaction_id]
+      additionalProperties: false
+      properties:
+        checkout_url:
+          type: string
+          format: uri
+          description: Hosted Paddle checkout for the configured price. Open it in the system browser.
+        transaction_id:
+          type: string
+    BillingVerificationResult:
+      type: object
+      required: [status]
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum: [applied, current, duplicate, ok]
+          description: applied when the provider state changed; current when a newer update already applied; duplicate when the event was already processed.
+    BudgetEnvelope:
+      type: object
+      description: |
+        Client-encrypted cloud snapshot. The service validates this structure, the declared
+        suite, base64 field sizes, and byte limits, but cannot decrypt it. The ciphertext
+        contains the exact portable schema-2 budget JSON, including its title. The portable
+        budget ID and schema version are cleartext routing metadata bound into the AEAD
+        associated data on the client. See docs/cloud-sync-encryption.md.
+      required: [envelope_version, suite, portable_budget_id, schema_version, nonce, ciphertext, wrapped_data_key]
+      additionalProperties: false
+      properties:
+        envelope_version:
+          type: integer
+          const: 1
+        suite:
+          type: string
+          const: xchacha20poly1305-x25519-v1
+        portable_budget_id:
+          type: string
+          format: uuid
+        schema_version:
+          type: integer
+          minimum: 1
+          description: Portable schema version of the decrypted snapshot, for routing and change feeds only.
+        nonce:
+          type: string
+          contentEncoding: base64
+          description: Standard base64 of exactly 24 bytes.
+        ciphertext:
+          type: string
+          contentEncoding: base64
+          description: Standard base64 of the AEAD output, including the 16-byte authentication tag.
+        wrapped_data_key:
+          type: object
+          required: [nonce, ciphertext]
+          additionalProperties: false
+          properties:
+            nonce:
+              type: string
+              contentEncoding: base64
+              description: Standard base64 of exactly 24 bytes.
+            ciphertext:
+              type: string
+              contentEncoding: base64
+              description: Standard base64 of exactly 48 bytes (32-byte data key plus 16-byte tag).
+    BudgetCategory:
+      type: object
+      required: [id, ordinal, title, amount_planned, amount_actual, amount_accumulated, category_type, transactions]
+      properties:
+        id:
+          type: string
+          format: uuid
+        ordinal:
+          type: integer
+          format: int32
+          minimum: -2147483648
+          maximum: 2147483647
+        title:
+          type: string
+        amount_planned:
+          $ref: '#/components/schemas/MoneyAmount'
+        amount_actual:
+          $ref: '#/components/schemas/MoneyAmount'
+        amount_accumulated:
+          $ref: '#/components/schemas/MoneyAmount'
+        category_type:
+          type: string
+          enum: [income, expenses, savings, debt]
+        transactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/BudgetTransaction'
+      additionalProperties: false
+    BudgetTransaction:
+      type: object
+      required: [id, title, description, date, amount]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        date:
+          $ref: '#/components/schemas/BudgetDate'
+        amount:
+          $ref: '#/components/schemas/MoneyAmount'
+      additionalProperties: false
+    MoneyAmount:
+      type: integer
+      format: int64
+      minimum: 0
+      maximum: 9223372036854775807
+      description: Nonnegative minor-unit amount, represented as a signed 64-bit integer.
+    BudgetDate:
+      type: object
+      required: [year, month, day]
+      properties:
+        year:
+          type: integer
+          format: int32
+          minimum: -2147483648
+          maximum: 2147483647
+        month:
+          type: integer
+          minimum: 1
+          maximum: 12
+        day:
+          type: integer
+          minimum: 1
+          maximum: 31
+      additionalProperties: false
+    CRDTChanges:
+      type: object
+      required: [budget, categories, transactions, category_tombstones, transaction_tombstones]
+      properties:
+        budget:
+          type: array
+          items:
+            $ref: '#/components/schemas/BudgetChange'
+        categories:
+          type: object
+          propertyNames:
+            format: uuid
+          additionalProperties:
+            type: object
+            propertyNames:
+              enum: [Ordinal, Title, AmountPlanned, AmountAccumulated, CategoryType]
+            additionalProperties:
+              $ref: '#/components/schemas/CategoryChange'
+        transactions:
+          type: object
+          propertyNames:
+            format: uuid
+          additionalProperties:
+            type: object
+            propertyNames:
+              enum: [Title, Description, Date, Amount, Category]
+            additionalProperties:
+              $ref: '#/components/schemas/TransactionChange'
+        category_tombstones:
+          type: object
+          propertyNames:
+            format: uuid
+          additionalProperties:
+            $ref: '#/components/schemas/HlcTimestamp'
+        transaction_tombstones:
+          type: object
+          propertyNames:
+            format: uuid
+          additionalProperties:
+            $ref: '#/components/schemas/HlcTimestamp'
+      additionalProperties: false
+    HlcTimestamp:
+      type: object
+      required: [physical_ms, logical, device_id]
+      properties:
+        physical_ms:
+          type: integer
+          format: int64
+          minimum: -9223372036854775808
+          maximum: 9223372036854775807
+        logical:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 2147483647
+        device_id:
+          type: string
+          format: uuid
+      additionalProperties: false
+    CRDTOperation:
+      type: string
+      enum: [Create, Update]
+    BudgetChange:
+      type: object
+      required: [change_id, timestamp, payload]
+      properties:
+        change_id:
+          type: string
+          format: uuid
+        timestamp:
+          $ref: '#/components/schemas/HlcTimestamp'
+        payload:
+          oneOf:
+            - $ref: '#/components/schemas/BudgetChangePayload'
+            - type: 'null'
+      additionalProperties: false
+    BudgetChangePayload:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: [string, 'null']
+      additionalProperties: false
+    CategoryChange:
+      type: object
+      required: [change_id, timestamp, operation, category_id, payload]
+      properties:
+        change_id:
+          type: string
+          format: uuid
+        timestamp:
+          $ref: '#/components/schemas/HlcTimestamp'
+        operation:
+          $ref: '#/components/schemas/CRDTOperation'
+        category_id:
+          type: string
+          format: uuid
+        payload:
+          oneOf:
+            - $ref: '#/components/schemas/CategoryChangePayload'
+            - type: 'null'
+      additionalProperties: false
+    CategoryChangePayload:
+      type: object
+      properties:
+        ordinal:
+          type: [integer, 'null']
+          format: int32
+          minimum: -2147483648
+          maximum: 2147483647
+        title:
+          type: [string, 'null']
+        amount_planned:
+          oneOf:
+            - $ref: '#/components/schemas/MoneyAmount'
+            - type: 'null'
+        amount_accumulated:
+          oneOf:
+            - $ref: '#/components/schemas/MoneyAmount'
+            - type: 'null'
+        category_type:
+          type: [string, 'null']
+          enum: [income, expenses, savings, debt, null]
+      additionalProperties: false
+    TransactionChange:
+      type: object
+      required: [change_id, timestamp, operation, category_id, transaction_id, payload]
+      properties:
+        change_id:
+          type: string
+          format: uuid
+        timestamp:
+          $ref: '#/components/schemas/HlcTimestamp'
+        operation:
+          $ref: '#/components/schemas/CRDTOperation'
+        category_id:
+          type: string
+          format: uuid
+        transaction_id:
+          type: string
+          format: uuid
+        payload:
+          oneOf:
+            - $ref: '#/components/schemas/TransactionChangePayload'
+            - type: 'null'
+      additionalProperties: false
+    TransactionChangePayload:
+      type: object
+      properties:
+        title:
+          type: [string, 'null']
+        description:
+          type: [string, 'null']
+        date:
+          oneOf:
+            - $ref: '#/components/schemas/BudgetDate'
+            - type: 'null'
+        amount:
+          oneOf:
+            - $ref: '#/components/schemas/MoneyAmount'
+            - type: 'null'
+      additionalProperties: false
+    ApiProblem:
+      type: object
+      required: [type, title, status, code, request_id]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        code:
+          type: string
+          description: Stable machine-readable error identifier.
+          enum:
+            - invalid_request
+            - challenge_expired
+            - checkout_expired
+            - account_deletion_pending
+            - billing_cancellation_required
+            - internal_error
+            - service_unavailable
+            - session_expired
+            - entitlement_required
+            - not_found
+            - version_conflict
+            - idempotency_key_reused
+            - cloud_id_in_use
+            - quota_exceeded
+            - identity_already_linked
+            - purchase_claimed
+            - entitlement_already_active
+            - invalid_store_proof
+            - purchase_unbound
+            - account_mismatch
+            - subscription_owned_by_another_account
+            - invalid_webhook_signature
+            - envelope_unsupported
+            - resource_deleted
+            - cursor_expired
+            - page_token_expired
+            - cloud_retention_expired
+            - snapshot_too_large
+            - invalid_snapshot
+            - protocol_unsupported
+            - rate_limited
+            - invalid_provider_proof
+            - reauthentication_required
+        detail:
+          type: string
+        instance:
+          type: string
+        request_id:
+          type: string
+          format: uuid
+        details:
+          type: object
+          properties:
+            current_server_version:
+              type: string
+              pattern: '^[A-Za-z0-9_-]+$'
+              description: Unquoted opaque version for version_conflict.
+            received_schema_version:
+              type: integer
+            supported_schema_versions:
+              type: array
+              items:
+                type: integer
+            used_bytes:
+              type: integer
+              minimum: 0
+            projected_bytes:
+              type: integer
+              minimum: 0
+            limit_bytes:
+              type: integer
+              minimum: 1
+            max_snapshot_bytes:
+              type: integer
+              minimum: 1
+            max_request_body_bytes:
+              type: integer
+              minimum: 1
+            supported_protocol_versions:
+              type: array
+              items:
+                type: integer
+            minimum_client_version:
+              type: string
+            data_purge_after:
+              type: string
+              format: date-time
+          additionalProperties: true
+      additionalProperties: false
