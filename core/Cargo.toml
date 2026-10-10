@@ -12,3 +12,24 @@ chrono = "0.4.45"
 uuid = { version = "1.23.5", features = ["v4", "serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Client-side encryption for cloud snapshots. Default-off so the portable
+# domain builds without cryptography; app binding builds enable `cloud-sync`.
+chacha20poly1305 = { version = "0.11", optional = true }
+x25519-dalek = { version = "3", optional = true, features = ["static_secrets"] }
+hkdf = { version = "0.13", optional = true }
+sha2 = { version = "0.11", optional = true }
+getrandom = { version = "0.4", optional = true }
+base64 = { version = "0.22", optional = true }
+zeroize = { version = "1", optional = true, features = ["derive"] }
+
+[features]
+default = []
+cloud-sync = [
+    "dep:chacha20poly1305",
+    "dep:x25519-dalek",
+    "dep:hkdf",
+    "dep:sha2",
+    "dep:getrandom",
+    "dep:base64",
+    "dep:zeroize",
+]
