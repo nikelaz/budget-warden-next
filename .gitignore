@@ -8,3 +8,6 @@ bin/
 obj/
 windows/test-artifacts/
 .codex-tmp/
+/target/
+/server/target/
+/server/.env

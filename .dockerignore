@@ -1,0 +1,16 @@
+.git
+.github
+.codex
+.agents
+.env
+**/.env
+**/target
+**/DerivedData
+**/.build
+**/bin
+**/obj
+**/node_modules
+**/*.budget
+android/.gradle
+android/**/build
+windows/test-artifacts
