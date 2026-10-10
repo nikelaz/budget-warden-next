@@ -1,14 +1,14 @@
 //! Provider-neutral subscription state and entitlement computation.
 //!
-//! Every store adapter (Paddle, Apple, Google) reduces its provider data to a
+//! Every store adapter (Stripe, Apple, Google) reduces its provider data to a
 //! [`SubscriptionUpdate`]. This module applies updates in provider-time order,
 //! refuses to move a subscription between accounts, and recomputes the account
 //! entitlement from all of its subscriptions.
 
 pub mod apple;
 pub mod google;
-pub mod paddle;
 pub mod routes;
+pub mod stripe;
 pub mod worker;
 
 use std::{sync::Arc, time::Instant};
@@ -31,7 +31,7 @@ pub const READ_WINDOW_DAYS: i64 = 90;
 pub enum Provider {
     Apple,
     Google,
-    Paddle,
+    Stripe,
 }
 
 impl Provider {
@@ -39,7 +39,7 @@ impl Provider {
         match self {
             Self::Apple => "apple",
             Self::Google => "google",
-            Self::Paddle => "paddle",
+            Self::Stripe => "stripe",
         }
     }
 }

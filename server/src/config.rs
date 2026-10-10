@@ -27,7 +27,7 @@ pub struct Config {
     pub dev_entitlement: bool,
     pub google_auth: ProviderConfig,
     pub apple_auth: ProviderConfig,
-    pub paddle: PaddleConfig,
+    pub stripe: StripeConfig,
     pub storekit: StoreKitConfig,
     pub google_play: GooglePlayConfig,
     /// Trust `X-Forwarded-For` for client addresses. Enable only behind a proxy
@@ -37,11 +37,13 @@ pub struct Config {
 }
 
 #[derive(Clone, Default)]
-pub struct PaddleConfig {
-    pub api_key: Option<String>,
+pub struct StripeConfig {
+    pub secret_key: Option<String>,
     pub webhook_secret: Option<String>,
     pub price_id: Option<String>,
-    pub sandbox: bool,
+    pub success_url: Option<String>,
+    pub cancel_url: Option<String>,
+    pub portal_return_url: Option<String>,
     pub webhook_tolerance_seconds: i64,
 }
 
@@ -129,7 +131,7 @@ impl Config {
         let google_auth = provider_config("GOOGLE", false)?;
         let apple_auth = provider_config("APPLE", true)?;
 
-        let max_snapshot_bytes = parse_usize("BW_MAX_SNAPSHOT_BYTES", 10 * 1024 * 1024)?;
+        let max_snapshot_bytes = parse_usize("BW_MAX_SNAPSHOT_BYTES", 250 * 1024 * 1024)?;
         let request_limit_default = max_snapshot_bytes
             .checked_add(64 * 1024)
             .ok_or_else(|| "Configured snapshot limit overflows the request limit".to_string())?;
@@ -183,7 +185,7 @@ impl Config {
             dev_entitlement,
             google_auth,
             apple_auth,
-            paddle: paddle_config(is_development)?,
+            stripe: stripe_config()?,
             storekit: storekit_config(is_development),
             google_play: google_play_config(),
             trust_proxy_headers: parse_bool("BW_TRUST_PROXY_HEADERS", false)?,
@@ -193,20 +195,16 @@ impl Config {
     }
 }
 
-fn paddle_config(is_development: bool) -> Result<PaddleConfig, String> {
-    let sandbox = match env::var("BW_PADDLE_ENVIRONMENT").ok().as_deref() {
-        Some("production") => false,
-        Some("sandbox") => true,
-        Some(_) => return Err("BW_PADDLE_ENVIRONMENT must be sandbox or production".to_string()),
-        None => is_development,
-    };
+fn stripe_config() -> Result<StripeConfig, String> {
     let webhook_tolerance_seconds =
-        parse_i64("BW_PADDLE_WEBHOOK_TOLERANCE_SECONDS", 300)?.clamp(5, 3600);
-    Ok(PaddleConfig {
-        api_key: optional("BW_PADDLE_API_KEY"),
-        webhook_secret: optional("BW_PADDLE_WEBHOOK_SECRET"),
-        price_id: optional("BW_PADDLE_PRICE_ID"),
-        sandbox,
+        parse_i64("BW_STRIPE_WEBHOOK_TOLERANCE_SECONDS", 300)?.clamp(5, 3600);
+    Ok(StripeConfig {
+        secret_key: optional("BW_STRIPE_SECRET_KEY"),
+        webhook_secret: optional("BW_STRIPE_WEBHOOK_SECRET"),
+        price_id: optional("BW_STRIPE_PRICE_ID"),
+        success_url: optional("BW_STRIPE_SUCCESS_URL"),
+        cancel_url: optional("BW_STRIPE_CANCEL_URL"),
+        portal_return_url: optional("BW_STRIPE_PORTAL_RETURN_URL"),
         webhook_tolerance_seconds,
     })
 }

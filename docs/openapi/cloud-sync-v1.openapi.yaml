@@ -524,10 +524,10 @@ paths:
           $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/Error'
-  /v1/billing/paddle/checkout:
+  /v1/billing/stripe/checkout:
     post:
-      operationId: createPaddleCheckout
-      description: Creates a Paddle transaction for the configured monthly price with this account in custom_data and returns its hosted checkout URL. Checkout does not grant access; entitlement comes only from verified Paddle webhooks.
+      operationId: createStripeCheckout
+      description: Creates a Stripe Managed Payments subscription Checkout Session for the configured price, binding the signed-in account in session and subscription metadata. Checkout does not grant access; entitlement comes only from verified Stripe subscription webhooks.
       parameters:
         - $ref: '#/components/parameters/ProtocolVersion'
       responses:
@@ -539,7 +539,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaddleCheckoutSession'
+                $ref: '#/components/schemas/StripeCheckoutSession'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '409':
@@ -653,10 +653,38 @@ paths:
           $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/Error'
-  /v1/billing/paddle/webhook:
+  /v1/billing/stripe/portal:
     post:
-      operationId: receivePaddleWebhook
-      description: Paddle notification. Verified with the Paddle-Signature header (HMAC-SHA256 over "<ts>:<raw body>", five-minute tolerance) before any state change. Redelivered events are acknowledged without reprocessing.
+      operationId: createStripePortalSession
+      description: Creates a short-lived Stripe customer portal session for the signed-in account's active Stripe subscription.
+      parameters:
+        - $ref: '#/components/parameters/ProtocolVersion'
+      responses:
+        '200':
+          description: Hosted customer portal URL.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StripePortalSession'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '426':
+          $ref: '#/components/responses/UnsupportedProtocol'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/billing/stripe/webhook:
+    post:
+      operationId: receiveStripeWebhook
+      description: Stripe subscription event. Verified with the Stripe-Signature header (HMAC-SHA256 over "<timestamp>.<raw body>", five-minute tolerance) before any state change. Redelivered events are acknowledged without reprocessing.
       security: []
       requestBody:
         required: true
@@ -664,7 +692,7 @@ paths:
           application/json:
             schema:
               type: object
-              description: Paddle event envelope; preserve the raw body for signature verification.
+              description: Stripe event envelope; preserve the raw body for signature verification.
               additionalProperties: true
       responses:
         '200':
@@ -912,7 +940,7 @@ components:
             snapshot_bytes:
               type: integer
               minimum: 1
-              description: Maximum compact UTF-8 JSON bytes for one encrypted envelope, with exact integers.
+              description: Maximum compact UTF-8 JSON bytes for one encrypted envelope. Defaults to 250 MiB.
             request_body_bytes:
               type: integer
               minimum: 1
@@ -920,7 +948,7 @@ components:
             account_storage_bytes:
               type: integer
               minimum: 1
-              description: Combined current snapshots and retained recovery history allowed per account.
+              description: Combined current snapshots and retained recovery history allowed per account. Defaults to 5 GiB.
             budget_count_cap:
               type: [integer, 'null']
               minimum: 1
@@ -1361,17 +1389,26 @@ components:
         reason:
           type: string
           enum: [user_deleted, retention_expired]
-    PaddleCheckoutSession:
+    StripeCheckoutSession:
       type: object
-      required: [checkout_url, transaction_id]
+      required: [checkout_url, session_id]
       additionalProperties: false
       properties:
         checkout_url:
           type: string
           format: uri
-          description: Hosted Paddle checkout for the configured price. Open it in the system browser.
-        transaction_id:
+          description: Hosted Stripe Managed Payments checkout for the configured price. Open it in the system browser.
+        session_id:
           type: string
+    StripePortalSession:
+      type: object
+      required: [portal_url]
+      additionalProperties: false
+      properties:
+        portal_url:
+          type: string
+          format: uri
+          description: Short-lived Stripe customer portal URL. Open it in the system browser.
     BillingVerificationResult:
       type: object
       required: [status]

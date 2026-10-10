@@ -23,7 +23,7 @@ use uuid::Uuid;
 const DEV_TOKEN: &str = "local-only-dev-token-change-this";
 const DEV_ACCOUNT: &str = "00000000-0000-0000-0000-000000000001";
 const CURSOR_SECRET: &str = "local-only-test-cursor-secret-with-enough-bytes";
-const PADDLE_SECRET: &str = "pdl_ntfset_test_secret_for_gates";
+const STRIPE_SECRET: &str = "whsec_test_secret_for_gates";
 
 struct Server {
     child: Child,
@@ -57,7 +57,7 @@ fn start_server() -> Server {
         .env("BW_DEV_ACCOUNT_ID", DEV_ACCOUNT)
         .env("BW_DEV_BEARER_TOKEN", DEV_TOKEN)
         .env("BW_DEV_ENTITLEMENT", "true")
-        .env("BW_PADDLE_WEBHOOK_SECRET", PADDLE_SECRET)
+        .env("BW_STRIPE_WEBHOOK_SECRET", STRIPE_SECRET)
         .env("BW_AUTH_RATE_LIMIT_PER_MINUTE", "5")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -152,49 +152,52 @@ async fn entitlement_state(account_id: Uuid) -> Option<(String, bool)> {
     .unwrap()
 }
 
-fn paddle_signature(secret: &str, timestamp: i64, body: &[u8]) -> String {
+fn stripe_signature(secret: &str, timestamp: i64, body: &[u8]) -> String {
     let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap();
     mac.update(timestamp.to_string().as_bytes());
-    mac.update(b":");
+    mac.update(b".");
     mac.update(body);
     let digest = mac.finalize().into_bytes();
     let hex: String = digest.iter().map(|byte| format!("{byte:02x}")).collect();
-    format!("ts={timestamp};h1={hex}")
+    format!("t={timestamp},v1={hex}")
 }
 
-fn paddle_event(
+fn stripe_event(
     event_id: &str,
     occurred_at: DateTime<Utc>,
     status: &str,
     account_id: Uuid,
     subscription: &str,
 ) -> Value {
+    let ended_at = (status == "canceled").then_some(occurred_at.timestamp());
     json!({
-        "event_id": event_id,
-        "event_type": format!("subscription.{status}"),
-        "occurred_at": occurred_at.to_rfc3339(),
+        "id": event_id,
+        "type": "customer.subscription.updated",
+        "created": occurred_at.timestamp(),
         "data": {
-            "id": subscription,
-            "status": status,
-            "custom_data": { "account_id": account_id },
-            "current_billing_period": {
-                "ends_at": (occurred_at + ChronoDuration::days(30)).to_rfc3339()
+            "object": {
+                "id": subscription,
+                "status": status,
+                "metadata": { "budget_warden_account_id": account_id },
+                "current_period_end": (occurred_at + ChronoDuration::days(30)).timestamp(),
+                "ended_at": ended_at,
+                "cancel_at_period_end": false
             }
         }
     })
 }
 
-async fn post_paddle(
+async fn post_stripe(
     client: &Client,
     base: &str,
     event: &Value,
     signature_secret: &str,
 ) -> Response {
     let body = serde_json::to_vec(event).unwrap();
-    let signature = paddle_signature(signature_secret, Utc::now().timestamp(), &body);
+    let signature = stripe_signature(signature_secret, Utc::now().timestamp(), &body);
     client
-        .post(format!("{base}/v1/billing/paddle/webhook"))
-        .header("Paddle-Signature", signature)
+        .post(format!("{base}/v1/billing/stripe/webhook"))
+        .header("Stripe-Signature", signature)
         .header("Content-Type", "application/json")
         .body(body)
         .send()
@@ -204,20 +207,20 @@ async fn post_paddle(
 
 #[tokio::test]
 #[ignore = "needs BW_TEST_DATABASE_URL pointing at the local PostgreSQL"]
-async fn paddle_webhooks_grant_update_and_end_access() {
+async fn stripe_webhooks_grant_update_and_end_access() {
     let (server, client) = setup().await;
-    let account = insert_account(&format!("paddle-token-{}", Uuid::new_v4()), false).await;
+    let account = insert_account(&format!("stripe-token-{}", Uuid::new_v4()), false).await;
     let subscription = format!("sub_{}", Uuid::new_v4().simple());
     let now = Utc::now();
 
-    let activated = paddle_event(
+    let activated = stripe_event(
         &format!("evt_{}", Uuid::new_v4()),
         now,
         "active",
         account,
         &subscription,
     );
-    let response = post_paddle(&client, &server.base, &activated, PADDLE_SECRET).await;
+    let response = post_stripe(&client, &server.base, &activated, STRIPE_SECRET).await;
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(
         entitlement_state(account).await,
@@ -225,13 +228,13 @@ async fn paddle_webhooks_grant_update_and_end_access() {
     );
 
     // Redelivery of the same event is acknowledged and changes nothing.
-    let duplicate = post_paddle(&client, &server.base, &activated, PADDLE_SECRET).await;
+    let duplicate = post_stripe(&client, &server.base, &activated, STRIPE_SECRET).await;
     assert_eq!(duplicate.status(), StatusCode::OK);
     let body: Value = duplicate.json().await.unwrap();
     assert_eq!(body["status"], json!("duplicate"));
 
     // An older event cannot overwrite a newer state.
-    let stale = paddle_event(
+    let stale = stripe_event(
         &format!("evt_{}", Uuid::new_v4()),
         now - ChronoDuration::hours(1),
         "canceled",
@@ -239,7 +242,7 @@ async fn paddle_webhooks_grant_update_and_end_access() {
         &subscription,
     );
     assert_eq!(
-        post_paddle(&client, &server.base, &stale, PADDLE_SECRET)
+        post_stripe(&client, &server.base, &stale, STRIPE_SECRET)
             .await
             .status(),
         StatusCode::OK
@@ -250,7 +253,7 @@ async fn paddle_webhooks_grant_update_and_end_access() {
     );
 
     // A newer cancellation ends write access and keeps the read window.
-    let canceled = paddle_event(
+    let canceled = stripe_event(
         &format!("evt_{}", Uuid::new_v4()),
         now + ChronoDuration::minutes(1),
         "canceled",
@@ -258,7 +261,7 @@ async fn paddle_webhooks_grant_update_and_end_access() {
         &subscription,
     );
     assert_eq!(
-        post_paddle(&client, &server.base, &canceled, PADDLE_SECRET)
+        post_stripe(&client, &server.base, &canceled, STRIPE_SECRET)
             .await
             .status(),
         StatusCode::OK
@@ -273,24 +276,24 @@ async fn paddle_webhooks_grant_update_and_end_access() {
 
 #[tokio::test]
 #[ignore = "needs BW_TEST_DATABASE_URL pointing at the local PostgreSQL"]
-async fn paddle_webhooks_with_bad_signatures_change_nothing() {
+async fn stripe_webhooks_with_bad_signatures_change_nothing() {
     let (server, client) = setup().await;
-    let account = insert_account(&format!("paddle-token-{}", Uuid::new_v4()), false).await;
-    let event = paddle_event(
+    let account = insert_account(&format!("stripe-token-{}", Uuid::new_v4()), false).await;
+    let event = stripe_event(
         &format!("evt_{}", Uuid::new_v4()),
         Utc::now(),
         "active",
         account,
         &format!("sub_{}", Uuid::new_v4().simple()),
     );
-    let response = post_paddle(&client, &server.base, &event, "wrong-secret").await;
+    let response = post_stripe(&client, &server.base, &event, "wrong-secret").await;
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     let body: Value = response.json().await.unwrap();
     assert_eq!(body["code"], json!("invalid_webhook_signature"));
     assert_eq!(entitlement_state(account).await, None);
 
     let unsigned = client
-        .post(format!("{}/v1/billing/paddle/webhook", server.base))
+        .post(format!("{}/v1/billing/stripe/webhook", server.base))
         .body(serde_json::to_vec(&event).unwrap())
         .send()
         .await
@@ -307,7 +310,7 @@ async fn a_subscription_cannot_move_to_another_account() {
     let other = insert_account(&format!("other-token-{}", Uuid::new_v4()), false).await;
     let subscription = format!("sub_{}", Uuid::new_v4().simple());
 
-    let owned = paddle_event(
+    let owned = stripe_event(
         &format!("evt_{}", Uuid::new_v4()),
         Utc::now(),
         "active",
@@ -315,14 +318,14 @@ async fn a_subscription_cannot_move_to_another_account() {
         &subscription,
     );
     assert_eq!(
-        post_paddle(&client, &server.base, &owned, PADDLE_SECRET)
+        post_stripe(&client, &server.base, &owned, STRIPE_SECRET)
             .await
             .status(),
         StatusCode::OK
     );
 
     // A later event naming a different account is acknowledged but not applied.
-    let claimed = paddle_event(
+    let claimed = stripe_event(
         &format!("evt_{}", Uuid::new_v4()),
         Utc::now() + ChronoDuration::minutes(1),
         "canceled",
@@ -330,7 +333,7 @@ async fn a_subscription_cannot_move_to_another_account() {
         &subscription,
     );
     assert_eq!(
-        post_paddle(&client, &server.base, &claimed, PADDLE_SECRET)
+        post_stripe(&client, &server.base, &claimed, STRIPE_SECRET)
             .await
             .status(),
         StatusCode::OK
@@ -350,7 +353,7 @@ async fn a_subscription_cannot_move_to_another_account() {
 async fn checkout_requires_a_session_and_refuses_duplicate_subscriptions() {
     let (server, client) = setup().await;
     let unauthenticated = client
-        .post(format!("{}/v1/billing/paddle/checkout", server.base))
+        .post(format!("{}/v1/billing/stripe/checkout", server.base))
         .header("Budget-Warden-Protocol", "1")
         .send()
         .await
@@ -360,7 +363,7 @@ async fn checkout_requires_a_session_and_refuses_duplicate_subscriptions() {
     let token = format!("checkout-token-{}", Uuid::new_v4());
     let entitled = insert_account(&token, true).await;
     let response = client
-        .post(format!("{}/v1/billing/paddle/checkout", server.base))
+        .post(format!("{}/v1/billing/stripe/checkout", server.base))
         .bearer_auth(&token)
         .header("Budget-Warden-Protocol", "1")
         .send()
@@ -400,7 +403,7 @@ async fn sign_in_routes_are_rate_limited_per_client() {
 #[ignore = "needs BW_TEST_DATABASE_URL pointing at the local PostgreSQL"]
 async fn dev_account_entitlement_is_not_overwritten_by_webhooks() {
     let (server, client) = setup().await;
-    let event = paddle_event(
+    let event = stripe_event(
         &format!("evt_{}", Uuid::new_v4()),
         Utc::now(),
         "canceled",
@@ -408,14 +411,11 @@ async fn dev_account_entitlement_is_not_overwritten_by_webhooks() {
         &format!("sub_{}", Uuid::new_v4().simple()),
     );
     assert_eq!(
-        post_paddle(&client, &server.base, &event, PADDLE_SECRET)
+        post_stripe(&client, &server.base, &event, STRIPE_SECRET)
             .await
             .status(),
         StatusCode::OK
     );
     let state = entitlement_state(Uuid::parse_str(DEV_ACCOUNT).unwrap()).await;
-    assert_eq!(
-        state,
-        Some(("active".to_owned(), true))
-    );
+    assert_eq!(state, Some(("active".to_owned(), true)));
 }

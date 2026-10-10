@@ -20,7 +20,7 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-use super::{ApplyOutcome, Provider, apple, apply_update, google, paddle};
+use super::{ApplyOutcome, Provider, apple, apply_update, google, stripe};
 use crate::{
     auth::{self, AuthenticatedAccount},
     config::Config,
@@ -33,8 +33,12 @@ pub fn routes(state: AppState) -> Router<AppState> {
     let protected = middleware::from_fn_with_state(state.clone(), auth::require_auth);
     Router::new()
         .route(
-            "/v1/billing/paddle/checkout",
-            post(paddle_checkout).route_layer(protected.clone()),
+            "/v1/billing/stripe/checkout",
+            post(stripe_checkout).route_layer(protected.clone()),
+        )
+        .route(
+            "/v1/billing/stripe/portal",
+            post(stripe_portal).route_layer(protected.clone()),
         )
         .route(
             "/v1/billing/apple/verify",
@@ -44,7 +48,7 @@ pub fn routes(state: AppState) -> Router<AppState> {
             "/v1/billing/google/verify",
             post(google_verify).route_layer(protected),
         )
-        .route("/v1/billing/paddle/webhook", post(paddle_webhook))
+        .route("/v1/billing/stripe/webhook", post(stripe_webhook))
         .route("/v1/billing/apple/notifications", post(apple_notifications))
         .route(
             "/v1/billing/google/notifications",
@@ -155,9 +159,9 @@ fn trusted_root(config: &Config) -> &[u8] {
         .unwrap_or(apple::APPLE_ROOT_CA_G3_DER)
 }
 
-// ---------------------------------------------------------------- Paddle
+// ------------------------------------------------ Stripe Managed Payments
 
-async fn paddle_checkout(
+async fn stripe_checkout(
     State(state): State<AppState>,
     Extension(account): Extension<AuthenticatedAccount>,
     Extension(context): Extension<RequestContext>,
@@ -179,37 +183,70 @@ async fn paddle_checkout(
                 "This account already has an active subscription.",
             ));
         }
-        let link = paddle::create_checkout(&state.billing, &state.config.paddle, account.0).await?;
+        let link = stripe::create_checkout(&state.billing, &state.config.stripe, account.0).await?;
         serde_json::to_value(link).map_err(ApiError::internal)
     }
     .await;
     respond(result, context)
 }
 
-async fn paddle_webhook(
+async fn stripe_portal(
+    State(state): State<AppState>,
+    Extension(account): Extension<AuthenticatedAccount>,
+    Extension(context): Extension<RequestContext>,
+) -> Response {
+    let result = async {
+        let subscription_id = sqlx::query_scalar::<_, String>(
+            "SELECT provider_subscription_id FROM subscriptions \
+             WHERE account_id = $1 AND billing_provider = 'stripe' \
+               AND state IN ('active', 'grace', 'payment_retry') \
+               AND (access_until IS NULL OR access_until > clock_timestamp()) \
+             ORDER BY verified_at DESC LIMIT 1",
+        )
+        .bind(account.0)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(database_error)?
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                "not_found",
+                "No active Stripe subscription was found for this account.",
+            )
+        })?;
+        let portal_url =
+            stripe::create_portal_session(&state.billing, &state.config.stripe, &subscription_id)
+                .await?;
+        Ok(json!({ "portal_url": portal_url }))
+    }
+    .await;
+    respond(result, context)
+}
+
+async fn stripe_webhook(
     State(state): State<AppState>,
     Extension(context): Extension<RequestContext>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    let result = paddle_webhook_inner(&state, &headers, &body).await;
+    let result = stripe_webhook_inner(&state, &headers, &body).await;
     respond(result, context)
 }
 
-async fn paddle_webhook_inner(
+async fn stripe_webhook_inner(
     state: &AppState,
     headers: &HeaderMap,
     body: &[u8],
 ) -> ApiResult<Value> {
-    let config = &state.config.paddle;
+    let config = &state.config.stripe;
     let secret = config
         .webhook_secret
         .as_deref()
-        .ok_or_else(|| super::provider_unavailable("Paddle webhooks are not configured."))?;
+        .ok_or_else(|| super::provider_unavailable("Stripe webhooks are not configured."))?;
     let signature = headers
-        .get("Paddle-Signature")
+        .get("Stripe-Signature")
         .and_then(|value| value.to_str().ok());
-    paddle::verify_webhook_signature(
+    stripe::verify_webhook_signature(
         secret,
         signature,
         body,
@@ -220,30 +257,37 @@ async fn paddle_webhook_inner(
         ApiError::new(
             StatusCode::UNAUTHORIZED,
             "invalid_webhook_signature",
-            "The webhook signature could not be verified.",
+            "The Stripe webhook signature could not be verified.",
         )
     })?;
 
-    let event: paddle::PaddleEvent = serde_json::from_slice(body).map_err(|_| {
+    let event: stripe::StripeEvent = serde_json::from_slice(body).map_err(|_| {
         ApiError::new(
             StatusCode::BAD_REQUEST,
             "invalid_request",
-            "The webhook body is not a valid event.",
+            "The Stripe webhook body is not a valid event.",
         )
     })?;
-    if already_processed(state, Provider::Paddle, &event.event_id, &digest(body)).await? {
+    let event_time = chrono::DateTime::from_timestamp(event.created, 0).ok_or_else(|| {
+        ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
+            "The Stripe event timestamp is invalid.",
+        )
+    })?;
+    if already_processed(state, Provider::Stripe, &event.id, &digest(body)).await? {
         return Ok(json!({ "status": "duplicate" }));
     }
-    let update = if event.event_type.starts_with("subscription.") {
-        paddle::update_from_subscription(&event.data, event.occurred_at)
+    let update = if event.event_type.starts_with("customer.subscription.") {
+        stripe::update_from_subscription(&event.data.object, event_time)
     } else {
         None
     };
     if let Some(update) = update {
         let outcome = apply_update(&state.db, &state.config, &update).await?;
-        tracing::info!(event_id = %event.event_id, ?outcome, "paddle subscription event processed");
+        tracing::info!(event_id = %event.id, ?outcome, "stripe subscription event processed");
     }
-    mark_processed(state, Provider::Paddle, &event.event_id).await?;
+    mark_processed(state, Provider::Stripe, &event.id).await?;
     Ok(json!({ "status": "ok" }))
 }
 
@@ -627,7 +671,7 @@ async fn schedule_account_deletion(
     sqlx::query(
         "UPDATE subscriptions SET cancel_requested_at = COALESCE(cancel_requested_at, clock_timestamp()), \
          cancel_next_attempt_at = COALESCE(cancel_next_attempt_at, clock_timestamp()) \
-         WHERE account_id = $1 AND billing_provider = 'paddle' AND auto_renews = true AND cancelled_at IS NULL",
+         WHERE account_id = $1 AND billing_provider = 'stripe' AND auto_renews = true AND cancelled_at IS NULL",
     )
     .bind(account_id)
     .execute(&mut **tx)

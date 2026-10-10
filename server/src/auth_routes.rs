@@ -882,12 +882,12 @@ async fn delete_account_inner(
     let mut tx = state.db.begin().await.map_err(database_error)?;
     require_account_not_pending_deletion(&mut tx, account.0).await?;
 
-    // Desktop subscriptions are canceled at Paddle by the billing worker, which
+    // Desktop subscriptions are canceled at Stripe by the billing worker, which
     // retries until the provider accepts the cancellation.
     sqlx::query(
         "UPDATE subscriptions SET cancel_requested_at = COALESCE(cancel_requested_at, clock_timestamp()), \
          cancel_next_attempt_at = COALESCE(cancel_next_attempt_at, clock_timestamp()) \
-         WHERE account_id = $1 AND billing_provider = 'paddle' AND auto_renews = true \
+         WHERE account_id = $1 AND billing_provider = 'stripe' AND auto_renews = true \
          AND cancelled_at IS NULL",
     )
     .bind(account.0)

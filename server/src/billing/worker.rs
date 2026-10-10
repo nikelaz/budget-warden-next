@@ -11,7 +11,7 @@ use chrono::{DateTime, Utc};
 use tokio::sync::watch;
 use uuid::Uuid;
 
-use super::{BillingClients, apple, google, paddle, recompute_entitlement};
+use super::{BillingClients, apple, google, recompute_entitlement, stripe};
 use crate::{
     errors::{ApiResult, database_error},
     state::AppState,
@@ -48,7 +48,7 @@ const MAX_CANCEL_BACKOFF_MINUTES: i64 = 360;
 async fn process_cancellations(state: &AppState) -> ApiResult<()> {
     let due = sqlx::query_as::<_, (Uuid, String, i32)>(
         "SELECT id, provider_subscription_id, cancel_attempts FROM subscriptions \
-         WHERE billing_provider = 'paddle' AND cancel_requested_at IS NOT NULL AND cancelled_at IS NULL \
+         WHERE billing_provider = 'stripe' AND cancel_requested_at IS NOT NULL AND cancelled_at IS NULL \
            AND (cancel_next_attempt_at IS NULL OR cancel_next_attempt_at <= clock_timestamp()) \
          ORDER BY cancel_next_attempt_at NULLS FIRST LIMIT 20",
     )
@@ -57,15 +57,15 @@ async fn process_cancellations(state: &AppState) -> ApiResult<()> {
     .map_err(database_error)?;
 
     for (id, provider_subscription_id, attempts) in due {
-        let result = paddle::cancel_subscription(
+        let result = stripe::cancel_subscription(
             &state.billing,
-            &state.config.paddle,
+            &state.config.stripe,
             &provider_subscription_id,
         )
         .await;
         match result {
             Ok(outcome) => {
-                tracing::info!(%id, ?outcome, "paddle subscription cancellation accepted");
+                tracing::info!(%id, ?outcome, "stripe subscription cancellation accepted");
                 sqlx::query(
                     "UPDATE subscriptions SET cancelled_at = clock_timestamp(), auto_renews = false, \
                      cancel_attempts = cancel_attempts + 1, cancel_next_attempt_at = NULL WHERE id = $1",
@@ -79,7 +79,7 @@ async fn process_cancellations(state: &AppState) -> ApiResult<()> {
                 let minutes = 2_i64
                     .saturating_pow(attempts.clamp(0, 16) as u32)
                     .min(MAX_CANCEL_BACKOFF_MINUTES);
-                tracing::error!(%id, ?failure, "paddle subscription cancellation failed; will retry");
+                tracing::error!(%id, ?failure, "stripe subscription cancellation failed; will retry");
                 sqlx::query(
                     "UPDATE subscriptions SET cancel_attempts = cancel_attempts + 1, \
                      cancel_next_attempt_at = clock_timestamp() + make_interval(mins => $2) WHERE id = $1",
@@ -108,8 +108,8 @@ async fn reconcile_subscriptions(state: &AppState) -> ApiResult<()> {
     let now = Utc::now();
     for (provider, provider_subscription_id) in live {
         let result = match provider.as_str() {
-            "paddle" => {
-                reconcile_paddle(&state.billing, state, &provider_subscription_id, now).await
+            "stripe" => {
+                reconcile_stripe(&state.billing, state, &provider_subscription_id, now).await
             }
             "apple" => reconcile_apple(&state.billing, state, &provider_subscription_id, now).await,
             "google" => {
@@ -124,14 +124,14 @@ async fn reconcile_subscriptions(state: &AppState) -> ApiResult<()> {
     Ok(())
 }
 
-async fn reconcile_paddle(
+async fn reconcile_stripe(
     clients: &BillingClients,
     state: &AppState,
     subscription_id: &str,
     now: DateTime<Utc>,
 ) -> ApiResult<()> {
-    let data = paddle::fetch_subscription(clients, &state.config.paddle, subscription_id).await?;
-    if let Some(update) = paddle::update_from_subscription(&data, now) {
+    let data = stripe::fetch_subscription(clients, &state.config.stripe, subscription_id).await?;
+    if let Some(update) = stripe::update_from_subscription(&data, now) {
         super::apply_update(&state.db, &state.config, &update).await?;
     }
     Ok(())
