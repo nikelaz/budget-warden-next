@@ -1,5 +1,6 @@
 mod auth;
 mod auth_routes;
+mod billing;
 mod budgets;
 mod config;
 mod db;
@@ -8,6 +9,7 @@ mod errors;
 mod jobs;
 mod middleware;
 mod provider;
+mod ratelimit;
 mod state;
 mod tokens;
 
@@ -41,12 +43,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         db: db.clone(),
         config: config.clone(),
         provider_verifier: provider::ProviderVerifier::new().map_err(std::io::Error::other)?,
+        billing: billing::BillingClients::new().map_err(std::io::Error::other)?,
     };
+    let billing_state = state.clone();
     let app = Router::new()
         .route("/healthz", get(health))
         .route("/v1/capabilities", get(budgets::capabilities))
         .merge(auth_routes::routes(state.clone()))
         .merge(budgets::routes(state.clone()))
+        .merge(billing::routes::routes(state.clone()))
         .fallback(not_found)
         .layer(DefaultBodyLimit::max(config.max_request_body_bytes))
         .layer(axum_middleware::from_fn(middleware::request_context))
@@ -60,12 +65,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
-    let retention_task = tokio::spawn(jobs::run_retention_worker(db, config, shutdown_rx));
-    let serve_result = axum::serve(listener, app)
+    let retention_task = tokio::spawn(jobs::run_retention_worker(db, config, shutdown_rx.clone()));
+    let billing_task = tokio::spawn(billing::worker::run_billing_worker(
+        billing_state,
+        shutdown_rx,
+    ));
+    let serve_result = axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
     .with_graceful_shutdown(shutdown_signal(shutdown_tx.clone()))
     .await;
     let _ = shutdown_tx.send(true);
     retention_task.await?;
+    billing_task.await?;
     serve_result?;
     Ok(())
 }

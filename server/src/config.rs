@@ -27,6 +27,43 @@ pub struct Config {
     pub dev_entitlement: bool,
     pub google_auth: ProviderConfig,
     pub apple_auth: ProviderConfig,
+    pub paddle: PaddleConfig,
+    pub storekit: StoreKitConfig,
+    pub google_play: GooglePlayConfig,
+    /// Trust `X-Forwarded-For` for client addresses. Enable only behind a proxy
+    /// that overwrites that header.
+    pub trust_proxy_headers: bool,
+    pub auth_rate_limit_per_minute: i32,
+}
+
+#[derive(Clone, Default)]
+pub struct PaddleConfig {
+    pub api_key: Option<String>,
+    pub webhook_secret: Option<String>,
+    pub price_id: Option<String>,
+    pub sandbox: bool,
+    pub webhook_tolerance_seconds: i64,
+}
+
+#[derive(Clone, Default)]
+pub struct StoreKitConfig {
+    pub issuer_id: Option<String>,
+    pub bundle_id: Option<String>,
+    pub key_id: Option<String>,
+    pub private_key: Option<String>,
+    pub sandbox: bool,
+    /// Root certificate the signed-transaction chains must end in. Defaults to
+    /// the pinned Apple Root CA - G3 and is overridable for tests.
+    pub root_certificate_der: Option<Vec<u8>>,
+}
+
+#[derive(Clone, Default)]
+pub struct GooglePlayConfig {
+    pub package_name: Option<String>,
+    pub service_account_email: Option<String>,
+    pub private_key: Option<String>,
+    pub pubsub_audience: Option<String>,
+    pub pubsub_service_account: Option<String>,
 }
 
 #[derive(Clone, Default)]
@@ -146,8 +183,62 @@ impl Config {
             dev_entitlement,
             google_auth,
             apple_auth,
+            paddle: paddle_config(is_development)?,
+            storekit: storekit_config(is_development),
+            google_play: google_play_config(),
+            trust_proxy_headers: parse_bool("BW_TRUST_PROXY_HEADERS", false)?,
+            auth_rate_limit_per_minute: parse_i64("BW_AUTH_RATE_LIMIT_PER_MINUTE", 30)?
+                .clamp(1, i32::MAX as i64) as i32,
         })
     }
+}
+
+fn paddle_config(is_development: bool) -> Result<PaddleConfig, String> {
+    let sandbox = match env::var("BW_PADDLE_ENVIRONMENT").ok().as_deref() {
+        Some("production") => false,
+        Some("sandbox") => true,
+        Some(_) => return Err("BW_PADDLE_ENVIRONMENT must be sandbox or production".to_string()),
+        None => is_development,
+    };
+    let webhook_tolerance_seconds =
+        parse_i64("BW_PADDLE_WEBHOOK_TOLERANCE_SECONDS", 300)?.clamp(5, 3600);
+    Ok(PaddleConfig {
+        api_key: optional("BW_PADDLE_API_KEY"),
+        webhook_secret: optional("BW_PADDLE_WEBHOOK_SECRET"),
+        price_id: optional("BW_PADDLE_PRICE_ID"),
+        sandbox,
+        webhook_tolerance_seconds,
+    })
+}
+
+fn storekit_config(is_development: bool) -> StoreKitConfig {
+    let sandbox = match env::var("BW_STOREKIT_ENVIRONMENT").ok().as_deref() {
+        Some("production") => false,
+        Some("sandbox") => true,
+        _ => is_development,
+    };
+    StoreKitConfig {
+        issuer_id: optional("BW_STOREKIT_ISSUER_ID"),
+        bundle_id: optional("BW_STOREKIT_BUNDLE_ID"),
+        key_id: optional("BW_STOREKIT_KEY_ID"),
+        private_key: optional("BW_STOREKIT_PRIVATE_KEY").map(|key| key.replace("\\n", "\n")),
+        sandbox,
+        root_certificate_der: None,
+    }
+}
+
+fn google_play_config() -> GooglePlayConfig {
+    GooglePlayConfig {
+        package_name: optional("BW_GOOGLE_PLAY_PACKAGE_NAME"),
+        service_account_email: optional("BW_GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL"),
+        private_key: optional("BW_GOOGLE_PLAY_PRIVATE_KEY").map(|key| key.replace("\\n", "\n")),
+        pubsub_audience: optional("BW_GOOGLE_PLAY_PUBSUB_AUDIENCE"),
+        pubsub_service_account: optional("BW_GOOGLE_PLAY_PUBSUB_SERVICE_ACCOUNT"),
+    }
+}
+
+fn optional(name: &str) -> Option<String> {
+    env::var(name).ok().filter(|value| !value.trim().is_empty())
 }
 
 fn provider_config(prefix: &str, apple: bool) -> Result<ProviderConfig, String> {

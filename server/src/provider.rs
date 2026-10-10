@@ -211,6 +211,36 @@ impl ProviderVerifier {
         })
     }
 
+    /// Verifies an RS256 JWT issued by the provider's published key set and
+    /// returns its claims. Used for Pub/Sub push tokens and Sign in with Apple
+    /// server-to-server notifications, which carry no per-request nonce.
+    pub async fn verify_signed_jwt(
+        &self,
+        provider: ProviderName,
+        token: &str,
+        expected_audience: &str,
+    ) -> Result<Value, ProviderError> {
+        let header = decode_header(token).map_err(|_| ProviderError::InvalidProof)?;
+        if header.alg != Algorithm::RS256 {
+            return Err(ProviderError::InvalidProof);
+        }
+        let key_id = header.kid.ok_or(ProviderError::InvalidProof)?;
+        let mut jwk = self.key_set(provider, false).await?.find(&key_id).cloned();
+        if jwk.is_none() {
+            jwk = self.key_set(provider, true).await?.find(&key_id).cloned();
+        }
+        let jwk = jwk.ok_or(ProviderError::InvalidProof)?;
+        let key = DecodingKey::from_jwk(&jwk).map_err(|_| ProviderError::InvalidProof)?;
+        let mut validation = Validation::new(Algorithm::RS256);
+        validation.set_required_spec_claims(&["exp", "iss", "aud"]);
+        validation.set_issuer(provider.issuers());
+        validation.set_audience(&[expected_audience]);
+        validation.leeway = 30;
+        decode::<Value>(token, &key, &validation)
+            .map(|data| data.claims)
+            .map_err(|_| ProviderError::InvalidProof)
+    }
+
     async fn key_set(
         &self,
         provider: ProviderName,

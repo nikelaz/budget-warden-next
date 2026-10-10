@@ -1,5 +1,6 @@
 use sqlx::PgPool;
 
+use crate::billing::BillingClients;
 use crate::config::Config;
 use crate::provider::ProviderVerifier;
 
@@ -8,4 +9,5 @@ pub struct AppState {
     pub db: PgPool,
     pub config: Config,
     pub provider_verifier: ProviderVerifier,
+    pub billing: BillingClients,
 }

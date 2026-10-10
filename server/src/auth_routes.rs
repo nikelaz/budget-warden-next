@@ -31,18 +31,19 @@ const PROOF_MINUTES: i64 = 5;
 
 pub fn routes(state: AppState) -> Router<AppState> {
     let protected = middleware::from_fn_with_state(state.clone(), auth::require_auth);
+    let limited = middleware::from_fn_with_state(state.clone(), crate::ratelimit::limit_sign_in);
     Router::new()
         .route(
             "/v1/auth/{provider}/start",
-            post(start_authentication),
+            post(start_authentication).route_layer(limited.clone()),
         )
         .route(
             "/v1/auth/{provider}/complete",
-            post(complete_authentication),
+            post(complete_authentication).route_layer(limited.clone()),
         )
         .route(
             "/v1/sessions/refresh",
-            post(refresh_session),
+            post(refresh_session).route_layer(limited),
         )
         .route(
             "/v1/sessions/revoke",
@@ -881,21 +882,18 @@ async fn delete_account_inner(
     let mut tx = state.db.begin().await.map_err(database_error)?;
     require_account_not_pending_deletion(&mut tx, account.0).await?;
 
-    let auto_renewing_desktop_subscriptions = sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM subscriptions WHERE account_id = $1 \
-         AND billing_provider IN ('paddle', 'stripe') AND auto_renews = true FOR UPDATE",
+    // Desktop subscriptions are canceled at Paddle by the billing worker, which
+    // retries until the provider accepts the cancellation.
+    sqlx::query(
+        "UPDATE subscriptions SET cancel_requested_at = COALESCE(cancel_requested_at, clock_timestamp()), \
+         cancel_next_attempt_at = COALESCE(cancel_next_attempt_at, clock_timestamp()) \
+         WHERE account_id = $1 AND billing_provider = 'paddle' AND auto_renews = true \
+         AND cancelled_at IS NULL",
     )
     .bind(account.0)
-    .fetch_all(&mut *tx)
+    .execute(&mut *tx)
     .await
     .map_err(database_error)?;
-    if !auto_renewing_desktop_subscriptions.is_empty() {
-        return Err(ApiError::new(
-            StatusCode::CONFLICT,
-            "billing_cancellation_required",
-            "Cancel the desktop subscription before deleting this account.",
-        ));
-    }
 
     let subscriptions = sqlx::query_as::<_, SubscriptionResponse>(
         "SELECT id AS subscription_id, billing_provider, state, access_until, auto_renews, management_url \

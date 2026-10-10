@@ -1,0 +1,69 @@
+services:
+  postgres:
+    image: docker.io/library/postgres:17
+    environment:
+      POSTGRES_DB: budgetwarden
+      POSTGRES_USER: budgetwarden
+      POSTGRES_PASSWORD: budgetwarden
+    ports:
+      - "54329:5432"
+    volumes:
+      - budgetwarden-cloud-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U budgetwarden -d budgetwarden"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  cloud-server:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    environment:
+      BW_ENV: development
+      BW_LISTEN_ADDR: 0.0.0.0:8080
+      BW_DATABASE_URL: postgres://budgetwarden:budgetwarden@postgres:5432/budgetwarden
+      BW_CURSOR_SECRET: local-only-development-cursor-secret-change-this
+      BW_DEV_ACCOUNT_ID: 00000000-0000-0000-0000-000000000001
+      BW_DEV_BEARER_TOKEN: local-only-dev-token-change-this
+      BW_DEV_ENTITLEMENT: "true"
+      BW_GOOGLE_CLIENT_ID_MACOS: ${BW_GOOGLE_CLIENT_ID_MACOS:-}
+      BW_GOOGLE_CLIENT_ID_IOS: ${BW_GOOGLE_CLIENT_ID_IOS:-}
+      BW_GOOGLE_CLIENT_ID_ANDROID: ${BW_GOOGLE_CLIENT_ID_ANDROID:-}
+      BW_GOOGLE_CLIENT_ID_WINDOWS: ${BW_GOOGLE_CLIENT_ID_WINDOWS:-}
+      BW_GOOGLE_CLIENT_ID_WEB: ${BW_GOOGLE_CLIENT_ID_WEB:-}
+      BW_GOOGLE_REDIRECT_URIS: ${BW_GOOGLE_REDIRECT_URIS:-}
+      BW_GOOGLE_CLIENT_SECRET: ${BW_GOOGLE_CLIENT_SECRET:-}
+      BW_APPLE_CLIENT_ID_MACOS: ${BW_APPLE_CLIENT_ID_MACOS:-}
+      BW_APPLE_CLIENT_ID_IOS: ${BW_APPLE_CLIENT_ID_IOS:-}
+      BW_APPLE_CLIENT_ID_ANDROID: ${BW_APPLE_CLIENT_ID_ANDROID:-}
+      BW_APPLE_CLIENT_ID_WINDOWS: ${BW_APPLE_CLIENT_ID_WINDOWS:-}
+      BW_APPLE_CLIENT_ID_WEB: ${BW_APPLE_CLIENT_ID_WEB:-}
+      BW_APPLE_REDIRECT_URIS: ${BW_APPLE_REDIRECT_URIS:-}
+      BW_APPLE_TEAM_ID: ${BW_APPLE_TEAM_ID:-}
+      BW_APPLE_KEY_ID: ${BW_APPLE_KEY_ID:-}
+      BW_APPLE_PRIVATE_KEY: ${BW_APPLE_PRIVATE_KEY:-}
+      BW_PADDLE_API_KEY: ${BW_PADDLE_API_KEY:-}
+      BW_PADDLE_WEBHOOK_SECRET: ${BW_PADDLE_WEBHOOK_SECRET:-}
+      BW_PADDLE_PRICE_ID: ${BW_PADDLE_PRICE_ID:-}
+      BW_PADDLE_ENVIRONMENT: ${BW_PADDLE_ENVIRONMENT:-sandbox}
+      BW_STOREKIT_ISSUER_ID: ${BW_STOREKIT_ISSUER_ID:-}
+      BW_STOREKIT_BUNDLE_ID: ${BW_STOREKIT_BUNDLE_ID:-}
+      BW_STOREKIT_KEY_ID: ${BW_STOREKIT_KEY_ID:-}
+      BW_STOREKIT_PRIVATE_KEY: ${BW_STOREKIT_PRIVATE_KEY:-}
+      BW_STOREKIT_ENVIRONMENT: ${BW_STOREKIT_ENVIRONMENT:-sandbox}
+      BW_GOOGLE_PLAY_PACKAGE_NAME: ${BW_GOOGLE_PLAY_PACKAGE_NAME:-}
+      BW_GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL: ${BW_GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL:-}
+      BW_GOOGLE_PLAY_PRIVATE_KEY: ${BW_GOOGLE_PLAY_PRIVATE_KEY:-}
+      BW_GOOGLE_PLAY_PUBSUB_AUDIENCE: ${BW_GOOGLE_PLAY_PUBSUB_AUDIENCE:-}
+      BW_GOOGLE_PLAY_PUBSUB_SERVICE_ACCOUNT: ${BW_GOOGLE_PLAY_PUBSUB_SERVICE_ACCOUNT:-}
+      BW_TRUST_PROXY_HEADERS: ${BW_TRUST_PROXY_HEADERS:-false}
+      BW_AUTH_RATE_LIMIT_PER_MINUTE: ${BW_AUTH_RATE_LIMIT_PER_MINUTE:-30}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+
+volumes:
+  budgetwarden-cloud-postgres:

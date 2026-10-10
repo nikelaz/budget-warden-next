@@ -23,3 +23,5 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
 url = "2.5.7"
 uuid = { version = "1.23.5", features = ["serde", "v4"] }
+x509-parser = "0.18.1"
+aws-lc-rs = "1.18"

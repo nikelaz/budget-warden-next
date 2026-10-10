@@ -96,7 +96,18 @@ async fn prune_account(
         if data_not_purged && database_now >= deleted_at + chrono::Duration::days(30) {
             tracing::error!(%account_id, %purge_after, "account deletion exceeded the 30-day deadline");
         }
-        if purge_after <= database_now {
+        // A paid subscription that is still auto-renewing must be canceled
+        // at the provider before the account rows that link it are removed.
+        let cancellation_pending = sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS (SELECT 1 FROM subscriptions WHERE account_id = $1 \
+             AND cancel_requested_at IS NOT NULL AND cancelled_at IS NULL)",
+        )
+        .bind(account_id)
+        .fetch_one(&mut *tx)
+        .await?;
+        if purge_after <= database_now && cancellation_pending {
+            tracing::error!(%account_id, "account purge waits for provider cancellation");
+        } else if purge_after <= database_now {
             purge_deleted_account(&mut tx, account_id).await?;
             tx.commit().await?;
             return Ok(());
