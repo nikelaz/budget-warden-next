@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.lazarovco.BudgetWarden</id>
+  <name>Budget Warden</name>
+  <summary>Plan your money with portable local budgets</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-Source-Available-Educational</project_license>
+  <developer id="com.lazarovco">
+    <name>Lazarov &amp; Co EOOD</name>
+  </developer>
+  <description>
+    <p>Budget Warden helps you plan income, expenses, savings, debt, and transactions in a portable local budget file.</p>
+    <p>Your budgets remain in JSON-based .budget files that can be opened by Budget Warden on other supported platforms.</p>
+  </description>
+  <launchable type="desktop-id">com.lazarovco.BudgetWarden.desktop</launchable>
+  <provides>
+    <binary>budget-warden-linux</binary>
+    <mediatype>application/x-budget-warden-budget</mediatype>
+  </provides>
+</component>

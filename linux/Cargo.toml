@@ -1,0 +1,25 @@
+[package]
+name = "budget-warden-linux"
+version = "0.1.0"
+edition = "2024"
+description = "Budget Warden desktop app for Linux"
+license = "LicenseRef-Source-Available-Educational"
+
+[lib]
+name = "budget_warden_linux"
+path = "src/lib.rs"
+
+[[bin]]
+name = "budget-warden-linux"
+path = "src/main.rs"
+
+[dependencies]
+adw = { package = "libadwaita", version = "0.9", features = ["v1_5"] }
+gtk = { package = "gtk4", version = "0.11", features = ["v4_10"] }
+bw_core = { path = "../core" }
+chrono = "0.4.45"
+iso_currency = { version = "0.7.1", features = ["iterator"] }
+uuid = { version = "1.23.5", features = ["v4", "serde"] }
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"

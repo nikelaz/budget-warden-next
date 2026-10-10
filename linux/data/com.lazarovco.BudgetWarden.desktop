@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Budget Warden
+GenericName=Budget Planner
+Comment=Plan your money with portable local budgets
+Exec=budget-warden-linux %F
+Icon=com.lazarovco.BudgetWarden
+Terminal=false
+Categories=Office;Finance;
+MimeType=application/x-budget-warden-budget;
+StartupWMClass=com.lazarovco.BudgetWarden
+Keywords=budget;finance;money;transactions;

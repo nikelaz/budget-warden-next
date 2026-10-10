@@ -1,6 +1,6 @@
 # Budget Warden
 
-Budget Warden is a source-available native macOS, iOS, Android, and Windows budgeting app with a standalone Rust command-line client. Budgets are stored as portable local `.budget` files.
+Budget Warden is a source-available native macOS, iOS, Android, Linux, and Windows budgeting app with a standalone Rust command-line client. Budgets are stored as portable local `.budget` files.
 
 ## Architecture
 
@@ -18,6 +18,7 @@ windows/ (WinUI 3 client using generated C# bindings)
 android/ (Compose client using generated Kotlin/JNI bindings)
 
 cli/ (standalone Rust executable linking directly to bw_core)
+linux/ (GTK 4/libadwaita desktop app linking directly to bw_core)
 ```
 
 - `core/` is the canonical Rust implementation for models, validation, codec, CRDT, reporting, money, templates, and legacy migration. `boltffi.toml` configures Apple and Android binding generation.
@@ -26,6 +27,7 @@ cli/ (standalone Rust executable linking directly to bw_core)
 - `android/` is a Gradle Android app using Jetpack Compose and the generated Rust core Kotlin/JNI bindings. Kotlin owns Android document-provider I/O and recent-file preferences; there is no app-managed cloud synchronization.
 - `windows/` is a WinUI 3 app that consumes the generated Rust core directly through a local BoltFFI C# NuGet package. See `windows/README.md` for generation, build, and test commands.
 - `cli/` contains the `budget-warden` executable. It links directly to `core/` through `bw_core`, owns command dispatch, JSON protocol, local file persistence, and CLI-only preferences, and builds independently from generated bindings.
+- `linux/` contains the GTK 4/libadwaita desktop app. It links directly to `core/` through `bw_core`, owns Linux presentation and local preferences, and reads and writes the same `.budget` files without generated bindings. See [linux/README.md](linux/README.md) for Linux dependencies and build instructions.
 
 Build the CLI from the repository root with `cargo build --manifest-path cli/Cargo.toml --release`. See [cli/README.md](cli/README.md) for commands, protocol schemas, persistence behavior, and distribution notes.
 
@@ -36,6 +38,7 @@ See [AGENTS.md](AGENTS.md) for a compact contributor map and change-routing note
 - macOS and Xcode for the Apple clients
 - Android Studio / a compatible JDK for Android development
 - Windows, .NET 10, Visual Studio C++ build tools, and WinApp CLI for the Windows client
+- Linux, GTK 4, libadwaita 1.5 or newer, pkg-config, and Rust/Cargo for the Linux client
 - Rust and the project’s FFI generator when regenerating `core/dist` bindings
 - Rust and Cargo for the standalone CLI
 
