@@ -24,6 +24,8 @@ final class BWStore: ObservableObject {
     private static let recentBookmarksKey = "BW_RECENT_BUDGET_BOOKMARKS_V1"
     private static let currencyKey = "BW_CURRENCY"
     private static let deviceIDKey = "BW_DEVICE_ID"
+    private static let clockPhysicalMsKey = "BW_CLOCK_PHYSICAL_MS"
+    private static let clockLogicalKey = "BW_CLOCK_LOGICAL"
 
     @Published var currentBudget: BWBudget?
     @Published var recentFiles: [URL] = NSDocumentController.shared.recentDocumentURLs
@@ -48,7 +50,13 @@ final class BWStore: ObservableObject {
         }
 
         do {
-            try initializeCore(deviceId: deviceID)
+            let physicalMs = defaults.object(forKey: Self.clockPhysicalMsKey) as? Int64 ?? 0
+            let logical = Int32(exactly: defaults.integer(forKey: Self.clockLogicalKey)) ?? 0
+            try initializeCoreWithClockFloor(
+                deviceId: deviceID,
+                physicalMs: physicalMs,
+                logical: logical
+            )
         } catch let error as FfiError where error.message != "Rust core is already initialized" {
             assertionFailure("Could not initialize BWCore: \(error.message)")
         } catch {
@@ -333,6 +341,10 @@ final class BWStore: ObservableObject {
         do {
             let json = try encodeBudget(budget: budget)
             try json.write(to: url, atomically: true, encoding: .utf8)
+            let floor = try getClockFloor()
+            let defaults = UserDefaults.standard
+            defaults.set(floor.physicalMs, forKey: Self.clockPhysicalMsKey)
+            defaults.set(floor.logical, forKey: Self.clockLogicalKey)
         } catch let error as BWError {
             throw error
         } catch {

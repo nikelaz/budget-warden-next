@@ -60,6 +60,8 @@ final class BWStore {
     private static let recentBookmarksKey = "BWI_RECENT_BUDGET_BOOKMARKS_V1"
     private static let currencyKey = "BWI_CURRENCY"
     private static let deviceIDKey = "BWI_DEVICE_ID"
+    private static let clockPhysicalMsKey = "BWI_CLOCK_PHYSICAL_MS"
+    private static let clockLogicalKey = "BWI_CLOCK_LOGICAL"
 
     private(set) var currentBudget: BWBudget?
     private(set) var recentFiles: [URL] = []
@@ -87,7 +89,13 @@ final class BWStore {
         }
 
         do {
-            try initializeCore(deviceId: deviceID)
+            let physicalMs = defaults.object(forKey: Self.clockPhysicalMsKey) as? Int64 ?? 0
+            let logical = Int32(exactly: defaults.integer(forKey: Self.clockLogicalKey)) ?? 0
+            try initializeCoreWithClockFloor(
+                deviceId: deviceID,
+                physicalMs: physicalMs,
+                logical: logical
+            )
         } catch let error as FfiError where error.message != "Rust core is already initialized" {
             assertionFailure("Could not initialize BWCore: \(error.message)")
         } catch {
@@ -438,6 +446,10 @@ final class BWStore {
                 throw BWError.savingFile()
             }
             try coordinatedWrite(data, to: url)
+            let floor = try BWCore.getClockFloor()
+            let defaults = UserDefaults.standard
+            defaults.set(floor.physicalMs, forKey: Self.clockPhysicalMsKey)
+            defaults.set(floor.logical, forKey: Self.clockLogicalKey)
         } catch let error as BWError {
             throw error
         } catch let error as FfiError {

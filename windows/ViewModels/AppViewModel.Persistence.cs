@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Text.Json;
 using Bw_core;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -10,6 +11,8 @@ namespace BudgetWarden_Windows.ViewModels;
 public sealed partial class AppViewModel
 {
     private const string DeviceIdKey = "BW_DEVICE_ID";
+    private const string ClockPhysicalMsKey = "BW_CLOCK_PHYSICAL_MS";
+    private const string ClockLogicalKey = "BW_CLOCK_LOGICAL";
     private const string CurrencyKey = "BW_CURRENCY";
     private const string RecentFilesKey = "BW_RECENT_FILES_V1";
 
@@ -247,7 +250,7 @@ public sealed partial class AppViewModel
         RememberRecent(path);
     }
 
-    private static async Task WriteBudgetAsync(BwBudget budget, string path)
+    private async Task WriteBudgetAsync(BwBudget budget, string path)
     {
         CoreApi.ValidateBudget(budget);
         string json = CoreApi.EncodeBudget(budget);
@@ -260,6 +263,9 @@ public sealed partial class AppViewModel
         {
             await File.WriteAllTextAsync(temporaryPath, json).ConfigureAwait(false);
             File.Move(temporaryPath, path, true);
+            var clockFloor = CoreApi.GetClockFloor();
+            _settings.Values[ClockPhysicalMsKey] = clockFloor.PhysicalMs.ToString(CultureInfo.InvariantCulture);
+            _settings.Values[ClockLogicalKey] = clockFloor.Logical.ToString(CultureInfo.InvariantCulture);
         }
         finally
         {
@@ -298,9 +304,24 @@ public sealed partial class AppViewModel
             _settings.Values[DeviceIdKey] = deviceId.ToString("D");
         }
 
+        long physicalMs = long.TryParse(
+            ReadSetting(ClockPhysicalMsKey),
+            NumberStyles.Integer,
+            CultureInfo.InvariantCulture,
+            out long savedPhysicalMs)
+            ? savedPhysicalMs
+            : 0;
+        int logical = int.TryParse(
+            ReadSetting(ClockLogicalKey),
+            NumberStyles.Integer,
+            CultureInfo.InvariantCulture,
+            out int savedLogical)
+            ? savedLogical
+            : 0;
+
         try
         {
-            CoreApi.InitializeCore(deviceId);
+            CoreApi.InitializeCoreWithClockFloor(deviceId, physicalMs, logical);
         }
         catch (BoltException error) when (error.Message.Contains("already initialized", StringComparison.OrdinalIgnoreCase))
         {

@@ -12,6 +12,7 @@ import com.lazarovco.budgetwarden.core.budgetFromPreviousBudget
 import com.lazarovco.budgetwarden.core.budgetFromTemplate
 import com.lazarovco.budgetwarden.core.decodeBudget
 import com.lazarovco.budgetwarden.core.encodeBudget
+import com.lazarovco.budgetwarden.core.getClockFloor
 import com.lazarovco.budgetwarden.core.mergeBudgetForSave
 import com.lazarovco.budgetwarden.android.domain.Budget
 import com.lazarovco.budgetwarden.android.domain.TemplateSelection
@@ -204,6 +205,13 @@ internal class BudgetRepository(
         // a complete, atomically-written recovery snapshot before asking the
         // provider to replace its copy so an interrupted provider write never
         // destroys the only valid budget.
+        // Persist causality before publishing a snapshot. A failed file write
+        // may advance the floor, which is safe; a saved edit must not outlive it.
+        val clockFloor = getClockFloor()
+        check(preferences.edit()
+            .putLong(BudgetWardenApplication.CLOCK_PHYSICAL_MS_KEY, clockFloor.physicalMs)
+            .putInt(BudgetWardenApplication.CLOCK_LOGICAL_KEY, clockFloor.logical)
+            .commit()) { "Could not persist the mutation clock." }
         recoveryStore.write(uri, json)
         resolver.openOutputStream(uri, "rwt")
             ?.bufferedWriter()
