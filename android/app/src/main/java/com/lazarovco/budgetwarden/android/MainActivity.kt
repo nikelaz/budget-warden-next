@@ -82,6 +82,7 @@ import com.lazarovco.budgetwarden.core.updateCategory
 import com.lazarovco.budgetwarden.core.updateBudgetTitle
 import com.lazarovco.budgetwarden.core.updateTransaction
 import com.lazarovco.budgetwarden.android.data.BudgetRepository
+import com.lazarovco.budgetwarden.android.data.McpEvent
 import com.lazarovco.budgetwarden.android.data.StoredBudget
 import com.lazarovco.budgetwarden.android.domain.Budget
 import com.lazarovco.budgetwarden.android.domain.BudgetDates
@@ -123,6 +124,8 @@ fun BudgetWardenAndroidApp() {
         factory = remember(repository) { BudgetSessionViewModel.Factory(repository) },
     )
     val sessionState by sessionViewModel.state.collectAsStateWithLifecycle()
+    val mcpServer = remember { (context.applicationContext as BudgetWardenApplication).mcpServer }
+    val mcpState by mcpServer.state.collectAsStateWithLifecycle()
     val preferences = remember {
         context.getSharedPreferences(BudgetWardenApplication.PREFERENCES_NAME, Context.MODE_PRIVATE)
     }
@@ -154,6 +157,20 @@ fun BudgetWardenAndroidApp() {
 
     fun mutateBudget(operation: (Budget) -> Budget) {
         sessionViewModel.mutateBudget(operation)
+    }
+
+    LaunchedEffect(mcpServer, currentBudget?.url, currencyCode) {
+        mcpServer.updateBudgets(currentBudget?.url?.let(Uri::parse), currencyCode)
+    }
+
+    LaunchedEffect(mcpServer, sessionViewModel) {
+        mcpServer.events.collect { event ->
+            when (event) {
+                is McpEvent.BudgetChanged -> sessionViewModel.reloadBudget(event.uri)
+                is McpEvent.BudgetCreated -> sessionViewModel.refreshStoredBudgets()
+                is McpEvent.ShowBudget -> sessionViewModel.openBudget(event.uri)
+            }
+        }
     }
 
     LaunchedEffect(sessionViewModel, resources) {
@@ -304,7 +321,11 @@ fun BudgetWardenAndroidApp() {
                         AppDestination.SETTINGS -> SettingsScreen(
                             budget = budget,
                             currencyCode = currencyCode,
+                            mcpState = mcpState,
                             modifier = Modifier.padding(innerPadding),
+                            onMcpEnabledChange = mcpServer::setEnabled,
+                            onMcpAllowNetworkChange = mcpServer::setAllowNetwork,
+                            onRegenerateMcpUrl = mcpServer::regenerateUrl,
                             onCurrencyChange = {
                                 currencyCode = it
                                 preferences.edit().putString("currency_code", it).apply()

@@ -140,7 +140,10 @@ internal class BudgetRepository(
 
     override suspend fun deleteBudget(budget: Budget) = withContext(ioDispatcher) {
         val uri = Uri.parse(budget.url ?: error("Budget has no document URI."))
-        val deleted = if (DocumentsContract.isDocumentUri(applicationContext, uri)) {
+        val deleted = if (uri.scheme == "file") {
+            // Budgets created by the MCP server live in app storage.
+            java.io.File(checkNotNull(uri.path)).delete()
+        } else if (DocumentsContract.isDocumentUri(applicationContext, uri)) {
             DocumentsContract.deleteDocument(resolver, uri)
         } else {
             resolver.delete(uri, null, null) != 0
@@ -148,6 +151,22 @@ internal class BudgetRepository(
         check(deleted) { "The document provider could not delete this budget." }
         recoveryStore.delete(uri)
         removeRecent(uri)
+    }
+
+    /** Recent budget documents, most recent first, for the MCP server. */
+    internal fun recentBudgetUris(): List<Uri> = recentUriStrings().map(Uri::parse)
+
+    /** Reads a budget document's raw JSON for the MCP server. */
+    internal fun readBudgetJson(uri: Uri): String = encodeBudget(readBudget(uri))
+
+    /** Replaces a budget document with JSON the MCP server already merged. */
+    internal fun writeBudgetJson(uri: Uri, json: String) {
+        writeBudget(decodeBudget(json = json, url = uri.toString()).copy(url = uri.toString()))
+    }
+
+    /** Adds a budget the MCP server created to the recent list. */
+    internal fun rememberCreatedBudget(uri: Uri) {
+        rememberRecent(uri)
     }
 
     override fun removeRecent(uri: Uri) {

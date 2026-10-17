@@ -357,7 +357,21 @@ impl AppState {
         Ok(())
     }
 
-    fn remember_recent(&mut self, path: PathBuf) {
+    pub fn settings_dir(&self) -> &Path {
+        &self.settings_dir
+    }
+
+    /// Re-reads the open budget after another writer, such as the MCP server,
+    /// changed its file.
+    pub fn reload_budget(&mut self) -> Result<(), String> {
+        let Some(path) = self.budget.as_ref().and_then(|budget| budget.url.clone()) else {
+            return Ok(());
+        };
+        self.budget = Some(read_budget(Path::new(&path))?);
+        Ok(())
+    }
+
+    pub fn remember_recent(&mut self, path: PathBuf) {
         self.recent_files.retain(|recent| recent != &path);
         self.recent_files.insert(0, path);
         self.recent_files.truncate(12);
@@ -394,7 +408,20 @@ fn write_budget_exclusive(budget: &BWBudget, path: &Path) -> Result<(), String> 
 }
 
 fn write_budget_file(budget: &BWBudget, path: &Path, exclusive: bool) -> Result<(), String> {
-    let encoded = encode_budget(budget)?;
+    write_json_file(&encode_budget(budget)?, path, exclusive)
+}
+
+/// Atomically replaces the budget at `path` with already-encoded JSON.
+pub(crate) fn write_budget_json(encoded: &str, path: &Path) -> Result<(), String> {
+    write_json_file(encoded, path, false)
+}
+
+/// Writes already-encoded JSON to a new budget file without replacing one.
+pub(crate) fn write_budget_json_exclusive(encoded: &str, path: &Path) -> Result<(), String> {
+    write_json_file(encoded, path, true)
+}
+
+fn write_json_file(encoded: &str, path: &Path, exclusive: bool) -> Result<(), String> {
     let parent = path
         .parent()
         .ok_or_else(|| "The budget path has no parent directory.".to_string())?;

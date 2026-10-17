@@ -81,6 +81,15 @@ internal class BudgetSessionViewModel(
         commands.trySend(Command.Close)
     }
 
+    /** Re-reads the open budget if another writer, such as the MCP server, changed it. */
+    fun reloadBudget(uri: Uri) {
+        commands.trySend(Command.Reload(uri))
+    }
+
+    fun refreshStoredBudgets() {
+        commands.trySend(Command.LoadRecents)
+    }
+
     private suspend fun process(command: Command) {
         try {
             when (command) {
@@ -119,6 +128,14 @@ internal class BudgetSessionViewModel(
                 }
                 Command.Close -> {
                     _state.value = _state.value.copy(currentBudget = null)
+                }
+                is Command.Reload -> {
+                    val current = _state.value.currentBudget
+                    if (current?.url == command.uri.toString()) {
+                        val reloaded = repository.openBudget(command.uri)
+                        _state.value = _state.value.copy(currentBudget = reloaded)
+                    }
+                    refreshRecents()
                 }
             }
         } catch (error: CancellationException) {
@@ -162,10 +179,12 @@ internal class BudgetSessionViewModel(
 
         data object Close : Command
 
+        data class Reload(val uri: Uri) : Command
+
         val errorKind: BudgetSessionErrorKind
             get() = when (this) {
                 LoadRecents -> BudgetSessionErrorKind.LOAD_RECENTS
-                is Open -> BudgetSessionErrorKind.OPEN
+                is Open, is Reload -> BudgetSessionErrorKind.OPEN
                 is Create -> BudgetSessionErrorKind.CREATE
                 is Mutate -> BudgetSessionErrorKind.SAVE
                 is Delete -> BudgetSessionErrorKind.DELETE

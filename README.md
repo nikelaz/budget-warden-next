@@ -29,6 +29,15 @@ linux/ (GTK 4/libadwaita desktop app linking directly to bw_core)
 - `cli/` contains the `budget-warden` executable. It links directly to `core/` through `bw_core`, owns command dispatch, JSON protocol, local file persistence, and CLI-only preferences, and builds independently from generated bindings.
 - `linux/` contains the GTK 4/libadwaita desktop app. It links directly to `core/` through `bw_core`, owns Linux presentation and local preferences, and reads and writes the same `.budget` files without generated bindings. See [linux/README.md](linux/README.md) for Linux dependencies and build instructions.
 
+## MCP server
+
+Every app can run a built-in [Model Context Protocol](https://modelcontextprotocol.io) server so AI assistants and other MCP clients can manage budgets the way the app does. Turn it on in the app's settings (Preferences on macOS and Linux, the Settings page on Windows, and a budget's Settings tab on iOS and Android), then give the client the URL shown there, for example `http://127.0.0.1:18765/<secret>/mcp`.
+
+- The server speaks MCP over the Streamable HTTP transport and is implemented once in `core/src/mcp/`. Each app supplies storage through the `BWMcpHost` callback interface, so the server reaches only the app's open and recent budgets plus budgets it creates.
+- Tools cover listing budgets and templates, creating and renaming budgets (from a template or a previous budget), reports, and creating, updating, moving, and deleting categories and transactions. Amounts are decimal strings such as `"12.50"`; dates use `YYYY-MM-DD`.
+- Saves go through the same CRDT merge as the apps, and the app reloads a budget the server changed. New budgets go to a `Budgets` folder in the app's documents location (iCloud Drive on macOS when available, `Documents/Budget Warden` on Linux and Windows, app storage on Android).
+- By default the server listens on this device only. "Allow other devices" listens on the local network and shows the LAN URL. The secret path segment is the only credential, so keep the URL private and use "Generate new URL" to revoke it. On mobile, the server runs only while the app is running.
+
 Build the CLI from the repository root with `cargo build --manifest-path cli/Cargo.toml --release`. See [cli/README.md](cli/README.md) for commands, protocol schemas, persistence behavior, and distribution notes.
 
 See [AGENTS.md](AGENTS.md) for a compact contributor map and change-routing notes.

@@ -86,6 +86,7 @@ public sealed partial class AppViewModel : ObservableObject
         InitializePersistence();
         SelectedCurrency = CurrencyOptions.FirstOrDefault(item => item.Code == SelectedCurrencyCode)
             ?? CurrencyOptions[0];
+        InitializeMcpServer();
     }
 
     partial void OnSearchTextChanged(string value) => RefreshTransactions();

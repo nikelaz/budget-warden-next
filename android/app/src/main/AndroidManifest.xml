@@ -2,6 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- The optional MCP server listens on a local TCP port. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:name=".BudgetWardenApplication"
         android:allowBackup="true"

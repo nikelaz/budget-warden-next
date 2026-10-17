@@ -1,6 +1,7 @@
 use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::time::Duration;
 
 use adw::prelude::*;
 use bw_core::models::{BWCategory, BWCategoryType, BWDate, BWMoneyAmount, BWTransaction};
@@ -8,6 +9,7 @@ use chrono::{Datelike, Local};
 use gtk::{Align, Orientation};
 use uuid::Uuid;
 
+use crate::mcp::{McpController, McpEvent, McpSnapshot};
 use crate::store::{
     AppPage, AppState, BudgetTemplate, ReportMode, TransactionSort, budget_date_range,
     category_date_range, money_text, parse_date, parse_money, read_budget, supported_currencies,
@@ -189,7 +191,10 @@ pub struct AppUi {
     filters: Rc<RefCell<TransactionFilters>>,
     category_windows: RefCell<Vec<CategoryWindow>>,
     search: RefCell<Option<gtk::SearchEntry>>,
+    mcp: RefCell<McpController>,
 }
+
+const MCP_EVENT_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
 impl AppUi {
     pub fn new(app: &adw::Application, state: AppState) -> Rc<Self> {
@@ -201,6 +206,10 @@ impl AppUi {
             .width_request(360)
             .height_request(480)
             .build();
+        let budgets_dir = gtk::glib::user_special_dir(gtk::glib::UserDirectory::Documents)
+            .unwrap_or_else(gtk::glib::home_dir)
+            .join("Budget Warden");
+        let mcp = McpController::new(state.settings_dir(), budgets_dir);
         let ui = Rc::new(Self {
             app: app.clone(),
             window,
@@ -215,9 +224,67 @@ impl AppUi {
             )))),
             category_windows: RefCell::new(Vec::new()),
             search: RefCell::new(None),
+            mcp: RefCell::new(mcp),
         });
         ui.install_actions();
+        ui.sync_mcp();
+        ui.mcp.borrow_mut().apply();
+        ui.watch_mcp_events();
         ui
+    }
+
+    /// Shares the open and recent budgets with the MCP server.
+    fn sync_mcp(&self) {
+        let state = self.state.borrow();
+        self.mcp.borrow().update_snapshot(McpSnapshot {
+            open_budget: state
+                .budget
+                .as_ref()
+                .and_then(|budget| budget.url.as_ref())
+                .map(PathBuf::from),
+            recent_files: state.recent_files.clone(),
+            currency: state.currency.clone(),
+        });
+    }
+
+    fn watch_mcp_events(self: &Rc<Self>) {
+        let weak = Rc::downgrade(self);
+        gtk::glib::timeout_add_local(MCP_EVENT_POLL_INTERVAL, move || {
+            let Some(ui) = weak.upgrade() else {
+                return gtk::glib::ControlFlow::Break;
+            };
+            let events = ui.mcp.borrow().drain_events();
+            for event in events {
+                ui.handle_mcp_event(event);
+            }
+            gtk::glib::ControlFlow::Continue
+        });
+    }
+
+    fn handle_mcp_event(self: &Rc<Self>, event: McpEvent) {
+        match event {
+            McpEvent::BudgetChanged(path) => {
+                let is_open = self
+                    .state
+                    .borrow()
+                    .budget
+                    .as_ref()
+                    .and_then(|budget| budget.url.as_deref())
+                    .is_some_and(|url| std::path::Path::new(url) == path);
+                if is_open {
+                    let result = self.state.borrow_mut().reload_budget();
+                    match result {
+                        Ok(()) => self.refresh(),
+                        Err(error) => self.show_error(&error),
+                    }
+                }
+            }
+            McpEvent::BudgetCreated(path) => {
+                self.state.borrow_mut().remember_recent(path);
+                self.refresh();
+            }
+            McpEvent::ShowBudget(path) => self.open_budget(path),
+        }
     }
 
     pub fn present(self: &Rc<Self>) {
@@ -316,6 +383,7 @@ impl AppUi {
     }
 
     fn refresh(self: &Rc<Self>) {
+        self.sync_mcp();
         let budget = self.state.borrow().budget.clone();
         let Some(budget) = budget else {
             self.window.set_content(Some(&self.welcome()));
@@ -1750,6 +1818,7 @@ impl AppUi {
         );
         group.add(&currency);
         page.add(&group);
+        page.add(&self.mcp_preferences_group());
         dialog.add(&page);
         let ui = self.clone();
         currency.connect_selected_notify(move |row| {
@@ -1762,6 +1831,99 @@ impl AppUi {
             }
         });
         dialog.present(Some(&self.window));
+    }
+
+    fn mcp_preferences_group(self: &Rc<Self>) -> adw::PreferencesGroup {
+        let group = adw::PreferencesGroup::builder()
+            .title("MCP Server")
+            .description(
+                "Let AI assistants and other MCP clients read and edit your open and recent budgets.",
+            )
+            .build();
+        let settings = self.mcp.borrow().settings.clone();
+        let enabled = adw::SwitchRow::builder()
+            .title("Enable MCP server")
+            .active(settings.enabled)
+            .build();
+        let network = adw::SwitchRow::builder()
+            .title("Allow other devices")
+            .subtitle("Listen on your local network instead of this computer only")
+            .active(settings.allow_network)
+            .build();
+        let address = adw::ActionRow::builder()
+            .title("Server URL")
+            .subtitle_selectable(true)
+            .build();
+        let copy = gtk::Button::builder()
+            .icon_name("edit-copy-symbolic")
+            .tooltip_text("Copy URL")
+            .valign(Align::Center)
+            .css_classes(["flat"])
+            .build();
+        let reset = gtk::Button::builder()
+            .icon_name("view-refresh-symbolic")
+            .tooltip_text("Generate a new URL")
+            .valign(Align::Center)
+            .css_classes(["flat"])
+            .build();
+        address.add_suffix(&copy);
+        address.add_suffix(&reset);
+        group.add(&enabled);
+        group.add(&network);
+        group.add(&address);
+
+        let update_address = {
+            let ui = self.clone();
+            let address = address.clone();
+            let copy = copy.clone();
+            let reset = reset.clone();
+            move || {
+                let mcp = ui.mcp.borrow();
+                let status = mcp.status();
+                let text = match (&mcp.last_error, status.url) {
+                    (Some(error), _) => error.clone(),
+                    (None, Some(url)) => url,
+                    (None, None) => "Turn on the server to get its URL.".to_string(),
+                };
+                address.set_subtitle(&gtk::glib::markup_escape_text(&text));
+                copy.set_sensitive(status.running);
+                reset.set_sensitive(mcp.settings.enabled);
+            }
+        };
+        update_address();
+
+        let ui = self.clone();
+        let refresh = update_address.clone();
+        enabled.connect_active_notify(move |row| {
+            let active = row.is_active();
+            ui.sync_mcp();
+            ui.mcp.borrow_mut().update_settings(|settings| settings.enabled = active);
+            refresh();
+        });
+        let ui = self.clone();
+        let refresh = update_address.clone();
+        network.connect_active_notify(move |row| {
+            let active = row.is_active();
+            ui.mcp
+                .borrow_mut()
+                .update_settings(|settings| settings.allow_network = active);
+            refresh();
+        });
+        let ui = self.clone();
+        let refresh = update_address.clone();
+        reset.connect_clicked(move |_| {
+            ui.mcp
+                .borrow_mut()
+                .update_settings(|settings| settings.token = bw_core::mcp::generate_mcp_token());
+            refresh();
+        });
+        let ui = self.clone();
+        copy.connect_clicked(move |button| {
+            if let Some(url) = ui.mcp.borrow().status().url {
+                button.clipboard().set_text(&url);
+            }
+        });
+        group
     }
 
     fn show_about(&self) {

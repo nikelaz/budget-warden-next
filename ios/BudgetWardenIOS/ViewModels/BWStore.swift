@@ -60,15 +60,24 @@ final class BWStore {
     private static let currencyKey = "BWI_CURRENCY"
     private static let deviceIDKey = "BWI_DEVICE_ID"
 
-    private(set) var currentBudget: BWBudget?
-    private(set) var recentFiles: [URL] = []
+    private(set) var currentBudget: BWBudget? {
+        didSet { shareBudgetsWithMcp() }
+    }
+    private(set) var recentFiles: [URL] = [] {
+        didSet { shareBudgetsWithMcp() }
+    }
     var errorMessage: String?
     var selectedCurrency: BWCurrency {
         didSet {
             UserDefaults.standard.set(selectedCurrency.rawValue, forKey: Self.currencyKey)
+            shareBudgetsWithMcp()
         }
     }
+    private(set) var mcpSettings: BWMcpSettings?
+    private(set) var mcpStatus: BWMcpServerStatus?
+    private(set) var mcpErrorMessage: String?
 
+    @ObservationIgnored private var mcpServer: BWMcpServerController?
     private var currentSecurityScopedURL: URL?
     var hasAttemptedLegacyMigration = false
 
@@ -94,6 +103,80 @@ final class BWStore {
         }
 
         loadRecentFiles()
+
+        mcpServer = BWMcpServerController(
+            keyPrefix: "BWI_MCP_",
+            newBudgetDirectory: { BWStore.mcpBudgetDirectory() },
+            budgetDidChange: { [weak self] url in self?.reloadBudgetChangedByMcp(at: url) },
+            budgetWasCreated: { [weak self] url in self?.rememberRecent(url) },
+            showBudget: { [weak self] url in
+                Task { await self?.openBudget(at: url) }
+            }
+        )
+        shareBudgetsWithMcp()
+        refreshMcpState()
+    }
+
+    // MARK: MCP server
+
+    func setMcpServerEnabled(_ isEnabled: Bool) {
+        mcpServer?.setEnabled(isEnabled)
+        refreshMcpState()
+    }
+
+    func setMcpServerAllowsNetwork(_ allowsNetwork: Bool) {
+        mcpServer?.setAllowsNetwork(allowsNetwork)
+        refreshMcpState()
+    }
+
+    func regenerateMcpServerURL() {
+        mcpServer?.regenerateURL()
+        refreshMcpState()
+    }
+
+    /// iOS closes listening sockets while the app is suspended; listen again
+    /// when it becomes active.
+    func restartMcpServerIfEnabled() {
+        guard mcpSettings?.isEnabled == true else { return }
+        mcpServer?.restartIfEnabled()
+        refreshMcpState()
+    }
+
+    private func refreshMcpState() {
+        mcpSettings = mcpServer?.settings
+        mcpStatus = mcpServer?.status
+        mcpErrorMessage = mcpServer?.errorMessage
+    }
+
+    private func shareBudgetsWithMcp() {
+        let openURL = currentBudget?.url.map { path in
+            currentSecurityScopedURL.flatMap { scoped in
+                scoped.standardizedFileURL.path == URL(fileURLWithPath: path).standardizedFileURL.path
+                    ? scoped
+                    : nil
+            } ?? URL(fileURLWithPath: path)
+        }
+        mcpServer?.updateBudgets(
+            open: openURL,
+            recent: recentFiles,
+            currencyCode: selectedCurrency.rawValue
+        )
+    }
+
+    private func reloadBudgetChangedByMcp(at url: URL) {
+        guard
+            let path = currentBudget?.url,
+            URL(fileURLWithPath: path).standardizedFileURL == url.standardizedFileURL,
+            let reloaded = try? readBudget(at: URL(fileURLWithPath: path))
+        else {
+            return
+        }
+        currentBudget = reloaded
+    }
+
+    private nonisolated static func mcpBudgetDirectory() -> URL? {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("Budgets", isDirectory: true)
     }
 
     var selectedBudgetID: UUID? {

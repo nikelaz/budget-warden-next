@@ -35,12 +35,16 @@ public sealed partial class AppViewModel
         LoadRecentFiles();
     }
 
-    partial void OnSelectedCurrencyCodeChanged(string value) =>
+    partial void OnSelectedCurrencyCodeChanged(string value)
+    {
         _settings.Values[CurrencyKey] = value;
+        ShareBudgetsWithMcp();
+    }
 
     partial void OnCurrentBudgetChanged(BwBudget? value)
     {
         UpdateRecentBudgetSelection();
+        ShareBudgetsWithMcp();
         Refresh();
     }
 
@@ -345,6 +349,7 @@ public sealed partial class AppViewModel
         }
 
         UpdateRecentBudgetSelection();
+        ShareBudgetsWithMcp();
         string[] recentPaths = RecentFiles.Select(item => item.Path).ToArray();
         _settings.Values[RecentFilesKey] = JsonSerializer.Serialize(
             recentPaths,

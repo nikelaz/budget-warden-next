@@ -47,6 +47,8 @@
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Budget Warden lets MCP clients on your local network connect to its MCP server when you allow other devices.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

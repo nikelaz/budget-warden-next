@@ -17,3 +17,4 @@ pub mod templates;
 pub mod money;
 pub mod reporting;
 pub mod validation;
+pub mod mcp;

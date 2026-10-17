@@ -10,6 +10,7 @@
 import SwiftUI
 
 struct BWRootView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @State private var store = BWStore()
     @State private var navigationPath: [UUID] = []
     @State private var isCreateBudgetPresented = false
@@ -34,6 +35,11 @@ struct BWRootView: View {
         }
         .task {
             await store.migrateLegacyBudgetsIfNeeded()
+        }
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            if oldPhase == .background, newPhase != .background {
+                store.restartMcpServerIfEnabled()
+            }
         }
         .onOpenURL(perform: openBudget)
         .fileImporter(

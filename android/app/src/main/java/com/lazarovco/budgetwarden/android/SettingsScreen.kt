@@ -1,7 +1,11 @@
 package com.lazarovco.budgetwarden.android
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -17,6 +21,7 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -24,12 +29,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import com.lazarovco.budgetwarden.android.data.McpServerUiState
 import com.lazarovco.budgetwarden.android.domain.Budget
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,7 +46,11 @@ import com.lazarovco.budgetwarden.android.domain.Budget
 internal fun SettingsScreen(
     budget: Budget,
     currencyCode: String,
+    mcpState: McpServerUiState,
     modifier: Modifier = Modifier,
+    onMcpEnabledChange: (Boolean) -> Unit,
+    onMcpAllowNetworkChange: (Boolean) -> Unit,
+    onRegenerateMcpUrl: () -> Unit,
     onCurrencyChange: (String) -> Unit,
     onRenameBudget: (String) -> Unit,
     onDeleteBudget: () -> Unit,
@@ -102,9 +115,68 @@ internal fun SettingsScreen(
             }
         }
 
+        McpServerSettings(
+            state = mcpState,
+            onEnabledChange = onMcpEnabledChange,
+            onAllowNetworkChange = onMcpAllowNetworkChange,
+            onRegenerateUrl = onRegenerateMcpUrl,
+        )
+
         Text(stringResource(R.string.actions), style = MaterialTheme.typography.titleMedium)
         OutlinedButton(onClick = onDeleteBudget, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.delete_budget_action))
         }
+    }
+}
+
+@Composable
+private fun McpServerSettings(
+    state: McpServerUiState,
+    onEnabledChange: (Boolean) -> Unit,
+    onAllowNetworkChange: (Boolean) -> Unit,
+    onRegenerateUrl: () -> Unit,
+) {
+    val context = LocalContext.current
+    val copiedMessage = stringResource(R.string.mcp_url_copied)
+
+    Text(stringResource(R.string.mcp_server), style = MaterialTheme.typography.titleMedium)
+    Text(
+        stringResource(R.string.mcp_server_description),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    SettingsSwitch(stringResource(R.string.mcp_enable), state.enabled, onEnabledChange)
+    SettingsSwitch(stringResource(R.string.mcp_allow_network), state.allowNetwork, onAllowNetworkChange)
+    state.error?.let { error ->
+        Text(error, color = MaterialTheme.colorScheme.error)
+    }
+    state.url?.let { url ->
+        Text(stringResource(R.string.mcp_server_url), style = MaterialTheme.typography.labelLarge)
+        Text(url, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+        OutlinedButton(
+            onClick = {
+                context.getSystemService(ClipboardManager::class.java)
+                    ?.setPrimaryClip(ClipData.newPlainText(copiedMessage, url))
+                Toast.makeText(context, copiedMessage, Toast.LENGTH_SHORT).show()
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.mcp_copy_url))
+        }
+        OutlinedButton(onClick = onRegenerateUrl, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.mcp_regenerate_url))
+        }
+    }
+}
+
+@Composable
+private fun SettingsSwitch(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(label, modifier = Modifier.weight(1f))
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
