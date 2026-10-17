@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using BudgetWarden_Windows.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Windows.ApplicationModel.DataTransfer;
 
 namespace BudgetWarden_Windows.Views;
 
@@ -90,6 +91,38 @@ public sealed partial class SettingsView : UserControl
         Vm.SelectedCurrency = currency;
         sender.Text = currency.DisplayName;
     }
+
+    // Bindings also raise Toggled; only forward changes the user made.
+    private void McpEnabledSwitch_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (McpEnabledSwitch.IsOn != Vm.IsMcpServerEnabled)
+        {
+            Vm.SetMcpServerEnabled(McpEnabledSwitch.IsOn);
+        }
+    }
+
+    private void McpNetworkSwitch_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (McpNetworkSwitch.IsOn != Vm.McpServerAllowsNetwork)
+        {
+            Vm.SetMcpServerAllowsNetwork(McpNetworkSwitch.IsOn);
+        }
+    }
+
+    private void CopyMcpUrl_Click(object sender, RoutedEventArgs e)
+    {
+        if (Vm.McpServerUrl is not string url)
+        {
+            return;
+        }
+
+        DataPackage package = new();
+        package.SetText(url);
+        Clipboard.SetContent(package);
+    }
+
+    private void RegenerateMcpUrl_Click(object sender, RoutedEventArgs e) =>
+        Vm.RegenerateMcpServerUrl();
 
     private CurrencyOption? CurrencyFromDisplayName(string displayName) =>
         Vm.CurrencyOptions.FirstOrDefault(currency =>

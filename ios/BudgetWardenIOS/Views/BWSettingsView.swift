@@ -9,6 +9,7 @@
 
 import BWAppleCore
 import SwiftUI
+import UIKit
 
 struct BWSettingsView: View {
     let store: BWStore
@@ -48,6 +49,39 @@ struct BWSettingsView: View {
                     LabeledContent("Currency", value: title(for: store.selectedCurrency))
                 }
                 .buttonStyle(.plain)
+            }
+
+            Section {
+                Toggle("Enable MCP Server", isOn: Binding(
+                    get: { store.mcpSettings?.isEnabled ?? false },
+                    set: { store.setMcpServerEnabled($0) }
+                ))
+                Toggle("Allow Other Devices", isOn: Binding(
+                    get: { store.mcpSettings?.allowsNetwork ?? false },
+                    set: { store.setMcpServerAllowsNetwork($0) }
+                ))
+                if let error = store.mcpErrorMessage {
+                    Text(error)
+                        .foregroundStyle(.red)
+                } else if let url = store.mcpStatus?.url, store.mcpStatus?.running == true {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Server URL")
+                        Text(url)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+                    Button("Copy URL", systemImage: "doc.on.doc") {
+                        UIPasteboard.general.string = url
+                    }
+                    Button("Generate New URL", systemImage: "arrow.clockwise") {
+                        store.regenerateMcpServerURL()
+                    }
+                }
+            } header: {
+                Text("MCP Server")
+            } footer: {
+                Text("MCP clients such as AI assistants can read and edit your open and recent budgets through this URL while Budget Warden is open. Keep it private.")
             }
 
             if let path = budget.url {

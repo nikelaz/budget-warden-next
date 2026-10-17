@@ -49,6 +49,7 @@ struct BWWindowMain: Scene {
             }
             .sheet(isPresented: $windowStore.isPreferencesDialogOpen) {
                 BWPreferencesView(
+                    store: store,
                     selectedCurrency: $store.selectedCurrency,
                     onClose: windowStore.closePreferencesDialog
                 )

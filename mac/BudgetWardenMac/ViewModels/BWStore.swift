@@ -24,11 +24,25 @@ final class BWStore: ObservableObject {
     private static let currencyKey = "BW_CURRENCY"
     private static let deviceIDKey = "BW_DEVICE_ID"
 
-    @Published var currentBudget: BWBudget?
-    @Published var recentFiles: [URL] = NSDocumentController.shared.recentDocumentURLs
-    @Published var selectedCurrency: BWCurrency {
-        didSet { UserDefaults.standard.set(selectedCurrency.rawValue, forKey: Self.currencyKey) }
+    @Published var currentBudget: BWBudget? {
+        didSet { shareBudgetsWithMcp() }
     }
+    @Published var recentFiles: [URL] = NSDocumentController.shared.recentDocumentURLs {
+        didSet { shareBudgetsWithMcp() }
+    }
+    @Published var selectedCurrency: BWCurrency {
+        didSet {
+            UserDefaults.standard.set(selectedCurrency.rawValue, forKey: Self.currencyKey)
+            shareBudgetsWithMcp()
+        }
+    }
+    @Published private(set) var mcpSettings: BWMcpSettings?
+    @Published private(set) var mcpStatus: BWMcpServerStatus?
+    @Published private(set) var mcpErrorMessage: String?
+    /// Changes when an MCP client asks the app to show a budget.
+    @Published private(set) var mcpShowBudgetRequest = UUID()
+
+    private var mcpServer: BWMcpServerController?
 
     private var currentSecurityScopedURL: URL?
     var hasAttemptedLegacyMigration = false
@@ -53,6 +67,84 @@ final class BWStore: ObservableObject {
         } catch {
             assertionFailure("Could not initialize BWCore: \(error.localizedDescription)")
         }
+
+        mcpServer = BWMcpServerController(
+            keyPrefix: "BW_MCP_",
+            newBudgetDirectory: { BWStore.mcpBudgetDirectory() },
+            budgetDidChange: { [weak self] url in self?.reloadBudgetChangedByMcp(at: url) },
+            budgetWasCreated: { [weak self] url in self?.rememberRecent(url) },
+            showBudget: { [weak self] url in self?.showBudgetRequestedByMcp(at: url) }
+        )
+        shareBudgetsWithMcp()
+        refreshMcpState()
+    }
+
+    // MARK: MCP server
+
+    func setMcpServerEnabled(_ isEnabled: Bool) {
+        mcpServer?.setEnabled(isEnabled)
+        refreshMcpState()
+    }
+
+    func setMcpServerAllowsNetwork(_ allowsNetwork: Bool) {
+        mcpServer?.setAllowsNetwork(allowsNetwork)
+        refreshMcpState()
+    }
+
+    func regenerateMcpServerURL() {
+        mcpServer?.regenerateURL()
+        refreshMcpState()
+    }
+
+    private func refreshMcpState() {
+        mcpSettings = mcpServer?.settings
+        mcpStatus = mcpServer?.status
+        mcpErrorMessage = mcpServer?.errorMessage
+    }
+
+    private func shareBudgetsWithMcp() {
+        let openURL = currentBudget?.url.map { path in
+            currentSecurityScopedURL.flatMap { scoped in
+                scoped.standardizedFileURL.path == URL(fileURLWithPath: path).standardizedFileURL.path
+                    ? scoped
+                    : nil
+            } ?? URL(fileURLWithPath: path)
+        }
+        mcpServer?.updateBudgets(
+            open: openURL,
+            recent: recentFiles,
+            currencyCode: selectedCurrency.rawValue
+        )
+    }
+
+    private func reloadBudgetChangedByMcp(at url: URL) {
+        guard
+            let path = currentBudget?.url,
+            URL(fileURLWithPath: path).standardizedFileURL == url.standardizedFileURL,
+            let reloaded = try? readBudget(at: URL(fileURLWithPath: path))
+        else {
+            return
+        }
+        currentBudget = reloaded
+    }
+
+    private func showBudgetRequestedByMcp(at url: URL) {
+        let isOpen = currentBudget?.url.map {
+            URL(fileURLWithPath: $0).standardizedFileURL == url.standardizedFileURL
+        } ?? false
+        if !isOpen {
+            try? openBudget(at: url)
+        }
+        mcpShowBudgetRequest = UUID()
+        NSApp.activate()
+    }
+
+    private nonisolated static func mcpBudgetDirectory() -> URL? {
+        let documents = FileManager.default
+            .url(forUbiquityContainerIdentifier: nil)?
+            .appendingPathComponent("Documents", isDirectory: true)
+            ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        return documents?.appendingPathComponent("Budgets", isDirectory: true)
     }
 
     func createBudget(
@@ -116,6 +208,16 @@ final class BWStore: ObservableObject {
     }
 
     func openBudget(at url: URL, windowStore: BWWindowStore) async -> Bool {
+        do {
+            try openBudget(at: url)
+            return true
+        } catch {
+            windowStore.setError(error)
+            return false
+        }
+    }
+
+    private func openBudget(at url: URL) throws {
         let scoped = url.startAccessingSecurityScopedResource()
         do {
             let opened = try readBudget(at: url)
@@ -125,11 +227,9 @@ final class BWStore: ObservableObject {
             currentSecurityScopedURL = scoped ? url : nil
             currentBudget = opened
             rememberRecent(url)
-            return true
         } catch {
             if scoped { url.stopAccessingSecurityScopedResource() }
-            windowStore.setError(error)
-            return false
+            throw error
         }
     }
 
@@ -275,13 +375,18 @@ final class BWStore: ObservableObject {
             }
             updated.url = path
             let url = URL(fileURLWithPath: path)
-            let onDisk = try readBudget(at: url)
-            updated = try BWCore.mergeBudgetForSave(
-                budgetInMemory: updated,
-                budgetOnDisk: onDisk
-            )
-            updated = try updated.updateActuals()
-            try writeBudget(updated, to: url)
+            let inMemory = updated
+            // Shared with the MCP server so concurrent saves merge instead of
+            // overwriting each other.
+            updated = try BWBudgetSaveLock.withLock {
+                let onDisk = try readBudget(at: url)
+                let merged = try BWCore.mergeBudgetForSave(
+                    budgetInMemory: inMemory,
+                    budgetOnDisk: onDisk
+                ).updateActuals()
+                try writeBudget(merged, to: url)
+                return merged
+            }
             currentBudget = updated
             rememberRecent(url)
             return true

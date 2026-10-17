@@ -38,6 +38,11 @@ struct BWWindowWelcome: Scene {
             .task {
                 await store.migrateLegacyBudgetsIfNeeded(windowStore: windowStore)
             }
+            .onChange(of: store.mcpShowBudgetRequest) {
+                if store.currentBudget != nil {
+                    openMainWindow()
+                }
+            }
             .onOpenURL { url in
                 Task {
                     if await store.openBudget(at: url, windowStore: windowStore) {
@@ -63,6 +68,7 @@ struct BWWindowWelcome: Scene {
             }
             .sheet(isPresented: $windowStore.isPreferencesDialogOpen) {
                 BWPreferencesView(
+                    store: store,
                     selectedCurrency: $store.selectedCurrency,
                     onClose: windowStore.closePreferencesDialog
                 )

@@ -3,6 +3,7 @@
     x:Class="BudgetWarden_Windows.Views.SettingsView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:BudgetWarden_Windows.Views"
     xmlns:viewModels="using:BudgetWarden_Windows.ViewModels">
     <ScrollViewer Padding="30">
         <StackPanel
@@ -40,6 +41,60 @@
                         AutomationProperties.Name="Currency"
                         AutomationProperties.AutomationId="CurrencySearchBox" />
                 </Grid>
+            </Border>
+            <Border
+                Padding="24"
+                MaxWidth="720"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="{ThemeResource ControlCornerRadius}">
+                <StackPanel Spacing="12">
+                    <TextBlock
+                        Text="MCP Server"
+                        Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <TextBlock
+                        Text="MCP clients such as AI assistants can read and edit your open and recent budgets through this URL while Budget Warden is running. Keep it private."
+                        TextWrapping="Wrap"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <ToggleSwitch
+                        x:Name="McpEnabledSwitch"
+                        Header="Enable MCP server"
+                        IsOn="{x:Bind Vm.IsMcpServerEnabled, Mode=OneWay}"
+                        Toggled="McpEnabledSwitch_Toggled"
+                        AutomationProperties.AutomationId="McpEnabledSwitch" />
+                    <ToggleSwitch
+                        x:Name="McpNetworkSwitch"
+                        Header="Allow other devices on this network"
+                        IsOn="{x:Bind Vm.McpServerAllowsNetwork, Mode=OneWay}"
+                        Toggled="McpNetworkSwitch_Toggled"
+                        AutomationProperties.AutomationId="McpNetworkSwitch" />
+                    <TextBlock
+                        Text="{x:Bind Vm.McpServerError, Mode=OneWay}"
+                        TextWrapping="Wrap"
+                        Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                        Visibility="{x:Bind local:ViewVisibility.When(Vm.HasMcpServerError), Mode=OneWay}" />
+                    <StackPanel
+                        Spacing="8"
+                        Visibility="{x:Bind local:ViewVisibility.When(Vm.HasMcpServerUrl), Mode=OneWay}">
+                        <TextBox
+                            Header="Server URL"
+                            IsReadOnly="True"
+                            FontFamily="Consolas"
+                            Text="{x:Bind Vm.McpServerUrl, Mode=OneWay}"
+                            AutomationProperties.AutomationId="McpServerUrl" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button
+                                Content="Copy URL"
+                                Click="CopyMcpUrl_Click"
+                                AutomationProperties.AutomationId="CopyMcpUrlButton" />
+                            <Button
+                                Content="Generate new URL"
+                                Click="RegenerateMcpUrl_Click"
+                                AutomationProperties.AutomationId="RegenerateMcpUrlButton" />
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
             </Border>
         </StackPanel>
     </ScrollViewer>

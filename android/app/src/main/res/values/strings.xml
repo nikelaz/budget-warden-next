@@ -81,4 +81,12 @@
     <string name="error_create_budget">Could not create budget.</string>
     <string name="error_save_budget">Could not save budget.</string>
     <string name="error_delete_budget">Could not delete budget.</string>
+    <string name="mcp_server">MCP Server</string>
+    <string name="mcp_server_description">MCP clients such as AI assistants can read and edit your open and recent budgets through this URL while Budget Warden is running. Keep it private.</string>
+    <string name="mcp_enable">Enable MCP server</string>
+    <string name="mcp_allow_network">Allow other devices on this network</string>
+    <string name="mcp_server_url">Server URL</string>
+    <string name="mcp_copy_url">Copy URL</string>
+    <string name="mcp_url_copied">MCP server URL copied</string>
+    <string name="mcp_regenerate_url">Generate New URL</string>
 </resources>

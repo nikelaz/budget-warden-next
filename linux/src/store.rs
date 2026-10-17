@@ -1,7 +1,7 @@
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use bw_core::app_state::initialize_core;
 use bw_core::codec::{decode_budget, encode_budget};
@@ -17,6 +17,15 @@ use uuid::Uuid;
 
 const APP_DIR: &str = "budget-warden";
 static CURRENCIES: OnceLock<Vec<CurrencyInfo>> = OnceLock::new();
+/// Held for the whole read-merge-write of every budget save, by the app and
+/// by the MCP server, so neither can overwrite a save it never read.
+static BUDGET_SAVE_LOCK: Mutex<()> = Mutex::new(());
+
+pub(crate) fn budget_save_lock() -> MutexGuard<'static, ()> {
+    BUDGET_SAVE_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
 
 #[derive(Clone, Debug)]
 pub struct CurrencyInfo {
@@ -348,6 +357,7 @@ impl AppState {
             .clone()
             .ok_or_else(|| "Save the budget before making changes.".to_string())?;
         let path = PathBuf::from(path);
+        let _save = budget_save_lock();
         let on_disk = read_budget(&path)?;
         updated = domain::merge_budget_for_save(updated, on_disk)?.update_actuals()?;
         updated.url = Some(path.to_string_lossy().into_owned());
@@ -357,7 +367,21 @@ impl AppState {
         Ok(())
     }
 
-    fn remember_recent(&mut self, path: PathBuf) {
+    pub fn settings_dir(&self) -> &Path {
+        &self.settings_dir
+    }
+
+    /// Re-reads the open budget after another writer, such as the MCP server,
+    /// changed its file.
+    pub fn reload_budget(&mut self) -> Result<(), String> {
+        let Some(path) = self.budget.as_ref().and_then(|budget| budget.url.clone()) else {
+            return Ok(());
+        };
+        self.budget = Some(read_budget(Path::new(&path))?);
+        Ok(())
+    }
+
+    pub fn remember_recent(&mut self, path: PathBuf) {
         self.recent_files.retain(|recent| recent != &path);
         self.recent_files.insert(0, path);
         self.recent_files.truncate(12);
@@ -394,7 +418,20 @@ fn write_budget_exclusive(budget: &BWBudget, path: &Path) -> Result<(), String> 
 }
 
 fn write_budget_file(budget: &BWBudget, path: &Path, exclusive: bool) -> Result<(), String> {
-    let encoded = encode_budget(budget)?;
+    write_json_file(&encode_budget(budget)?, path, exclusive)
+}
+
+/// Atomically replaces the budget at `path` with already-encoded JSON.
+pub(crate) fn write_budget_json(encoded: &str, path: &Path) -> Result<(), String> {
+    write_json_file(encoded, path, false)
+}
+
+/// Writes already-encoded JSON to a new budget file without replacing one.
+pub(crate) fn write_budget_json_exclusive(encoded: &str, path: &Path) -> Result<(), String> {
+    write_json_file(encoded, path, true)
+}
+
+fn write_json_file(encoded: &str, path: &Path, exclusive: bool) -> Result<(), String> {
     let parent = path
         .parent()
         .ok_or_else(|| "The budget path has no parent directory.".to_string())?;

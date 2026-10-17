@@ -35,12 +35,16 @@ public sealed partial class AppViewModel
         LoadRecentFiles();
     }
 
-    partial void OnSelectedCurrencyCodeChanged(string value) =>
+    partial void OnSelectedCurrencyCodeChanged(string value)
+    {
         _settings.Values[CurrencyKey] = value;
+        ShareBudgetsWithMcp();
+    }
 
     partial void OnCurrentBudgetChanged(BwBudget? value)
     {
         UpdateRecentBudgetSelection();
+        ShareBudgetsWithMcp();
         Refresh();
     }
 
@@ -236,15 +240,30 @@ public sealed partial class AppViewModel
         });
     }
 
+    /// <summary>
+    /// Held for the whole read-merge-write of every budget save, by the app and
+    /// by the MCP server, so neither can overwrite a save it never read.
+    /// </summary>
+    internal static SemaphoreSlim BudgetSaveGate { get; } = new(1, 1);
+
     private async Task MutateAsync(Func<BwBudget, BwBudget> mutation)
     {
         BwBudget current = RequireBudget();
         BwBudget updated = mutation(current).UpdateActuals();
         string path = ValidateBudgetPath(updated.Url ?? current.Url ?? string.Empty);
         updated = updated with { Url = path };
-        BwBudget onDisk = await ReadBudgetAsync(path);
-        updated = CoreApi.MergeBudgetForSave(updated, onDisk).UpdateActuals();
-        await WriteBudgetAsync(updated, path);
+        await BudgetSaveGate.WaitAsync();
+        try
+        {
+            BwBudget onDisk = await ReadBudgetAsync(path);
+            updated = CoreApi.MergeBudgetForSave(updated, onDisk).UpdateActuals();
+            await WriteBudgetAsync(updated, path);
+        }
+        finally
+        {
+            BudgetSaveGate.Release();
+        }
+
         CurrentBudget = updated;
         RememberRecent(path);
     }
@@ -345,6 +364,7 @@ public sealed partial class AppViewModel
         }
 
         UpdateRecentBudgetSelection();
+        ShareBudgetsWithMcp();
         string[] recentPaths = RecentFiles.Select(item => item.Path).ToArray();
         _settings.Values[RecentFilesKey] = JsonSerializer.Serialize(
             recentPaths,
