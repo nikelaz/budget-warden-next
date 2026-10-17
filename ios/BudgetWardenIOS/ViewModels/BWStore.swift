@@ -462,13 +462,18 @@ final class BWStore {
             updated = try updated.updateActuals()
             updated.url = path
             let url = URL(fileURLWithPath: path)
-            let onDisk = try readBudget(at: url)
-            updated = try BWCore.mergeBudgetForSave(
-                budgetInMemory: updated,
-                budgetOnDisk: onDisk
-            )
-            updated = try updated.updateActuals()
-            try writeBudget(updated, to: url)
+            let inMemory = updated
+            // Shared with the MCP server so concurrent saves merge instead of
+            // overwriting each other.
+            updated = try BWBudgetSaveLock.withLock {
+                let onDisk = try readBudget(at: url)
+                let merged = try BWCore.mergeBudgetForSave(
+                    budgetInMemory: inMemory,
+                    budgetOnDisk: onDisk
+                ).updateActuals()
+                try writeBudget(merged, to: url)
+                return merged
+            }
             currentBudget = updated
             errorMessage = nil
             rememberRecent(url)

@@ -127,9 +127,8 @@ internal class McpServerController(context: Context) {
         override fun readBudgetFile(location: String): String =
             repository.readBudgetJson(knownUri(location))
 
-        override fun writeBudgetFile(location: String, json: String) {
-            repository.writeBudgetJson(knownUri(location), json)
-        }
+        override fun writeBudgetFile(location: String, json: String, expectedRevisionId: String?): Boolean =
+            repository.writeBudgetJsonIfUnchanged(knownUri(location), json, expectedRevisionId)
 
         override fun createBudgetFile(fileName: String, json: String): String {
             val directory = applicationContext.getExternalFilesDir(BUDGETS_DIRECTORY)

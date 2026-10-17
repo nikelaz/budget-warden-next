@@ -10,6 +10,16 @@
 import BWCore
 import Foundation
 
+/// Held for the whole read-merge-write of every budget save, by the app and
+/// by the MCP server, so neither can overwrite a save it never read.
+public enum BWBudgetSaveLock {
+    private static let lock = NSLock()
+
+    public static func withLock<T>(_ body: () throws -> T) rethrows -> T {
+        try lock.withLock(body)
+    }
+}
+
 /// Persisted preferences for the built-in MCP server.
 public struct BWMcpSettings: Equatable, Sendable {
     public var isEnabled: Bool
@@ -198,10 +208,23 @@ final class BWMcpFileHost: BWMcpHost, @unchecked Sendable {
         }
     }
 
-    func writeBudgetFile(location: String, json: String) throws {
+    func writeBudgetFile(location: String, json: String, expectedRevisionId: String?) throws -> Bool {
         let url = try knownURL(location)
-        try withAccess(to: url) {
-            try coordinatedWrite(Data(json.utf8), to: url)
+        return try withAccess(to: url) {
+            try BWBudgetSaveLock.withLock {
+                if let expectedRevisionId {
+                    let stored = try decodeBudget(
+                        json: String(decoding: coordinatedRead(at: url), as: UTF8.self),
+                        url: location
+                    )
+                    // Another writer saved since the server read the budget.
+                    guard stored.revisionId == UUID(uuidString: expectedRevisionId) else {
+                        return false
+                    }
+                }
+                try coordinatedWrite(Data(json.utf8), to: url)
+                return true
+            }
         }
     }
 

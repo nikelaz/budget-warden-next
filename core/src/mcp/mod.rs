@@ -20,9 +20,7 @@ mod protocol;
 mod tools;
 
 use std::net::{SocketAddr, TcpListener, UdpSocket};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::thread::JoinHandle;
 
 use boltffi::*;
 use uuid::Uuid;
@@ -42,8 +40,19 @@ pub trait BWMcpHost: Send + Sync {
     /// Reads the raw `.budget` JSON stored at `location`.
     fn read_budget_file(&self, location: String) -> Result<String, String>;
 
-    /// Replaces the `.budget` JSON stored at `location`.
-    fn write_budget_file(&self, location: String, json: String) -> Result<(), String>;
+    /// Replaces the `.budget` JSON stored at `location` and returns `true`.
+    ///
+    /// When `expected_revision_id` is set, the host must check and replace the
+    /// document under the same lock its own saves hold for their whole
+    /// read-merge-write: if the stored budget's `revision_id` differs, another
+    /// writer saved first, so leave the document unchanged and return `false`.
+    /// The server then merges with the newer copy and tries again.
+    fn write_budget_file(
+        &self,
+        location: String,
+        json: String,
+        expected_revision_id: Option<String>,
+    ) -> Result<bool, String>;
 
     /// Stores a new budget document named after `file_name` and returns its
     /// location. The new document should also appear in the app's recent list.
@@ -108,18 +117,8 @@ pub fn default_mcp_server_config() -> BWMcpServerConfig {
 }
 
 struct RunningServer {
-    shutdown: Arc<AtomicBool>,
-    thread: Option<JoinHandle<()>>,
+    listener: http::Listener,
     status: BWMcpServerStatus,
-}
-
-impl RunningServer {
-    fn shut_down(mut self) {
-        self.shutdown.store(true, Ordering::SeqCst);
-        if let Some(thread) = self.thread.take() {
-            let _ = thread.join();
-        }
-    }
 }
 
 /// A controllable MCP server instance. Apps keep one for their lifetime.
@@ -159,7 +158,7 @@ impl BWMcpServer {
 
         let mut running = self.running.lock().map_err(|_| "The MCP server state is unavailable.".to_string())?;
         if let Some(previous) = running.take() {
-            previous.shut_down();
+            previous.listener.stop();
         }
 
         let bind_address: SocketAddr = if config.allow_network {
@@ -183,9 +182,8 @@ impl BWMcpServer {
             local_url.clone()
         };
 
-        let shutdown = Arc::new(AtomicBool::new(false));
         let service = Arc::new(tools::BudgetService::new(Arc::from(host)));
-        let thread = http::spawn(listener, token, service, shutdown.clone())
+        let listener = http::spawn(listener, token, service)
             .map_err(|error| format!("Could not start the MCP server: {error}"))?;
 
         let status = BWMcpServerStatus {
@@ -195,8 +193,7 @@ impl BWMcpServer {
             local_url: Some(local_url),
         };
         *running = Some(RunningServer {
-            shutdown,
-            thread: Some(thread),
+            listener,
             status: status.clone(),
         });
         Ok(status)
@@ -205,7 +202,7 @@ impl BWMcpServer {
     pub fn stop(&self) {
         let previous = self.running.lock().ok().and_then(|mut running| running.take());
         if let Some(previous) = previous {
-            previous.shut_down();
+            previous.listener.stop();
         }
     }
 

@@ -12,7 +12,7 @@ use bw_core::mcp::{
     DEFAULT_MCP_PORT, generate_mcp_token,
 };
 
-use crate::store::{write_budget_json, write_budget_json_exclusive};
+use crate::store::{budget_save_lock, write_budget_json, write_budget_json_exclusive};
 
 const SETTINGS_FILE: &str = "mcp-server";
 
@@ -127,10 +127,24 @@ impl BWMcpHost for LinuxMcpHost {
         fs::read_to_string(&path).map_err(|error| format!("Could not read {location}: {error}"))
     }
 
-    fn write_budget_file(&self, location: String, json: String) -> Result<(), String> {
+    fn write_budget_file(
+        &self,
+        location: String,
+        json: String,
+        expected_revision_id: Option<String>,
+    ) -> Result<bool, String> {
         let path = self.known_path(&location)?;
-        decode_budget(&json, location)?;
-        write_budget_json(&json, &path)
+        decode_budget(&json, location.clone())?;
+        let _save = budget_save_lock();
+        if let Some(expected) = expected_revision_id {
+            let stored = fs::read_to_string(&path)
+                .map_err(|error| format!("Could not read {location}: {error}"))?;
+            if decode_budget(&stored, location)?.revision_id.to_string() != expected {
+                return Ok(false);
+            }
+        }
+        write_budget_json(&json, &path)?;
+        Ok(true)
     }
 
     fn create_budget_file(&self, file_name: String, json: String) -> Result<String, String> {
@@ -279,10 +293,12 @@ mod tests {
         assert_eq!(host.list_budgets().len(), 2);
         assert_eq!(host.currency_code(), "BGN");
 
-        host.write_budget_file(first.clone(), json.clone()).unwrap();
+        let stored = decode_budget(&host.read_budget_file(first.clone()).unwrap(), first.clone()).unwrap();
+        assert!(!host.write_budget_file(first.clone(), json.clone(), Some(Uuid::new_v4().to_string())).unwrap());
+        assert!(host.write_budget_file(first.clone(), json.clone(), Some(stored.revision_id.to_string())).unwrap());
         assert!(host.read_budget_file(first.clone()).unwrap().contains("Home"));
         assert!(host.read_budget_file("/etc/passwd".to_string()).is_err());
-        assert!(host.write_budget_file(first.clone(), "{}".to_string()).is_err());
+        assert!(host.write_budget_file(first.clone(), "{}".to_string(), None).is_err());
 
         host.budget_did_change(first.clone());
         let events: Vec<McpEvent> = receiver.try_iter().collect();

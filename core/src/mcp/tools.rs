@@ -27,6 +27,7 @@ use crate::templates::{budget_from_previous_budget, budget_from_template_id, tem
 
 const DEFAULT_TEMPLATE_ID: &str = "basic-monthly";
 const DEFAULT_TRANSACTION_LIMIT: usize = 200;
+const MAX_SAVE_ATTEMPTS: usize = 5;
 
 type ToolResult = Result<Value, String>;
 
@@ -83,7 +84,7 @@ impl BudgetService {
         // TEMPORARY LEGACY MIGRATION: mirror the apps' schema-v1 writeback.
         if budget.requires_migration_writeback {
             self.host
-                .write_budget_file(location.to_string(), encode_budget(&budget)?)?;
+                .write_budget_file(location.to_string(), encode_budget(&budget)?, None)?;
             budget.requires_migration_writeback = false;
         }
         budget.update_actuals()
@@ -123,13 +124,24 @@ impl BudgetService {
     /// app about the change.
     fn save(&self, location: &str, updated: BWBudget) -> Result<BWBudget, String> {
         let updated = updated.update_actuals()?;
-        let on_disk = self.read(location)?;
-        let mut merged = domain::merge_budget_for_save(updated, on_disk)?.update_actuals()?;
-        self.host
-            .write_budget_file(location.to_string(), encode_budget(&merged)?)?;
-        merged.url = Some(location.to_string());
-        self.host.budget_did_change(location.to_string());
-        Ok(merged)
+        for _ in 0..MAX_SAVE_ATTEMPTS {
+            let on_disk = self.read(location)?;
+            let expected_revision_id = on_disk.revision_id.to_string();
+            let mut merged =
+                domain::merge_budget_for_save(updated.clone(), on_disk)?.update_actuals()?;
+            // The host replaces the file only if no app save landed since the
+            // read above; otherwise merge with the newer copy and retry.
+            if self.host.write_budget_file(
+                location.to_string(),
+                encode_budget(&merged)?,
+                Some(expected_revision_id),
+            )? {
+                merged.url = Some(location.to_string());
+                self.host.budget_did_change(location.to_string());
+                return Ok(merged);
+            }
+        }
+        Err("The budget kept changing while it was being saved. Please try again.".to_string())
     }
 
     fn mutate(

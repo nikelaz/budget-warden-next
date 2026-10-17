@@ -16,6 +16,9 @@ struct MemoryHost {
     files: Mutex<BTreeMap<String, String>>,
     changed: Mutex<Vec<String>>,
     shown: Mutex<Vec<String>>,
+    /// Titles an "app" saves just before the server's next writes, to
+    /// simulate saves racing the server.
+    racing_app_titles: Mutex<Vec<String>>,
 }
 
 impl BWMcpHost for Arc<MemoryHost> {
@@ -40,9 +43,27 @@ impl BWMcpHost for Arc<MemoryHost> {
             .ok_or_else(|| format!("missing {location}"))
     }
 
-    fn write_budget_file(&self, location: String, json: String) -> Result<(), String> {
-        self.files.lock().unwrap().insert(location, json);
-        Ok(())
+    fn write_budget_file(
+        &self,
+        location: String,
+        json: String,
+        expected_revision_id: Option<String>,
+    ) -> Result<bool, String> {
+        let mut files = self.files.lock().unwrap();
+        if let Some(title) = self.racing_app_titles.lock().unwrap().pop() {
+            let stored = crate::codec::decode_budget(&files[&location], location.clone())?;
+            let renamed = crate::domain::update_budget_title(stored.clone(), title)?;
+            let saved = crate::domain::merge_budget_for_save(renamed, stored)?;
+            files.insert(location.clone(), crate::codec::encode_budget(&saved)?);
+        }
+        if let Some(expected) = expected_revision_id {
+            let stored = crate::codec::decode_budget(&files[&location], location.clone())?;
+            if stored.revision_id.to_string() != expected {
+                return Ok(false);
+            }
+        }
+        files.insert(location, json);
+        Ok(true)
     }
 
     fn create_budget_file(&self, file_name: String, json: String) -> Result<String, String> {
@@ -230,6 +251,26 @@ fn tools_report_invalid_input_as_tool_errors() {
 }
 
 #[test]
+fn saves_merge_with_app_saves_that_land_first() {
+    let (host, service) = service();
+    let created = call(&service, "create_budget", json!({ "title": "Shared", "template_id": "empty" }));
+    let budget = created["budget"].as_str().unwrap().to_string();
+
+    // The app renames the budget between the server's read and its write.
+    host.racing_app_titles.lock().unwrap().push("Renamed in app".to_string());
+    call(&service, "create_category", json!({ "budget": budget, "title": "Rent", "type": "expenses" }));
+
+    let stored = crate::codec::decode_budget(&host.read_budget_file(budget.clone()).unwrap(), budget.clone()).unwrap();
+    assert_eq!(stored.title, "Renamed in app");
+    assert_eq!(stored.categories.len(), 1);
+
+    // A budget that keeps changing eventually reports an error instead of
+    // overwriting the other writer.
+    *host.racing_app_titles.lock().unwrap() = (0..10).map(|index| format!("Busy {index}")).collect();
+    assert!(call_error(&service, "rename_budget", json!({ "budget": budget, "title": "Mine" })).contains("kept changing"));
+}
+
+#[test]
 fn budget_file_names_are_safe() {
     assert_eq!(budget_file_name("Home/Work: 2026"), "Home-Work- 2026.budget");
     assert_eq!(budget_file_name("  .. "), "Untitled Budget.budget");
@@ -294,6 +335,56 @@ fn server_serves_streamable_http_behind_its_token() {
     server.stop();
     assert!(!server.status().running);
     assert!(TcpStream::connect(("127.0.0.1", port)).is_err());
+}
+
+#[test]
+fn stopping_the_server_closes_open_connections() {
+    let _ = initialize_core(Uuid::from_u128(0x3C9));
+    let host = Arc::new(MemoryHost::default());
+    let server = BWMcpServer::new();
+    let token = generate_mcp_token();
+    let config = BWMcpServerConfig { port: 38_768, token: token.clone(), allow_network: false };
+    server.start(Box::new(host.clone()), config.clone()).unwrap();
+
+    // A client keeps a connection open and idle, waiting to send its next request.
+    let mut stream = TcpStream::connect(("127.0.0.1", 38_768)).unwrap();
+    let body = r#"{"jsonrpc":"2.0","id":1,"method":"ping"}"#;
+    let request = format!(
+        "POST /{token}/mcp HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
+        body.len()
+    );
+    stream.write_all(request.as_bytes()).unwrap();
+    // Read exactly the first response so later bytes can only be a new one.
+    let mut head = Vec::new();
+    while !head.ends_with(b"\r\n\r\n") {
+        let mut byte = [0_u8; 1];
+        stream.read_exact(&mut byte).unwrap();
+        head.push(byte[0]);
+    }
+    let head = String::from_utf8(head).unwrap();
+    assert!(head.starts_with("HTTP/1.1 200"));
+    let length: usize = head
+        .lines()
+        .find_map(|line| line.strip_prefix("Content-Length: "))
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+    let mut first_body = vec![0_u8; length];
+    stream.read_exact(&mut first_body).unwrap();
+
+    // Replacing the URL restarts the server with a new token.
+    server
+        .start(Box::new(host.clone()), BWMcpServerConfig { token: generate_mcp_token(), ..config })
+        .unwrap();
+
+    // The old connection was closed: the next request gets no answer.
+    let _ = stream.write_all(request.as_bytes());
+    let mut rest = Vec::new();
+    let _ = stream.read_to_end(&mut rest);
+    let rest = String::from_utf8_lossy(&rest);
+    assert!(!rest.contains("\"result\""), "revoked connection still served: {rest}");
+    server.stop();
 }
 
 #[test]

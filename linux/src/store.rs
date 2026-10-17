@@ -1,7 +1,7 @@
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use bw_core::app_state::initialize_core;
 use bw_core::codec::{decode_budget, encode_budget};
@@ -17,6 +17,15 @@ use uuid::Uuid;
 
 const APP_DIR: &str = "budget-warden";
 static CURRENCIES: OnceLock<Vec<CurrencyInfo>> = OnceLock::new();
+/// Held for the whole read-merge-write of every budget save, by the app and
+/// by the MCP server, so neither can overwrite a save it never read.
+static BUDGET_SAVE_LOCK: Mutex<()> = Mutex::new(());
+
+pub(crate) fn budget_save_lock() -> MutexGuard<'static, ()> {
+    BUDGET_SAVE_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
 
 #[derive(Clone, Debug)]
 pub struct CurrencyInfo {
@@ -348,6 +357,7 @@ impl AppState {
             .clone()
             .ok_or_else(|| "Save the budget before making changes.".to_string())?;
         let path = PathBuf::from(path);
+        let _save = budget_save_lock();
         let on_disk = read_budget(&path)?;
         updated = domain::merge_budget_for_save(updated, on_disk)?.update_actuals()?;
         updated.url = Some(path.to_string_lossy().into_owned());

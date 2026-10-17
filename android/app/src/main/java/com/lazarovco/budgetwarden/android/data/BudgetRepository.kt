@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
+import java.util.UUID
 import com.lazarovco.budgetwarden.android.BudgetWardenApplication
 import com.lazarovco.budgetwarden.core.BWBudget
 import com.lazarovco.budgetwarden.core.budgetFromPreviousBudget
@@ -16,6 +17,7 @@ import com.lazarovco.budgetwarden.android.domain.Budget
 import com.lazarovco.budgetwarden.android.domain.TemplateSelection
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -56,7 +58,6 @@ internal class BudgetRepository(
         Context.MODE_PRIVATE,
     )
     private val recoveryStore = BudgetRecoveryStore(applicationContext)
-    private val saveMutex = Mutex()
 
     override suspend fun loadStoredBudgets(): List<StoredBudget> = withContext(ioDispatcher) {
         recentUriStrings().mapNotNull { value ->
@@ -159,10 +160,28 @@ internal class BudgetRepository(
     /** Reads a budget document's raw JSON for the MCP server. */
     internal fun readBudgetJson(uri: Uri): String = encodeBudget(readBudget(uri))
 
-    /** Replaces a budget document with JSON the MCP server already merged. */
+    /** Writes JSON for a budget document the MCP server just created. */
     internal fun writeBudgetJson(uri: Uri, json: String) {
         writeBudget(decodeBudget(json = json, url = uri.toString()).copy(url = uri.toString()))
     }
+
+    /**
+     * Replaces a budget document with JSON the MCP server already merged,
+     * unless another save changed its revision since the server read it.
+     * Called from MCP server threads; holds the same lock as [saveBudget].
+     */
+    internal fun writeBudgetJsonIfUnchanged(uri: Uri, json: String, expectedRevisionId: String?): Boolean =
+        runBlocking {
+            saveMutex.withLock {
+                if (expectedRevisionId != null &&
+                    readProviderBudget(uri).revisionId != UUID.fromString(expectedRevisionId)
+                ) {
+                    return@withLock false
+                }
+                writeBudgetJson(uri, json)
+                true
+            }
+        }
 
     /** Adds a budget the MCP server created to the recent list. */
     internal fun rememberCreatedBudget(uri: Uri) {
@@ -259,6 +278,11 @@ internal class BudgetRepository(
     }
 
     companion object {
+        /**
+         * Held for the whole read-merge-write of every save, by the app and by
+         * the MCP server, so neither can overwrite a save it never read.
+         */
+        private val saveMutex = Mutex()
         private const val RECENT_FILES_KEY = "recent_budget_uris_v1"
         private const val MAX_RECENT_FILES = 20
         private const val MAX_SAVE_ATTEMPTS = 3

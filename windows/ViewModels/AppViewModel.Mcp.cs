@@ -110,8 +110,14 @@ public sealed partial class AppViewModel
             {
                 switch (budgetEvent)
                 {
-                    case McpBudgetEvent.Changed when string.Equals(CurrentBudget?.Url, path, StringComparison.OrdinalIgnoreCase):
-                        CurrentBudget = await ReadBudgetAsync(path);
+                    case McpBudgetEvent.Changed when IsCurrentBudgetPath(path):
+                        BwBudget reloaded = await ReadBudgetAsync(path);
+                        // The user may have switched or closed budgets during the read.
+                        if (IsCurrentBudgetPath(path))
+                        {
+                            CurrentBudget = reloaded;
+                        }
+
                         break;
                     case McpBudgetEvent.Created:
                         RememberRecent(path);
@@ -128,6 +134,9 @@ public sealed partial class AppViewModel
             }
         });
     }
+
+    private bool IsCurrentBudgetPath(string path) =>
+        string.Equals(CurrentBudget?.Url, path, StringComparison.OrdinalIgnoreCase);
 }
 
 internal enum McpBudgetEvent
@@ -174,11 +183,27 @@ internal sealed class McpBudgetHost(string newBudgetDirectory, Action<McpBudgetE
 
     public string ReadBudgetFile(string location) => File.ReadAllText(KnownPath(location));
 
-    public void WriteBudgetFile(string location, string json)
+    public bool WriteBudgetFile(string location, string json, string? expectedRevisionId)
     {
         string path = KnownPath(location);
         CoreApi.DecodeBudget(json, path);
-        WriteAtomically(path, json, overwrite: true);
+        AppViewModel.BudgetSaveGate.Wait();
+        try
+        {
+            // Another writer saved since the server read the budget.
+            if (expectedRevisionId is not null
+                && CoreApi.DecodeBudget(File.ReadAllText(path), path).RevisionId != Guid.Parse(expectedRevisionId))
+            {
+                return false;
+            }
+
+            WriteAtomically(path, json, overwrite: true);
+            return true;
+        }
+        finally
+        {
+            AppViewModel.BudgetSaveGate.Release();
+        }
     }
 
     public string CreateBudgetFile(string fileName, string json)

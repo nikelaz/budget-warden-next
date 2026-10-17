@@ -13,9 +13,10 @@
 //! SSE stream, so `GET` answers 405 as the transport allows.
 
 use std::io::{self, BufRead, BufReader, Read, Write};
-use std::net::{TcpListener, TcpStream};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::collections::HashMap;
+use std::net::{Shutdown, TcpListener, TcpStream};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -80,17 +81,53 @@ impl Response {
     }
 }
 
+type Connections = Arc<Mutex<HashMap<u64, TcpStream>>>;
+
+/// A running listener and the connections it accepted.
+pub(super) struct Listener {
+    shutdown: Arc<AtomicBool>,
+    connections: Connections,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl Listener {
+    /// Stops accepting, closes every open connection, and refuses requests
+    /// that were already being read, so a revoked URL stops working at once.
+    pub fn stop(mut self) {
+        self.shutdown.store(true, Ordering::SeqCst);
+        // Join first so the listener cannot register a connection after the
+        // sweep below.
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+        let connections = self.connections.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        for stream in connections.values() {
+            let _ = stream.shutdown(Shutdown::Both);
+        }
+    }
+}
+
 pub(super) fn spawn(
     listener: TcpListener,
     token: String,
     service: Arc<BudgetService>,
-    shutdown: Arc<AtomicBool>,
-) -> io::Result<JoinHandle<()>> {
+) -> io::Result<Listener> {
     listener.set_nonblocking(true)?;
     let endpoint = format!("/{token}/mcp");
-    thread::Builder::new()
-        .name("bw-mcp-listener".to_string())
-        .spawn(move || accept_loop(listener, endpoint, service, shutdown))
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let connections: Connections = Arc::new(Mutex::new(HashMap::new()));
+    let thread = {
+        let shutdown = shutdown.clone();
+        let connections = connections.clone();
+        thread::Builder::new()
+            .name("bw-mcp-listener".to_string())
+            .spawn(move || accept_loop(listener, endpoint, service, shutdown, connections))?
+    };
+    Ok(Listener {
+        shutdown,
+        connections,
+        thread: Some(thread),
+    })
 }
 
 fn accept_loop(
@@ -98,30 +135,42 @@ fn accept_loop(
     endpoint: String,
     service: Arc<BudgetService>,
     shutdown: Arc<AtomicBool>,
+    connections: Connections,
 ) {
-    let connections = Arc::new(AtomicUsize::new(0));
+    let mut next_id = 0_u64;
     while !shutdown.load(Ordering::SeqCst) {
         match listener.accept() {
             Ok((stream, _)) => {
-                if connections.load(Ordering::SeqCst) >= MAX_CONNECTIONS {
-                    let mut stream = stream;
-                    let _ = stream.set_nonblocking(false);
+                let mut stream = stream;
+                let _ = stream.set_nonblocking(false);
+                let registered = {
+                    let mut open = connections.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+                    if open.len() >= MAX_CONNECTIONS {
+                        None
+                    } else {
+                        next_id += 1;
+                        stream.try_clone().ok().map(|clone| {
+                            open.insert(next_id, clone);
+                            next_id
+                        })
+                    }
+                };
+                let Some(id) = registered else {
                     let _ = write_response(&mut stream, Response::text(503, "Too many connections"), false);
                     continue;
-                }
-                connections.fetch_add(1, Ordering::SeqCst);
+                };
                 let endpoint = endpoint.clone();
                 let service = service.clone();
                 let shutdown = shutdown.clone();
-                let counter = connections.clone();
+                let open = connections.clone();
                 let spawned = thread::Builder::new()
                     .name("bw-mcp-connection".to_string())
                     .spawn(move || {
                         let _ = serve_connection(stream, &endpoint, &service, &shutdown);
-                        counter.fetch_sub(1, Ordering::SeqCst);
+                        open.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).remove(&id);
                     });
                 if spawned.is_err() {
-                    connections.fetch_sub(1, Ordering::SeqCst);
+                    connections.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).remove(&id);
                 }
             }
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
@@ -138,16 +187,12 @@ fn serve_connection(
     service: &BudgetService,
     shutdown: &AtomicBool,
 ) -> io::Result<()> {
-    stream.set_nonblocking(false)?;
     stream.set_read_timeout(Some(IDLE_TIMEOUT))?;
     stream.set_write_timeout(Some(IDLE_TIMEOUT))?;
     let mut writer = stream.try_clone()?;
     let mut reader = BufReader::new(stream);
 
     loop {
-        if shutdown.load(Ordering::SeqCst) {
-            return Ok(());
-        }
         let request = match read_request(&mut reader) {
             Ok(Some(request)) => request,
             Ok(None) => return Ok(()),
@@ -157,6 +202,12 @@ fn serve_connection(
                 return Ok(());
             }
         };
+        // The server may have been stopped, or its URL replaced, while this
+        // request was arriving.
+        if shutdown.load(Ordering::SeqCst) {
+            write_response(&mut writer, Response::text(503, "The MCP server has stopped"), false)?;
+            return Ok(());
+        }
         let keep_alive = !request
             .header("connection")
             .is_some_and(|value| value.eq_ignore_ascii_case("close"));
