@@ -85,7 +85,13 @@ impl Cache {
         // never escape the cache directory.
         let safe: String = file_id
             .chars()
-            .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect();
         self.root.join(safe)
     }
@@ -132,7 +138,11 @@ pub(crate) fn local_file_name(name: &str) -> String {
         .take(120)
         .collect();
     let cleaned = cleaned.trim().trim_start_matches('.').trim();
-    let stem = if cleaned.is_empty() { "Budget" } else { cleaned };
+    let stem = if cleaned.is_empty() {
+        "Budget"
+    } else {
+        cleaned
+    };
     format!("{stem}.budget")
 }
 
@@ -142,8 +152,12 @@ pub(crate) fn write_atomically(path: &Path, contents: &str) -> Result<(), String
     let parent = path
         .parent()
         .ok_or_else(|| "The cloud cache path has no parent folder.".to_string())?;
-    fs::create_dir_all(parent).map_err(|error| format!("Could not create the cloud cache: {error}"))?;
-    let name = path.file_name().and_then(|name| name.to_str()).unwrap_or("file");
+    fs::create_dir_all(parent)
+        .map_err(|error| format!("Could not create the cloud cache: {error}"))?;
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("file");
     let temporary = parent.join(format!(".{name}.{}.tmp", Uuid::new_v4().simple()));
     let result = (|| {
         let mut file = OpenOptions::new()
@@ -154,7 +168,8 @@ pub(crate) fn write_atomically(path: &Path, contents: &str) -> Result<(), String
         file.write_all(contents.as_bytes())
             .and_then(|_| file.sync_all())
             .map_err(|error| format!("Could not write the cloud cache: {error}"))?;
-        fs::rename(&temporary, path).map_err(|error| format!("Could not write the cloud cache: {error}"))
+        fs::rename(&temporary, path)
+            .map_err(|error| format!("Could not write the cloud cache: {error}"))
     })();
     if result.is_err() {
         let _ = fs::remove_file(&temporary);
@@ -163,14 +178,37 @@ pub(crate) fn write_atomically(path: &Path, contents: &str) -> Result<(), String
 }
 
 /// Budget content without the per-save revision identity, for deciding
-/// whether two copies differ in anything a person would notice.
+/// whether two copies differ in anything a person would notice. Categories
+/// and transactions are compared as sets: the CRDT merge does not promise a
+/// stable order for them.
 pub(crate) fn content(budget: &BWBudget) -> Value {
     let mut value = serde_json::to_value(budget).unwrap_or(Value::Null);
     if let Some(object) = value.as_object_mut() {
         object.remove("revision");
         object.remove("revision_id");
+        if let Some(Value::Array(categories)) = object.get_mut("categories") {
+            for category in categories.iter_mut() {
+                if let Some(Value::Array(transactions)) = category.get_mut("transactions") {
+                    sort_by_id(transactions);
+                }
+            }
+            sort_by_id(categories);
+        }
     }
     value
+}
+
+fn sort_by_id(values: &mut [Value]) {
+    values.sort_by(|left, right| {
+        let id = |value: &Value| {
+            value
+                .get("id")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string()
+        };
+        id(left).cmp(&id(right))
+    });
 }
 
 pub(crate) struct Reconciliation {
@@ -189,6 +227,7 @@ pub(crate) fn reconcile(local: BWBudget, remote: BWBudget) -> Result<Reconciliat
     let local_content = content(&local);
     let remote_content = content(&remote);
     if local_content == remote_content {
+        // Equal up to ordering: keep the working copy as it is.
         return Ok(Reconciliation {
             merged: local,
             local_changed: false,
@@ -204,4 +243,30 @@ pub(crate) fn reconcile(local: BWBudget, remote: BWBudget) -> Result<Reconciliat
         remote_changed: merged_content != remote_content,
         merged,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::templates::budget_from_template_id;
+
+    #[test]
+    fn content_ignores_revisions_and_ordering() {
+        let _ = crate::app_state::initialize_core(Uuid::from_u128(0xC10D));
+        let budget = budget_from_template_id("basic-monthly".into(), "A".into()).unwrap();
+        let mut reordered = budget.clone();
+        reordered.categories.reverse();
+        reordered.revision += 3;
+        reordered.revision_id = Uuid::new_v4();
+        assert_eq!(content(&budget), content(&reordered));
+        reordered.categories[0].title = "Changed".into();
+        assert_ne!(content(&budget), content(&reordered));
+    }
+
+    #[test]
+    fn local_file_names_are_safe() {
+        assert_eq!(local_file_name("a/b:c.budget"), "a-b-c.budget");
+        assert_eq!(local_file_name("..hidden"), "hidden.budget");
+        assert_eq!(local_file_name("  "), "Budget.budget");
+    }
 }

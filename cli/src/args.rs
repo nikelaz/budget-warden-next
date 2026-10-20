@@ -58,6 +58,11 @@ pub enum Command {
         command: RecentCommand,
     },
     Apply(ApplyArgs),
+    /// Budgets stored in Google Drive.
+    Cloud {
+        #[command(subcommand)]
+        command: CloudCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -480,4 +485,96 @@ pub struct ApplyArgs {
     pub dry_run: bool,
     #[arg(long, value_name = "UUID")]
     pub if_revision: Option<Uuid>,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CloudCommand {
+    /// Shows whether Google Drive is configured and signed in.
+    Status,
+    /// Signs in to Google Drive in the browser.
+    SignIn(CloudSignInArgs),
+    /// Signs out and removes local working copies of cloud budgets.
+    SignOut,
+    /// Lists budgets in Google Drive, including ones shared with you.
+    List(CloudListArgs),
+    /// Downloads or syncs a cloud budget and prints its local working copy.
+    Sync(CloudSyncArgs),
+    /// Uploads a local budget to Google Drive as a new cloud budget.
+    Upload(CloudUploadArgs),
+    /// Shares a cloud budget with someone by email.
+    Share(CloudShareArgs),
+    /// Lists who can access a cloud budget.
+    Shares(CloudIdArgs),
+    /// Revokes someone's access to a cloud budget.
+    Unshare(CloudUnshareArgs),
+}
+
+#[derive(Debug, clap::Args)]
+pub struct CloudSignInArgs {
+    /// Print the sign-in URL instead of opening a browser.
+    #[arg(long)]
+    pub no_browser: bool,
+    #[arg(long, value_name = "SECONDS", default_value_t = 300)]
+    pub timeout: i32,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct CloudListArgs {
+    /// List budgets from the last listing without contacting Google Drive.
+    #[arg(long)]
+    pub offline: bool,
+}
+
+#[derive(Debug, clap::Args)]
+#[group(required = true, multiple = false)]
+pub struct CloudSyncArgs {
+    /// Drive file ID from `cloud list`.
+    #[arg(long, value_name = "ID")]
+    pub id: Option<String>,
+    /// A working copy previously returned by `cloud sync`.
+    #[arg(long, value_name = "PATH")]
+    pub file: Option<PathBuf>,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct CloudUploadArgs {
+    #[arg(long, value_name = "PATH")]
+    pub file: PathBuf,
+    /// File name in Google Drive; defaults to the local file name.
+    #[arg(long, value_name = "NAME")]
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum CloudRoleArg {
+    Writer,
+    Reader,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct CloudShareArgs {
+    #[arg(long, value_name = "ID")]
+    pub id: String,
+    #[arg(long, value_name = "EMAIL")]
+    pub email: String,
+    #[arg(long, value_enum, default_value = "writer")]
+    pub role: CloudRoleArg,
+    /// Note included in Google's invitation email.
+    #[arg(long, value_name = "TEXT")]
+    pub message: Option<String>,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct CloudIdArgs {
+    #[arg(long, value_name = "ID")]
+    pub id: String,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct CloudUnshareArgs {
+    #[arg(long, value_name = "ID")]
+    pub id: String,
+    /// Share ID from `cloud shares`.
+    #[arg(long, value_name = "SHARE_ID")]
+    pub share_id: String,
 }

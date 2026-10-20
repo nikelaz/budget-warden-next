@@ -10,7 +10,7 @@
 //! Google OAuth 2.0 for installed apps: authorization code flow with PKCE.
 //!
 //! Apple apps receive the redirect through `ASWebAuthenticationSession`;
-//! desktop apps use [`BWOAuthLoopbackReceiver`], which listens on
+//! desktop apps use [`BWGoogleLoopbackReceiver`], which listens on
 //! `127.0.0.1` for the browser's redirect. Android does not use this module:
 //! Google Play services hands it access tokens directly.
 
@@ -149,7 +149,10 @@ pub(crate) fn authorization_url(
 }
 
 /// Extracts the authorization code from a redirect URL, checking `state`.
-pub(crate) fn authorization_code(callback_url: &str, expected_state: &str) -> Result<String, String> {
+pub(crate) fn authorization_code(
+    callback_url: &str,
+    expected_state: &str,
+) -> Result<String, String> {
     let pairs = query_pairs(callback_url);
     let value = |name: &str| {
         pairs
@@ -165,7 +168,9 @@ pub(crate) fn authorization_code(callback_url: &str, expected_state: &str) -> Re
         });
     }
     if value("state").as_deref() != Some(expected_state) {
-        return Err("Google sign-in returned an unexpected response. Please try again.".to_string());
+        return Err(
+            "Google sign-in returned an unexpected response. Please try again.".to_string(),
+        );
     }
     value("code")
         .filter(|code| !code.is_empty())
@@ -217,7 +222,9 @@ pub(crate) fn request_token(
             error_description: None,
         });
         if error.error == "invalid_grant" {
-            return Err(auth_required("Your Google sign-in expired. Sign in to Google Drive again."));
+            return Err(auth_required(
+                "Your Google sign-in expired. Sign in to Google Drive again.",
+            ));
         }
         return Err(format!(
             "Google rejected the sign-in: {}",
@@ -234,17 +241,19 @@ pub(crate) fn request_token(
 }
 
 pub(crate) fn revoke(http: &dyn BWHttpClient, token: &str) {
-    let request = BWHttpRequest::new("POST", REVOCATION_ENDPOINT)
-        .body("application/x-www-form-urlencoded", encode_pairs(&[("token", token)]));
+    let request = BWHttpRequest::new("POST", REVOCATION_ENDPOINT).body(
+        "application/x-www-form-urlencoded",
+        encode_pairs(&[("token", token)]),
+    );
     let _ = http.execute(request);
 }
 
 /// Receives a desktop OAuth redirect on a loopback port (RFC 8252 §7.3).
-pub struct BWOAuthLoopbackReceiver {
+pub struct BWGoogleLoopbackReceiver {
     listener: Mutex<Option<TcpListener>>,
 }
 
-impl Default for BWOAuthLoopbackReceiver {
+impl Default for BWGoogleLoopbackReceiver {
     fn default() -> Self {
         Self::new()
     }
@@ -253,7 +262,7 @@ impl Default for BWOAuthLoopbackReceiver {
 const LOOPBACK_SUCCESS_PAGE: &str = "<!doctype html><html><head><meta charset=\"utf-8\"><title>Budget Warden</title></head><body style=\"font-family:system-ui;text-align:center;padding:3em\"><h1>You're signed in</h1><p>You can close this window and return to Budget Warden.</p></body></html>";
 
 #[export]
-impl BWOAuthLoopbackReceiver {
+impl BWGoogleLoopbackReceiver {
     pub fn new() -> Self {
         Self {
             listener: Mutex::new(None),
@@ -269,8 +278,10 @@ impl BWOAuthLoopbackReceiver {
             .local_addr()
             .map_err(|error| format!("Could not prepare Google sign-in: {error}"))?
             .port();
-        *self.listener.lock().map_err(|_| "Sign-in state is unavailable.".to_string())? =
-            Some(listener);
+        *self
+            .listener
+            .lock()
+            .map_err(|_| "Sign-in state is unavailable.".to_string())? = Some(listener);
         Ok(format!("http://127.0.0.1:{port}"))
     }
 
@@ -287,7 +298,10 @@ impl BWOAuthLoopbackReceiver {
             .set_nonblocking(true)
             .map_err(|error| format!("Could not wait for Google sign-in: {error}"))?;
         let deadline = Instant::now() + Duration::from_secs(timeout_seconds.max(1) as u64);
-        let port = listener.local_addr().map(|address| address.port()).unwrap_or(0);
+        let port = listener
+            .local_addr()
+            .map(|address| address.port())
+            .unwrap_or(0);
         while Instant::now() < deadline {
             match listener.accept() {
                 Ok((stream, _)) => {
@@ -330,7 +344,11 @@ fn answer_redirect(mut stream: TcpStream) -> Option<String> {
             Err(_) => break,
         }
     }
-    let target = request_line.split_whitespace().nth(1).unwrap_or("/").to_string();
+    let target = request_line
+        .split_whitespace()
+        .nth(1)
+        .unwrap_or("/")
+        .to_string();
     let carries_result = query_pairs(&target)
         .iter()
         .any(|(key, _)| key == "code" || key == "error");
@@ -371,9 +389,21 @@ mod tests {
 
     #[test]
     fn authorization_url_requests_offline_pkce_access() {
-        let url = authorization_url("client.apps", "http://127.0.0.1:5000", GOOGLE_DRIVE_SCOPE, "s1", "v", None);
+        let url = authorization_url(
+            "client.apps",
+            "http://127.0.0.1:5000",
+            GOOGLE_DRIVE_SCOPE,
+            "s1",
+            "v",
+            None,
+        );
         let pairs = query_pairs(&url);
-        let get = |name: &str| pairs.iter().find(|(k, _)| k == name).map(|(_, v)| v.as_str());
+        let get = |name: &str| {
+            pairs
+                .iter()
+                .find(|(k, _)| k == name)
+                .map(|(_, v)| v.as_str())
+        };
         assert!(url.starts_with(AUTHORIZATION_ENDPOINT));
         assert_eq!(get("client_id"), Some("client.apps"));
         assert_eq!(get("redirect_uri"), Some("http://127.0.0.1:5000"));
@@ -385,7 +415,10 @@ mod tests {
 
     #[test]
     fn authorization_code_checks_state_and_errors() {
-        assert_eq!(authorization_code("x:/cb?state=a&code=c1", "a").unwrap(), "c1");
+        assert_eq!(
+            authorization_code("x:/cb?state=a&code=c1", "a").unwrap(),
+            "c1"
+        );
         assert!(authorization_code("x:/cb?state=b&code=c1", "a").is_err());
         assert_eq!(
             authorization_code("x:/cb?error=access_denied&state=a", "a").unwrap_err(),
@@ -395,17 +428,21 @@ mod tests {
 
     #[test]
     fn loopback_receiver_returns_the_redirect_and_ignores_other_requests() {
-        let receiver = BWOAuthLoopbackReceiver::new();
+        let receiver = BWGoogleLoopbackReceiver::new();
         let redirect = receiver.start().unwrap();
         let address = redirect.trim_start_matches("http://").to_string();
         let client = std::thread::spawn(move || {
             let mut favicon = TcpStream::connect(&address).unwrap();
-            favicon.write_all(b"GET /favicon.ico HTTP/1.1\r\nHost: x\r\n\r\n").unwrap();
+            favicon
+                .write_all(b"GET /favicon.ico HTTP/1.1\r\nHost: x\r\n\r\n")
+                .unwrap();
             let mut answer = String::new();
             let _ = std::io::Read::read_to_string(&mut favicon, &mut answer);
             assert!(answer.starts_with("HTTP/1.1 404"));
             let mut stream = TcpStream::connect(&address).unwrap();
-            stream.write_all(b"GET /?state=s&code=abc HTTP/1.1\r\nHost: x\r\n\r\n").unwrap();
+            stream
+                .write_all(b"GET /?state=s&code=abc HTTP/1.1\r\nHost: x\r\n\r\n")
+                .unwrap();
             let mut answer = String::new();
             let _ = std::io::Read::read_to_string(&mut stream, &mut answer);
             answer
@@ -424,7 +461,10 @@ mod tests {
             email: Some("me@example.com".into()),
             display_name: None,
         };
-        assert_eq!(StoredCredentials::decode(&credentials.encode()), Some(credentials.clone()));
+        assert_eq!(
+            StoredCredentials::decode(&credentials.encode()),
+            Some(credentials.clone())
+        );
         assert_eq!(credentials.valid_access_token(900_000), Some("a"));
         assert_eq!(credentials.valid_access_token(950_000), None);
     }

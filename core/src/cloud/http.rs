@@ -13,7 +13,7 @@
 //! app performs each request through [`BWHttpClient`] with its platform HTTP
 //! stack, so proxies, certificate trust, and network policy behave as the
 //! platform expects. Rust hosts (Linux and the CLI) can use the `ureq` client
-//! behind the `native-http` feature.
+//! from `cloud::native` behind the `native-http` feature.
 
 use boltffi::*;
 
@@ -165,75 +165,6 @@ pub(crate) fn query_pairs(url: &str) -> Vec<(String, String)> {
             (decode_component(key), decode_component(value))
         })
         .collect()
-}
-
-#[cfg(feature = "native-http")]
-pub mod native {
-    //! A blocking [`BWHttpClient`] for Rust hosts, built on `ureq` with rustls.
-
-    use std::time::Duration;
-
-    use super::{BWHttpClient, BWHttpHeader, BWHttpRequest, BWHttpResponse};
-
-    pub struct NativeHttpClient {
-        agent: ureq::Agent,
-    }
-
-    impl Default for NativeHttpClient {
-        fn default() -> Self {
-            Self::new()
-        }
-    }
-
-    impl NativeHttpClient {
-        pub fn new() -> Self {
-            let agent = ureq::Agent::config_builder()
-                .http_status_as_error(false)
-                .timeout_global(Some(Duration::from_secs(60)))
-                .build()
-                .new_agent();
-            Self { agent }
-        }
-    }
-
-    impl BWHttpClient for NativeHttpClient {
-        fn execute(&self, request: BWHttpRequest) -> Result<BWHttpResponse, String> {
-            let mut builder = ureq::http::Request::builder()
-                .method(request.method.as_str())
-                .uri(request.url.as_str());
-            for header in &request.headers {
-                builder = builder.header(header.name.as_str(), header.value.as_str());
-            }
-            let body = request.body.unwrap_or_default();
-            let http_request = builder
-                .body(body)
-                .map_err(|error| format!("Invalid request: {error}"))?;
-            let mut response = self
-                .agent
-                .run(http_request)
-                .map_err(|error| format!("Could not reach the server: {error}"))?;
-            let status = i32::from(response.status().as_u16());
-            let headers = response
-                .headers()
-                .iter()
-                .map(|(name, value)| BWHttpHeader {
-                    name: name.to_string(),
-                    value: value.to_str().unwrap_or_default().to_string(),
-                })
-                .collect();
-            let bytes = response
-                .body_mut()
-                .with_config()
-                .limit(64 * 1024 * 1024)
-                .read_to_vec()
-                .map_err(|error| format!("Could not read the server response: {error}"))?;
-            Ok(BWHttpResponse {
-                status,
-                headers,
-                body: String::from_utf8_lossy(&bytes).into_owned(),
-            })
-        }
-    }
 }
 
 #[cfg(test)]

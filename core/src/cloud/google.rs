@@ -16,7 +16,7 @@ use boltffi::*;
 
 use super::drive::{self, DriveFile, DrivePermission};
 use super::http::{BWHttpClient, BWHttpRequest, BWHttpResponse};
-use super::oauth::{self, PendingSignIn, StoredCredentials, GOOGLE_DRIVE_SCOPE};
+use super::oauth::{self, GOOGLE_DRIVE_SCOPE, PendingSignIn, StoredCredentials};
 use super::sync::{self, Cache, CacheState, CachedFile};
 use super::{AUTH_REQUIRED_PREFIX, BWGoogleSignInRequest, auth_required};
 use crate::codec::{decode_budget, encode_budget};
@@ -155,7 +155,10 @@ pub fn cloud_error_message(message: String) -> String {
 /// The redirect URI of an iOS-type OAuth client: its reversed client ID.
 #[export]
 pub fn google_apple_redirect_uri(client_id: String) -> String {
-    format!("{}:/oauth2redirect", google_apple_callback_scheme(client_id))
+    format!(
+        "{}:/oauth2redirect",
+        google_apple_callback_scheme(client_id)
+    )
 }
 
 /// URL scheme `ASWebAuthenticationSession` should wait for.
@@ -184,7 +187,11 @@ impl BWGoogleDrive {
     }
 
     /// Supplies networking and credential storage. Call once before use.
-    pub fn connect(&self, http: Box<dyn BWHttpClient>, credentials: Box<dyn BWGoogleCredentialStore>) {
+    pub fn connect(
+        &self,
+        http: Box<dyn BWHttpClient>,
+        credentials: Box<dyn BWGoogleCredentialStore>,
+    ) {
         *lock(&self.connection) = Some(Connection {
             http: Arc::from(http),
             credentials: Arc::from(credentials),
@@ -205,24 +212,29 @@ impl BWGoogleDrive {
         if lock(&self.token_source).is_some() {
             return self.account().is_some();
         }
-        self.credentials()
-            .is_some_and(|credentials| credentials.refresh_token.is_some() || credentials.access_token.is_some())
+        self.credentials().is_some_and(|credentials| {
+            credentials.refresh_token.is_some() || credentials.access_token.is_some()
+        })
     }
 
     pub fn account(&self) -> Option<BWGoogleAccount> {
         let credentials = self.credentials()?;
-        (credentials.email.is_some() || credentials.refresh_token.is_some() || credentials.access_token.is_some())
-            .then_some(BWGoogleAccount {
-                email: credentials.email,
-                display_name: credentials.display_name,
-            })
+        (credentials.email.is_some()
+            || credentials.refresh_token.is_some()
+            || credentials.access_token.is_some())
+        .then_some(BWGoogleAccount {
+            email: credentials.email,
+            display_name: credentials.display_name,
+        })
     }
 
     /// Starts the OAuth flow. Open `authorization_url` in a browser and pass
     /// the URL it redirects to to [`Self::complete_sign_in`].
     pub fn begin_sign_in(&self, redirect_uri: String) -> Result<BWGoogleSignInRequest, String> {
         if self.config.client_id.trim().is_empty() {
-            return Err("Google Drive is not configured in this build of Budget Warden.".to_string());
+            return Err(
+                "Google Drive is not configured in this build of Budget Warden.".to_string(),
+            );
         }
         let state = uuid::Uuid::new_v4().simple().to_string();
         let code_verifier = oauth::new_code_verifier();
@@ -273,7 +285,9 @@ impl BWGoogleDrive {
             email: None,
             display_name: None,
         };
-        connection.credentials.save_credentials(credentials.encode())?;
+        connection
+            .credentials
+            .save_credentials(credentials.encode())?;
         // A different account may have signed in: forget the old mirror.
         self.cache.clear();
         self.refresh_account()
@@ -293,7 +307,9 @@ impl BWGoogleDrive {
         }
         credentials.email = user.email_address.clone();
         credentials.display_name = user.display_name.clone();
-        connection.credentials.save_credentials(credentials.encode())?;
+        connection
+            .credentials
+            .save_credentials(credentials.encode())?;
         Ok(BWGoogleAccount {
             email: user.email_address,
             display_name: user.display_name,
@@ -348,7 +364,8 @@ impl BWGoogleDrive {
 
         let _state = lock(&self.state_lock);
         let mut state = self.cache.load_state();
-        let listed: std::collections::BTreeSet<String> = files.iter().map(|file| file.id.clone()).collect();
+        let listed: std::collections::BTreeSet<String> =
+            files.iter().map(|file| file.id.clone()).collect();
         // Forget budgets that disappeared from Drive, unless their working
         // copy holds edits that never reached Drive.
         let vanished: Vec<String> = state
@@ -369,7 +386,10 @@ impl BWGoogleDrive {
                 .get(&file.id)
                 .map(|cached| cached.local_name.clone())
                 .unwrap_or_else(|| sync::local_file_name(&file.name));
-            let snapshot_version = state.files.get(&file.id).and_then(|cached| cached.snapshot_version.clone());
+            let snapshot_version = state
+                .files
+                .get(&file.id)
+                .and_then(|cached| cached.snapshot_version.clone());
             state.files.insert(
                 file.id.clone(),
                 CachedFile {
@@ -400,11 +420,15 @@ impl BWGoogleDrive {
         let metadata = self.metadata(&file_id)?;
         let _state = lock(&self.state_lock);
         let mut state = self.cache.load_state();
-        let mut cached = state.files.get(&file_id).cloned().unwrap_or_else(|| CachedFile {
-            local_name: sync::local_file_name(&metadata.name),
-            file: metadata.clone(),
-            snapshot_version: None,
-        });
+        let mut cached = state
+            .files
+            .get(&file_id)
+            .cloned()
+            .unwrap_or_else(|| CachedFile {
+                local_name: sync::local_file_name(&metadata.name),
+                file: metadata.clone(),
+                snapshot_version: None,
+            });
         cached.file = metadata.clone();
 
         let remote_json = self.remote_content(&file_id, &mut cached)?;
@@ -422,8 +446,9 @@ impl BWGoogleDrive {
             for attempt in 0.. {
                 let local_json = read(&working_copy)?;
                 let local = decode_budget(&local_json, location.clone())?;
-                let remote = decode_budget(&remote_json, location.clone())
-                    .map_err(|error| format!("{} is not a readable budget: {error}", metadata.name))?;
+                let remote = decode_budget(&remote_json, location.clone()).map_err(|error| {
+                    format!("{} is not a readable budget: {error}", metadata.name)
+                })?;
                 let local_revision = local.revision_id;
                 let reconciliation = sync::reconcile(local, remote)?;
                 if reconciliation.local_changed {
@@ -432,7 +457,10 @@ impl BWGoogleDrive {
                     let current = decode_budget(&read(&working_copy)?, location.clone())?;
                     if current.revision_id != local_revision {
                         if attempt + 1 >= MAX_LOCAL_WRITE_ATTEMPTS {
-                            return Err("The budget kept changing while it was syncing. Please try again.".to_string());
+                            return Err(
+                                "The budget kept changing while it was syncing. Please try again."
+                                    .to_string(),
+                            );
                         }
                         continue;
                     }
@@ -483,7 +511,10 @@ impl BWGoogleDrive {
             file: file.clone(),
         };
         sync::write_atomically(&self.cache.snapshot(&file.id), &json)?;
-        sync::write_atomically(&self.cache.working_copy(&file.id, &cached.local_name), &json)?;
+        sync::write_atomically(
+            &self.cache.working_copy(&file.id, &cached.local_name),
+            &json,
+        )?;
         state.files.insert(file.id.clone(), cached.clone());
         self.cache.save_state(&state)?;
         Ok(self.summary(&file.id, &cached))
@@ -498,7 +529,8 @@ impl BWGoogleDrive {
 
     /// Whether `path` is inside this provider's cache directory.
     pub fn is_cloud_path(&self, path: String) -> bool {
-        let root = std::fs::canonicalize(self.cache.root()).unwrap_or_else(|_| self.cache.root().to_path_buf());
+        let root = std::fs::canonicalize(self.cache.root())
+            .unwrap_or_else(|_| self.cache.root().to_path_buf());
         let path = std::fs::canonicalize(&path).unwrap_or_else(|_| Path::new(&path).to_path_buf());
         path.starts_with(root)
     }
@@ -535,7 +567,12 @@ impl BWGoogleDrive {
                 return Err("Ownership cannot be transferred from Budget Warden.".to_string());
             }
         };
-        let response = self.send(drive::create_permission_request(&file_id, &email, role, message.as_deref()))?;
+        let response = self.send(drive::create_permission_request(
+            &file_id,
+            &email,
+            role,
+            message.as_deref(),
+        ))?;
         if !response.is_success() {
             return Err(drive::error_message(&response));
         }
@@ -549,7 +586,10 @@ impl BWGoogleDrive {
         if !response.is_success() {
             return Err(drive::error_message(&response));
         }
-        let mut shares: Vec<_> = drive::parse_permissions(&response)?.into_iter().map(share).collect();
+        let mut shares: Vec<_> = drive::parse_permissions(&response)?
+            .into_iter()
+            .map(share)
+            .collect();
         shares.sort_by_key(|share| (share.role as i32, share.email.clone().unwrap_or_default()));
         Ok(shares)
     }
@@ -614,7 +654,10 @@ impl BWGoogleDrive {
             connection.http.as_ref(),
             self.config.client_id.trim(),
             self.config.client_secret.as_deref(),
-            &[("grant_type", "refresh_token"), ("refresh_token", &refresh_token)],
+            &[
+                ("grant_type", "refresh_token"),
+                ("refresh_token", &refresh_token),
+            ],
         ) {
             Ok(grant) => grant,
             Err(error) => {
@@ -629,7 +672,9 @@ impl BWGoogleDrive {
         if grant.refresh_token.is_some() {
             credentials.refresh_token = grant.refresh_token;
         }
-        connection.credentials.save_credentials(credentials.encode())?;
+        connection
+            .credentials
+            .save_credentials(credentials.encode())?;
         Ok(grant.access_token)
     }
 
@@ -645,7 +690,9 @@ impl BWGoogleDrive {
         let token = self.access_token(true)?;
         let response = http.execute(authorized(request, &token))?;
         if response.status == 401 {
-            return Err(auth_required("Google Drive rejected your sign-in. Sign in again."));
+            return Err(auth_required(
+                "Google Drive rejected your sign-in. Sign in again.",
+            ));
         }
         Ok(response)
     }
@@ -706,7 +753,12 @@ impl BWGoogleDrive {
         Ok(id)
     }
 
-    fn upload_new(&self, name: &str, json: &str, refresh_folder: bool) -> Result<DriveFile, String> {
+    fn upload_new(
+        &self,
+        name: &str,
+        json: &str,
+        refresh_folder: bool,
+    ) -> Result<DriveFile, String> {
         let folder = self.folder_id(refresh_folder)?;
         let response = self.send(drive::create_file_request(name, &folder, json))?;
         if response.status == 404 && !refresh_folder {
@@ -727,7 +779,10 @@ impl BWGoogleDrive {
             return true;
         };
         let location = working_copy.to_string_lossy().into_owned();
-        match (decode_budget(&local, location.clone()), decode_budget(&remote, location)) {
+        match (
+            decode_budget(&local, location.clone()),
+            decode_budget(&remote, location),
+        ) {
             (Ok(local), Ok(remote)) => sync::content(&local) != sync::content(&remote),
             _ => true,
         }
@@ -751,9 +806,17 @@ impl BWGoogleDrive {
         BWCloudBudget {
             id: file_id.to_string(),
             name: file.name.clone(),
-            title: file.name.strip_suffix(".budget").unwrap_or(&file.name).to_string(),
-            owner_name: owner.display_name.or_else(|| sharer.as_ref().and_then(|user| user.display_name.clone())),
-            owner_email: owner.email_address.or_else(|| sharer.and_then(|user| user.email_address)),
+            title: file
+                .name
+                .strip_suffix(".budget")
+                .unwrap_or(&file.name)
+                .to_string(),
+            owner_name: owner
+                .display_name
+                .or_else(|| sharer.as_ref().and_then(|user| user.display_name.clone())),
+            owner_email: owner
+                .email_address
+                .or_else(|| sharer.and_then(|user| user.email_address)),
             shared_with_me,
             is_shared: file.shared.unwrap_or(false) || shared_with_me,
             can_edit: file.capabilities.can_edit,
@@ -772,11 +835,14 @@ fn authorized(request: BWHttpRequest, token: &str) -> BWHttpRequest {
 }
 
 fn read(path: &Path) -> Result<String, String> {
-    std::fs::read_to_string(path).map_err(|error| format!("Could not read {}: {error}", path.display()))
+    std::fs::read_to_string(path)
+        .map_err(|error| format!("Could not read {}: {error}", path.display()))
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    mutex
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 fn sort_budgets(budgets: &mut [BWCloudBudget]) {

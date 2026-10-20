@@ -23,6 +23,8 @@
 mod drive;
 mod google;
 pub mod http;
+#[cfg(feature = "native-http")]
+pub mod native;
 mod oauth;
 mod sync;
 
@@ -30,7 +32,7 @@ pub use drive::BUDGET_MIME_TYPE;
 pub use google::*;
 pub use http::{BWHttpClient, BWHttpHeader, BWHttpRequest, BWHttpResponse};
 pub use oauth::{
-    BWGoogleSignInRequest, BWOAuthLoopbackReceiver, GOOGLE_DRIVE_SCOPE, is_cloud_sign_in_required,
+    BWGoogleSignInRequest, BWGoogleLoopbackReceiver, GOOGLE_DRIVE_SCOPE, is_cloud_sign_in_required,
 };
 
 /// Prefix of errors that mean the user must sign in (again). Hosts test for

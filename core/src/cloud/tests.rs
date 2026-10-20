@@ -15,7 +15,7 @@ use super::*;
 use crate::app_state::initialize_core;
 use crate::codec::{decode_budget, encode_budget};
 use crate::domain;
-use crate::models::{BWBudget, BWCategory, BWCategoryType, BWMoneyAmount, BWTransaction, BWDate};
+use crate::models::{BWBudget, BWCategory, BWCategoryType, BWDate, BWMoneyAmount, BWTransaction};
 use crate::templates::budget_from_template_id;
 
 // MARK: Fake Drive
@@ -64,7 +64,10 @@ fn response(status: i32, body: Value) -> BWHttpResponse {
 }
 
 fn error(status: i32, message: &str) -> BWHttpResponse {
-    response(status, json!({ "error": { "code": status, "message": message } }))
+    response(
+        status,
+        json!({ "error": { "code": status, "message": message } }),
+    )
 }
 
 impl FakeDrive {
@@ -83,7 +86,12 @@ impl FakeDrive {
             .unwrap()
             .codes
             .insert(code.clone(), (email.to_string(), get("code_challenge")));
-        format!("{}?state={}&code={}", get("redirect_uri"), get("state"), code)
+        format!(
+            "{}?state={}&code={}",
+            get("redirect_uri"),
+            get("state"),
+            code
+        )
     }
 
     fn expire_access_tokens(&self) {
@@ -132,21 +140,30 @@ impl FakeDrive {
 
     fn handle(&self, request: BWHttpRequest) -> BWHttpResponse {
         let mut state = self.state.lock().unwrap();
-        state.requests.push(format!("{} {}", request.method, request.url));
+        state
+            .requests
+            .push(format!("{} {}", request.method, request.url));
         let path = request.url.split('?').next().unwrap().to_string();
         let query: BTreeMap<String, String> = query_pairs(&request.url).into_iter().collect();
         let body = request.body.clone().unwrap_or_default();
 
         if path == TOKEN_ENDPOINT {
-            let form: BTreeMap<String, String> = query_pairs(&format!("?{body}")).into_iter().collect();
-            assert_eq!(form.get("client_id").map(String::as_str), Some("test-client"));
+            let form: BTreeMap<String, String> =
+                query_pairs(&format!("?{body}")).into_iter().collect();
+            assert_eq!(
+                form.get("client_id").map(String::as_str),
+                Some("test-client")
+            );
             let email = match form["grant_type"].as_str() {
                 "authorization_code" => {
                     let Some((email, challenge)) = state.codes.remove(&form["code"]) else {
                         return response(400, json!({ "error": "invalid_grant" }));
                     };
                     let digest = Sha256::digest(form["code_verifier"].as_bytes());
-                    assert_eq!(super::oauth::code_challenge(&form["code_verifier"]), challenge);
+                    assert_eq!(
+                        super::oauth::code_challenge(&form["code_verifier"]),
+                        challenge
+                    );
                     assert_eq!(digest.len(), 32);
                     email
                 }
@@ -160,7 +177,10 @@ impl FakeDrive {
             let refresh = format!("rt-{email}");
             state.access_tokens.insert(access.clone(), email.clone());
             state.refresh_tokens.insert(refresh.clone(), email);
-            return response(200, json!({ "access_token": access, "expires_in": 3599, "refresh_token": refresh }));
+            return response(
+                200,
+                json!({ "access_token": access, "expires_in": 3599, "refresh_token": refresh }),
+            );
         }
         if path == REVOCATION_ENDPOINT {
             return response(200, json!({}));
@@ -177,7 +197,10 @@ impl FakeDrive {
         };
 
         if path == format!("{API_ROOT}/about") {
-            return response(200, json!({ "user": { "displayName": user.split('@').next(), "emailAddress": user } }));
+            return response(
+                200,
+                json!({ "user": { "displayName": user.split('@').next(), "emailAddress": user } }),
+            );
         }
 
         if path == format!("{API_ROOT}/files") && request.method == "GET" {
@@ -188,7 +211,8 @@ impl FakeDrive {
                 .filter(|(_, file)| !file.trashed && Self::role(file, &user).is_some())
                 .filter(|(_, file)| {
                     if q.contains("google-apps.folder") {
-                        file.mime_type == "application/vnd.google-apps.folder" && q.contains(&format!("name = '{}'", file.name))
+                        file.mime_type == "application/vnd.google-apps.folder"
+                            && q.contains(&format!("name = '{}'", file.name))
                     } else {
                         assert!(q.contains(BUDGET_MIME_TYPE));
                         file.mime_type == BUDGET_MIME_TYPE
@@ -221,11 +245,23 @@ impl FakeDrive {
 
         if path == format!("{UPLOAD_ROOT}/files") && request.method == "POST" {
             assert_eq!(query["uploadType"], "multipart");
-            let content_type = request.headers.iter().find(|h| h.name == "Content-Type").unwrap().value.clone();
+            let content_type = request
+                .headers
+                .iter()
+                .find(|h| h.name == "Content-Type")
+                .unwrap()
+                .value
+                .clone();
             let boundary = content_type.split("boundary=").nth(1).unwrap().to_string();
             let parts: Vec<&str> = body.split(&format!("--{boundary}")).collect();
-            let metadata: Value = serde_json::from_str(parts[1].split("\r\n\r\n").nth(1).unwrap().trim()).unwrap();
-            let content = parts[2].split_once("\r\n\r\n").unwrap().1.trim_end_matches("\r\n").to_string();
+            let metadata: Value =
+                serde_json::from_str(parts[1].split("\r\n\r\n").nth(1).unwrap().trim()).unwrap();
+            let content = parts[2]
+                .split_once("\r\n\r\n")
+                .unwrap()
+                .1
+                .trim_end_matches("\r\n")
+                .to_string();
             let parent = metadata["parents"][0].as_str().unwrap().to_string();
             if !state.files.contains_key(&parent) {
                 return error(404, "File not found: parent");
@@ -265,13 +301,20 @@ impl FakeDrive {
         match (request.method.as_str(), segments.next(), segments.next()) {
             ("GET", None, None) if query.get("alt").map(String::as_str) == Some("media") => {
                 state.downloads += 1;
-                BWHttpResponse { status: 200, headers: vec![], body: file.content }
+                BWHttpResponse {
+                    status: 200,
+                    headers: vec![],
+                    body: file.content,
+                }
             }
             ("GET", None, None) => response(200, Self::metadata(&id, &file, &user)),
             ("PATCH", None, None) => {
                 assert!(path.starts_with(UPLOAD_ROOT));
                 if role != "owner" && role != "writer" {
-                    return error(403, "The user does not have sufficient permissions for this file.");
+                    return error(
+                        403,
+                        "The user does not have sufficient permissions for this file.",
+                    );
                 }
                 let file = state.files.get_mut(&id).unwrap();
                 file.content = body;
@@ -291,12 +334,18 @@ impl FakeDrive {
                 let role = permission["role"].as_str().unwrap().to_string();
                 state.notifications.push(email.clone());
                 let file = state.files.get_mut(&id).unwrap();
-                file.permissions.push((permission_id.clone(), email.clone(), role.clone()));
+                file.permissions
+                    .push((permission_id.clone(), email.clone(), role.clone()));
                 file.version += 1;
-                response(200, json!({ "id": permission_id, "type": "user", "role": role, "emailAddress": email }))
+                response(
+                    200,
+                    json!({ "id": permission_id, "type": "user", "role": role, "emailAddress": email }),
+                )
             }
             ("GET", Some("permissions"), None) => {
-                let mut permissions = vec![json!({ "id": "owner", "type": "user", "role": "owner", "emailAddress": file.owner })];
+                let mut permissions = vec![
+                    json!({ "id": "owner", "type": "user", "role": "owner", "emailAddress": file.owner }),
+                ];
                 permissions.extend(file.permissions.iter().map(|(pid, email, role)| {
                     json!({ "id": pid, "type": "user", "role": role, "emailAddress": email })
                 }));
@@ -306,7 +355,11 @@ impl FakeDrive {
                 let permission_id = permission_id.to_string();
                 let file = state.files.get_mut(&id).unwrap();
                 file.permissions.retain(|(pid, _, _)| *pid != permission_id);
-                BWHttpResponse { status: 204, headers: vec![], body: String::new() }
+                BWHttpResponse {
+                    status: 204,
+                    headers: vec![],
+                    body: String::new(),
+                }
             }
             other => panic!("unexpected request {other:?} {path}"),
         }
@@ -360,12 +413,19 @@ fn device(server: &FakeDrive) -> Device {
     });
     let credentials = MemoryCredentials::default();
     drive.connect(Box::new(server.clone()), Box::new(credentials.clone()));
-    Device { drive, credentials, directory }
+    Device {
+        drive,
+        credentials,
+        directory,
+    }
 }
 
 fn signed_in(server: &FakeDrive, email: &str) -> Device {
     let device = device(server);
-    let request = device.drive.begin_sign_in("http://127.0.0.1:4567".into()).unwrap();
+    let request = device
+        .drive
+        .begin_sign_in("http://127.0.0.1:4567".into())
+        .unwrap();
     let callback = server.approve(&request.authorization_url, email);
     let account = device.drive.complete_sign_in(callback).unwrap();
     assert_eq!(account.email.as_deref(), Some(email));
@@ -402,7 +462,11 @@ fn add_transaction(budget: BWBudget, title: &str, cents: i64) -> BWBudget {
             id: Uuid::new_v4(),
             title: title.into(),
             description: String::new(),
-            date: BWDate { year: 2026, month: 10, day: 20 },
+            date: BWDate {
+                year: 2026,
+                month: 10,
+                day: 20,
+            },
             amount: BWMoneyAmount { value: cents },
         },
     )
@@ -438,7 +502,10 @@ fn transaction_titles(budget: &BWBudget) -> Vec<String> {
 }
 
 fn has_category(budget: &BWBudget, title: &str) -> bool {
-    budget.categories.iter().any(|category| category.title == title)
+    budget
+        .categories
+        .iter()
+        .any(|category| category.title == title)
 }
 
 // MARK: Tests
@@ -448,20 +515,36 @@ fn sign_in_uses_pkce_and_stores_a_refresh_token() {
     let server = FakeDrive::default();
     let device = signed_in(&server, "ana@example.com");
     assert!(device.drive.is_signed_in());
-    assert_eq!(device.drive.account().unwrap().email.as_deref(), Some("ana@example.com"));
+    assert_eq!(
+        device.drive.account().unwrap().email.as_deref(),
+        Some("ana@example.com")
+    );
     let stored = device.credentials.load_credentials().unwrap();
     assert!(stored.contains("rt-ana@example.com"));
 
     // A tampered state is rejected and leaves no pending sign-in behind.
     let other = device_with_pending(&server);
-    assert!(other.drive.complete_sign_in("http://127.0.0.1:4567/?state=wrong&code=x".into()).is_err());
-    assert!(other.drive.complete_sign_in("http://127.0.0.1:4567/?state=wrong&code=x".into()).is_err());
+    assert!(
+        other
+            .drive
+            .complete_sign_in("http://127.0.0.1:4567/?state=wrong&code=x".into())
+            .is_err()
+    );
+    assert!(
+        other
+            .drive
+            .complete_sign_in("http://127.0.0.1:4567/?state=wrong&code=x".into())
+            .is_err()
+    );
     assert!(!other.drive.is_signed_in());
 }
 
 fn device_with_pending(server: &FakeDrive) -> Device {
     let device = device(server);
-    device.drive.begin_sign_in("http://127.0.0.1:4567".into()).unwrap();
+    device
+        .drive
+        .begin_sign_in("http://127.0.0.1:4567".into())
+        .unwrap();
     device
 }
 
@@ -476,11 +559,18 @@ fn unconfigured_builds_and_signed_out_calls_explain_themselves() {
         folder_name: "Budget Warden".into(),
     });
     assert!(!unconfigured.is_configured());
-    assert!(unconfigured.begin_sign_in("http://127.0.0.1:1".into()).is_err());
+    assert!(
+        unconfigured
+            .begin_sign_in("http://127.0.0.1:1".into())
+            .is_err()
+    );
 
     let error = device.drive.list_budgets().unwrap_err();
     assert!(is_cloud_sign_in_required(error.clone()));
-    assert_eq!(cloud_error_message(error), "Sign in to Google Drive to sync your budgets.");
+    assert_eq!(
+        cloud_error_message(error),
+        "Sign in to Google Drive to sync your budgets."
+    );
 }
 
 #[test]
@@ -488,8 +578,14 @@ fn created_budgets_live_in_the_app_folder_and_open_from_a_working_copy() {
     let server = FakeDrive::default();
     let device = signed_in(&server, "ana@example.com");
 
-    let created = device.drive.create_budget("October".into(), new_budget_json("October")).unwrap();
-    let second = device.drive.create_budget("Nov/ember.budget".into(), new_budget_json("November")).unwrap();
+    let created = device
+        .drive
+        .create_budget("October".into(), new_budget_json("October"))
+        .unwrap();
+    let second = device
+        .drive
+        .create_budget("Nov/ember.budget".into(), new_budget_json("November"))
+        .unwrap();
     assert_eq!(created.name, "October.budget");
     assert_eq!(second.name, "Nov-ember.budget");
     assert!(!created.shared_with_me && created.can_edit && created.can_share);
@@ -499,13 +595,28 @@ fn created_budgets_live_in_the_app_folder_and_open_from_a_working_copy() {
     assert_eq!(file.app_properties["budgetWarden"], "budget");
     let folder = server.file(&file.parents[0]);
     assert_eq!(folder.name, "Budget Warden");
-    assert_eq!(server.file(&second.id).parents, file.parents, "the folder is created once");
+    assert_eq!(
+        server.file(&second.id).parents,
+        file.parents,
+        "the folder is created once"
+    );
 
     let path = created.local_path.clone().unwrap();
     assert!(device.drive.is_cloud_path(path.clone()));
-    assert_eq!(device.drive.budget_id_for_path(path.clone()), Some(created.id.clone()));
+    assert_eq!(
+        device.drive.budget_id_for_path(path.clone()),
+        Some(created.id.clone())
+    );
     assert_eq!(read_budget(&path).title, "October");
-    assert!(!device.drive.is_cloud_path(device.directory.join("elsewhere.budget").to_string_lossy().into_owned()));
+    assert!(
+        !device.drive.is_cloud_path(
+            device
+                .directory
+                .join("elsewhere.budget")
+                .to_string_lossy()
+                .into_owned()
+        )
+    );
 
     let listed = device.drive.list_budgets().unwrap();
     assert_eq!(listed.len(), 2);
@@ -518,13 +629,18 @@ fn concurrent_edits_on_two_devices_converge() {
     let laptop = signed_in(&server, "ana@example.com");
     let phone = signed_in(&server, "ana@example.com");
 
-    let created = laptop.drive.create_budget("Shared".into(), new_budget_json("Shared")).unwrap();
+    let created = laptop
+        .drive
+        .create_budget("Shared".into(), new_budget_json("Shared"))
+        .unwrap();
     let laptop_path = created.local_path.unwrap();
     let opened = phone.drive.open_budget(created.id.clone()).unwrap();
     assert!(opened.local_changed && !opened.remote_changed);
     let phone_path = opened.local_path;
 
-    app_edit(&laptop_path, |budget| add_transaction(budget, "Coffee", 450));
+    app_edit(&laptop_path, |budget| {
+        add_transaction(budget, "Coffee", 450)
+    });
     app_edit(&phone_path, |budget| add_category(budget, "Gym"));
     app_edit(&phone_path, |budget| add_transaction(budget, "Bus", 280));
 
@@ -557,16 +673,32 @@ fn a_lost_upload_race_heals_on_the_next_sync() {
     let server = FakeDrive::default();
     let first = signed_in(&server, "ana@example.com");
     let second = signed_in(&server, "ana@example.com");
-    let created = first.drive.create_budget("Race".into(), new_budget_json("Race")).unwrap();
+    let created = first
+        .drive
+        .create_budget("Race".into(), new_budget_json("Race"))
+        .unwrap();
     let first_path = created.local_path.unwrap();
-    let second_path = second.drive.open_budget(created.id.clone()).unwrap().local_path;
+    let second_path = second
+        .drive
+        .open_budget(created.id.clone())
+        .unwrap()
+        .local_path;
 
-    app_edit(&second_path, |budget| add_transaction(budget, "Second", 100));
+    app_edit(&second_path, |budget| {
+        add_transaction(budget, "Second", 100)
+    });
     second.drive.sync_budget(created.id.clone()).unwrap();
 
     // Another writer replaces Drive content with a stale copy, as a
     // last-writer-wins race would.
-    let stale = std::fs::read_to_string(first.directory.join("google-drive").join(&created.id).join("remote.json")).unwrap();
+    let stale = std::fs::read_to_string(
+        first
+            .directory
+            .join("google-drive")
+            .join(&created.id)
+            .join("remote.json"),
+    )
+    .unwrap();
     {
         let mut state = server.state.lock().unwrap();
         let file = state.files.get_mut(&created.id).unwrap();
@@ -579,7 +711,10 @@ fn a_lost_upload_race_heals_on_the_next_sync() {
     let result = second.drive.sync_budget(created.id.clone()).unwrap();
     assert!(result.remote_changed && result.local_changed);
     first.drive.sync_budget(created.id.clone()).unwrap();
-    assert_eq!(transaction_titles(&read_budget(&first_path)), vec!["First", "Second"]);
+    assert_eq!(
+        transaction_titles(&read_budget(&first_path)),
+        vec!["First", "Second"]
+    );
 }
 
 #[test]
@@ -589,56 +724,119 @@ fn shared_budgets_are_discovered_and_editable_by_writers_only() {
     let writer = signed_in(&server, "ben@example.com");
     let reader = signed_in(&server, "cy@example.com");
 
-    let created = owner.drive.create_budget("Family".into(), new_budget_json("Family")).unwrap();
+    let created = owner
+        .drive
+        .create_budget("Family".into(), new_budget_json("Family"))
+        .unwrap();
     assert!(writer.drive.list_budgets().unwrap().is_empty());
 
     let share = owner
         .drive
-        .share_budget(created.id.clone(), " ben@example.com ".into(), BWCloudShareRole::Writer, Some("Our budget".into()))
+        .share_budget(
+            created.id.clone(),
+            " ben@example.com ".into(),
+            BWCloudShareRole::Writer,
+            Some("Our budget".into()),
+        )
         .unwrap();
     assert_eq!(share.role, BWCloudShareRole::Writer);
     owner
         .drive
-        .share_budget(created.id.clone(), "cy@example.com".into(), BWCloudShareRole::Reader, None)
+        .share_budget(
+            created.id.clone(),
+            "cy@example.com".into(),
+            BWCloudShareRole::Reader,
+            None,
+        )
         .unwrap();
-    assert!(owner.drive.share_budget(created.id.clone(), "not an email".into(), BWCloudShareRole::Reader, None).is_err());
-    assert_eq!(server.state.lock().unwrap().notifications, vec!["ben@example.com", "cy@example.com"]);
+    assert!(
+        owner
+            .drive
+            .share_budget(
+                created.id.clone(),
+                "not an email".into(),
+                BWCloudShareRole::Reader,
+                None
+            )
+            .is_err()
+    );
+    assert_eq!(
+        server.state.lock().unwrap().notifications,
+        vec!["ben@example.com", "cy@example.com"]
+    );
 
     let shares = owner.drive.list_shares(created.id.clone()).unwrap();
-    assert_eq!(shares.iter().map(|s| s.role).collect::<Vec<_>>(), vec![
-        BWCloudShareRole::Owner,
-        BWCloudShareRole::Writer,
-        BWCloudShareRole::Reader
-    ]);
+    assert_eq!(
+        shares.iter().map(|s| s.role).collect::<Vec<_>>(),
+        vec![
+            BWCloudShareRole::Owner,
+            BWCloudShareRole::Writer,
+            BWCloudShareRole::Reader
+        ]
+    );
     assert!(owner.drive.list_budgets().unwrap()[0].is_shared);
 
     let discovered = writer.drive.list_budgets().unwrap();
     assert_eq!(discovered.len(), 1);
     assert!(discovered[0].shared_with_me && discovered[0].can_edit);
-    assert_eq!(discovered[0].owner_email.as_deref(), Some("ana@example.com"));
+    assert_eq!(
+        discovered[0].owner_email.as_deref(),
+        Some("ana@example.com")
+    );
 
-    let writer_path = writer.drive.open_budget(created.id.clone()).unwrap().local_path;
-    app_edit(&writer_path, |budget| add_transaction(budget, "Groceries", 5000));
-    assert!(writer.drive.sync_budget(created.id.clone()).unwrap().remote_changed);
+    let writer_path = writer
+        .drive
+        .open_budget(created.id.clone())
+        .unwrap()
+        .local_path;
+    app_edit(&writer_path, |budget| {
+        add_transaction(budget, "Groceries", 5000)
+    });
+    assert!(
+        writer
+            .drive
+            .sync_budget(created.id.clone())
+            .unwrap()
+            .remote_changed
+    );
     let owner_result = owner.drive.sync_budget(created.id.clone()).unwrap();
     assert!(owner_result.local_changed);
-    assert_eq!(transaction_titles(&read_budget(&owner_result.local_path)), vec!["Groceries"]);
+    assert_eq!(
+        transaction_titles(&read_budget(&owner_result.local_path)),
+        vec!["Groceries"]
+    );
 
     let reader_budget = &reader.drive.list_budgets().unwrap()[0];
     assert!(reader_budget.shared_with_me && !reader_budget.can_edit);
-    let reader_path = reader.drive.open_budget(created.id.clone()).unwrap().local_path;
+    let reader_path = reader
+        .drive
+        .open_budget(created.id.clone())
+        .unwrap()
+        .local_path;
     app_edit(&reader_path, |budget| add_transaction(budget, "Sneaky", 1));
     let reader_result = reader.drive.sync_budget(created.id.clone()).unwrap();
     assert!(!reader_result.remote_changed, "readers never upload");
 
     // Revoking access hides the budget and removes its unchanged copy.
-    let ben = shares.iter().find(|s| s.email.as_deref() == Some("ben@example.com")).unwrap();
-    owner.drive.remove_share(created.id.clone(), ben.id.clone()).unwrap();
+    let ben = shares
+        .iter()
+        .find(|s| s.email.as_deref() == Some("ben@example.com"))
+        .unwrap();
+    owner
+        .drive
+        .remove_share(created.id.clone(), ben.id.clone())
+        .unwrap();
     assert!(writer.drive.list_budgets().unwrap().is_empty());
     assert!(!Path::new(&writer_path).exists());
     // A reader with local edits that never reached Drive keeps them.
-    let cy = shares.iter().find(|s| s.email.as_deref() == Some("cy@example.com")).unwrap();
-    owner.drive.remove_share(created.id.clone(), cy.id.clone()).unwrap();
+    let cy = shares
+        .iter()
+        .find(|s| s.email.as_deref() == Some("cy@example.com"))
+        .unwrap();
+    owner
+        .drive
+        .remove_share(created.id.clone(), cy.id.clone())
+        .unwrap();
     assert_eq!(reader.drive.list_budgets().unwrap().len(), 1);
     assert!(Path::new(&reader_path).exists());
 }
@@ -647,7 +845,10 @@ fn shared_budgets_are_discovered_and_editable_by_writers_only() {
 fn expired_tokens_refresh_and_revoked_sign_ins_ask_to_sign_in_again() {
     let server = FakeDrive::default();
     let device = signed_in(&server, "ana@example.com");
-    device.drive.create_budget("A".into(), new_budget_json("A")).unwrap();
+    device
+        .drive
+        .create_budget("A".into(), new_budget_json("A"))
+        .unwrap();
 
     server.expire_access_tokens();
     assert_eq!(device.drive.list_budgets().unwrap().len(), 1);
@@ -665,22 +866,39 @@ fn expired_tokens_refresh_and_revoked_sign_ins_ask_to_sign_in_again() {
 fn sign_out_revokes_and_forgets_working_copies() {
     let server = FakeDrive::default();
     let device = signed_in(&server, "ana@example.com");
-    let created = device.drive.create_budget("A".into(), new_budget_json("A")).unwrap();
+    let created = device
+        .drive
+        .create_budget("A".into(), new_budget_json("A"))
+        .unwrap();
     device.drive.sign_out();
     assert!(!device.drive.is_signed_in());
     assert!(device.drive.cached_budgets().is_empty());
     assert!(!Path::new(&created.local_path.unwrap()).exists());
-    assert!(server.state.lock().unwrap().requests.iter().any(|r| r.starts_with(&format!("POST {REVOCATION_ENDPOINT}"))));
+    assert!(
+        server
+            .state
+            .lock()
+            .unwrap()
+            .requests
+            .iter()
+            .any(|r| r.starts_with(&format!("POST {REVOCATION_ENDPOINT}")))
+    );
 }
 
 #[test]
 fn a_deleted_app_folder_is_recreated() {
     let server = FakeDrive::default();
     let device = signed_in(&server, "ana@example.com");
-    let first = device.drive.create_budget("A".into(), new_budget_json("A")).unwrap();
+    let first = device
+        .drive
+        .create_budget("A".into(), new_budget_json("A"))
+        .unwrap();
     let folder = server.file(&first.id).parents[0].clone();
     server.state.lock().unwrap().files.remove(&folder);
-    let second = device.drive.create_budget("B".into(), new_budget_json("B")).unwrap();
+    let second = device
+        .drive
+        .create_budget("B".into(), new_budget_json("B"))
+        .unwrap();
     assert_ne!(server.file(&second.id).parents[0], folder);
 }
 
@@ -697,13 +915,26 @@ impl BWGoogleTokenSource for StaticTokens {
 fn platform_token_sources_replace_the_oauth_flow() {
     let server = FakeDrive::default();
     let device = device(&server);
-    server.state.lock().unwrap().access_tokens.insert("play-token".into(), "dee@example.com".into());
+    server
+        .state
+        .lock()
+        .unwrap()
+        .access_tokens
+        .insert("play-token".into(), "dee@example.com".into());
     let calls = Arc::new(Mutex::new(Vec::new()));
-    device.drive.use_token_source(Box::new(StaticTokens(calls.clone(), "play-token".into())));
+    device
+        .drive
+        .use_token_source(Box::new(StaticTokens(calls.clone(), "play-token".into())));
     assert!(device.drive.is_configured());
     assert!(!device.drive.is_signed_in());
-    assert_eq!(device.drive.refresh_account().unwrap().email.as_deref(), Some("dee@example.com"));
+    assert_eq!(
+        device.drive.refresh_account().unwrap().email.as_deref(),
+        Some("dee@example.com")
+    );
     assert!(device.drive.is_signed_in());
-    device.drive.create_budget("Play".into(), new_budget_json("Play")).unwrap();
+    device
+        .drive
+        .create_budget("Play".into(), new_budget_json("Play"))
+        .unwrap();
     assert!(calls.lock().unwrap().iter().all(|forced| !forced));
 }

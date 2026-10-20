@@ -135,7 +135,9 @@ pub(crate) fn list_files_request(query: &str, page_token: Option<&str>) -> BWHtt
     BWHttpRequest::new("GET", format!("{API_ROOT}/files?{}", encode_pairs(&pairs)))
 }
 
-pub(crate) fn parse_file_list(response: &BWHttpResponse) -> Result<(Vec<DriveFile>, Option<String>), String> {
+pub(crate) fn parse_file_list(
+    response: &BWHttpResponse,
+) -> Result<(Vec<DriveFile>, Option<String>), String> {
     let list: FileList = serde_json::from_str(&response.body)
         .map_err(|error| format!("Google Drive sent an unreadable file list: {error}"))?;
     Ok((list.files, list.next_page_token))
@@ -158,12 +160,19 @@ pub(crate) fn create_folder_request(name: &str) -> BWHttpRequest {
 pub(crate) fn metadata_request(file_id: &str) -> BWHttpRequest {
     BWHttpRequest::new(
         "GET",
-        format!("{API_ROOT}/files/{}?{}", path_segment(file_id), encode_pairs(&[("fields", FILE_FIELDS)])),
+        format!(
+            "{API_ROOT}/files/{}?{}",
+            path_segment(file_id),
+            encode_pairs(&[("fields", FILE_FIELDS)])
+        ),
     )
 }
 
 pub(crate) fn download_request(file_id: &str) -> BWHttpRequest {
-    BWHttpRequest::new("GET", format!("{API_ROOT}/files/{}?alt=media", path_segment(file_id)))
+    BWHttpRequest::new(
+        "GET",
+        format!("{API_ROOT}/files/{}?alt=media", path_segment(file_id)),
+    )
 }
 
 /// A multipart upload that creates `name` in `folder_id` with `json` content.
@@ -202,7 +211,10 @@ pub(crate) fn update_content_request(file_id: &str, json: &str) -> BWHttpRequest
 }
 
 pub(crate) fn about_request() -> BWHttpRequest {
-    BWHttpRequest::new("GET", format!("{API_ROOT}/about?fields=user(displayName,emailAddress)"))
+    BWHttpRequest::new(
+        "GET",
+        format!("{API_ROOT}/about?fields=user(displayName,emailAddress)"),
+    )
 }
 
 pub(crate) fn parse_about(response: &BWHttpResponse) -> Result<DriveUser, String> {
@@ -227,7 +239,11 @@ pub(crate) fn create_permission_request(
     let body = json!({ "type": "user", "role": role, "emailAddress": email });
     BWHttpRequest::new(
         "POST",
-        format!("{API_ROOT}/files/{}/permissions?{}", path_segment(file_id), encode_pairs(&pairs)),
+        format!(
+            "{API_ROOT}/files/{}/permissions?{}",
+            path_segment(file_id),
+            encode_pairs(&pairs)
+        ),
     )
     .body("application/json; charset=UTF-8", body.to_string())
 }
@@ -254,7 +270,11 @@ pub(crate) fn parse_permission(response: &BWHttpResponse) -> Result<DrivePermiss
 pub(crate) fn parse_permissions(response: &BWHttpResponse) -> Result<Vec<DrivePermission>, String> {
     let list: PermissionList = serde_json::from_str(&response.body)
         .map_err(|error| format!("Google Drive sent an unreadable sharing list: {error}"))?;
-    Ok(list.permissions.into_iter().filter(|permission| !permission.deleted).collect())
+    Ok(list
+        .permissions
+        .into_iter()
+        .filter(|permission| !permission.deleted)
+        .collect())
 }
 
 pub(crate) fn delete_permission_request(file_id: &str, permission_id: &str) -> BWHttpRequest {
@@ -309,7 +329,9 @@ mod tests {
     #[test]
     fn queries_quote_literals() {
         assert_eq!(query_literal("Bob's \\ budgets"), "'Bob\\'s \\\\ budgets'");
-        assert!(budgets_query().contains("mimeType = 'application/vnd.lazarovco.budgetwarden.budget'"));
+        assert!(
+            budgets_query().contains("mimeType = 'application/vnd.lazarovco.budgetwarden.budget'")
+        );
         assert!(folder_query("Budget Warden").contains("name = 'Budget Warden'"));
     }
 
@@ -320,7 +342,10 @@ mod tests {
         let boundary = content_type.split("boundary=").nth(1).unwrap();
         let body = request.body.unwrap();
         assert!(request.url.starts_with(UPLOAD_ROOT));
-        assert!(query_pairs(&request.url).contains(&("uploadType".to_string(), "multipart".to_string())));
+        assert!(
+            query_pairs(&request.url)
+                .contains(&("uploadType".to_string(), "multipart".to_string()))
+        );
         let parts: Vec<&str> = body.split(&format!("--{boundary}")).collect();
         assert_eq!(parts.len(), 4);
         let metadata: serde_json::Value =
@@ -338,8 +363,15 @@ mod tests {
             headers: vec![],
             body: "{\"error\":{\"code\":403,\"message\":\"Rate limit\"}}".to_string(),
         };
-        assert_eq!(error_message(&response), "Google Drive denied the request: Rate limit");
-        let missing = BWHttpResponse { status: 404, headers: vec![], body: String::new() };
+        assert_eq!(
+            error_message(&response),
+            "Google Drive denied the request: Rate limit"
+        );
+        let missing = BWHttpResponse {
+            status: 404,
+            headers: vec![],
+            body: String::new(),
+        };
         assert!(error_message(&missing).contains("no longer available"));
     }
 }
