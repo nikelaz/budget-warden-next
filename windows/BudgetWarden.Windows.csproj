@@ -36,6 +36,16 @@
     <Content Include="Assets\Wide310x150Logo.scale-200.png" />
   </ItemGroup>
 
+  <!--
+    Google Drive sign-in uses a Google OAuth "Desktop app" client. Pass
+    -p:BWGoogleClientId=... -p:BWGoogleClientSecret=... when building, or set
+    BUDGET_WARDEN_GOOGLE_CLIENT_ID / BUDGET_WARDEN_GOOGLE_CLIENT_SECRET at run time.
+  -->
+  <ItemGroup>
+    <AssemblyMetadata Include="BWGoogleClientId" Value="$(BWGoogleClientId)" />
+    <AssemblyMetadata Include="BWGoogleClientSecret" Value="$(BWGoogleClientSecret)" />
+  </ItemGroup>
+
   <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
     <TrimmerRootDescriptor Include="ILLink.Descriptors.xml" />

@@ -22,6 +22,14 @@ public sealed partial class BudgetView : UserControl
         InitializeComponent();
     }
 
+    private async void ShareBudget_Click(object sender, RoutedEventArgs e)
+    {
+        if (Vm.OpenCloudBudget is { } budget)
+        {
+            await BudgetDialogs.ShareCloudBudgetAsync(this, Vm, budget);
+        }
+    }
+
     private void BudgetView_Loaded(object sender, RoutedEventArgs e) =>
         QueueCategoryGroupHeaderLayout();
 

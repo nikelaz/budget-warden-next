@@ -44,6 +44,7 @@ public sealed partial class AppViewModel
     partial void OnCurrentBudgetChanged(BwBudget? value)
     {
         UpdateRecentBudgetSelection();
+        UpdateOpenCloudBudget();
         ShareBudgetsWithMcp();
         Refresh();
     }
@@ -266,6 +267,7 @@ public sealed partial class AppViewModel
 
         CurrentBudget = updated;
         RememberRecent(path);
+        SyncCloudBudget(path);
     }
 
     private static async Task WriteBudgetAsync(BwBudget budget, string path)
@@ -350,6 +352,14 @@ public sealed partial class AppViewModel
     private void RememberRecent(string path)
     {
         string normalizedPath = Path.GetFullPath(path);
+        if (IsCloudBudgetPath(normalizedPath))
+        {
+            // Google Drive budgets are listed under Google Drive instead.
+            UpdateRecentBudgetSelection();
+            ShareBudgetsWithMcp();
+            return;
+        }
+
         RecentBudget? duplicate = RecentFiles.FirstOrDefault(item =>
             string.Equals(item.Path, normalizedPath, StringComparison.OrdinalIgnoreCase));
         if (duplicate is not null)

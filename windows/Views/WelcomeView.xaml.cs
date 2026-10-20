@@ -22,6 +22,28 @@ public sealed partial class WelcomeView : UserControl
     private async void OpenRecent_Click(object sender, RoutedEventArgs e) =>
         await BudgetDialogs.OpenRecentAsync(this, Vm, sender);
 
+    private async void ConnectGoogleDrive_Click(object sender, RoutedEventArgs e) =>
+        await Vm.SignInToGoogleDriveAsync();
+
+    private async void RefreshGoogleDrive_Click(object sender, RoutedEventArgs e) =>
+        await Vm.RefreshCloudBudgetsAsync();
+
+    private async void OpenCloudBudget_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: CloudBudgetItem budget })
+        {
+            await BudgetDialogs.OpenCloudBudgetAsync(this, Vm, budget);
+        }
+    }
+
+    private async void ShareCloudBudget_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: CloudBudgetItem budget })
+        {
+            await BudgetDialogs.ShareCloudBudgetAsync(this, Vm, budget);
+        }
+    }
+
     public Task CreateBudgetAsync() =>
         BudgetDialogs.CreateBudgetAsync(this, Vm);
 

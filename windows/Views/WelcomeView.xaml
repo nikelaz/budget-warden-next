@@ -3,6 +3,7 @@
     x:Class="BudgetWarden_Windows.Views.WelcomeView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:BudgetWarden_Windows.Views"
     xmlns:viewModels="using:BudgetWarden_Windows.ViewModels">
     <Grid>
         <Grid.ColumnDefinitions>
@@ -60,13 +61,15 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
                 <StackPanel Spacing="4">
                     <TextBlock
                         Text="Recently opened"
                         Style="{StaticResource SubtitleTextBlockStyle}" />
                     <TextBlock
-                        Text="Your most recent .budget files stay on this device."
+                        Text="Your most recent .budget files on this device."
                         Style="{StaticResource CaptionTextBlockStyle}" />
                 </StackPanel>
                 <ListView
@@ -111,6 +114,114 @@
                                     <FontIcon Grid.Column="2" Glyph="&#xE76C;" />
                                 </Grid>
                             </Button>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+
+                <Grid
+                    Grid.Row="2"
+                    Margin="0,20,0,0"
+                    ColumnSpacing="8"
+                    Visibility="{x:Bind local:ViewVisibility.When(Vm.IsGoogleDriveConfigured), Mode=OneWay}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Spacing="4">
+                        <TextBlock
+                            Text="Google Drive"
+                            Style="{StaticResource SubtitleTextBlockStyle}" />
+                        <TextBlock
+                            Text="{x:Bind Vm.GoogleDriveAccount, Mode=OneWay}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Visibility="{x:Bind local:ViewVisibility.When(Vm.IsGoogleDriveSignedIn), Mode=OneWay}" />
+                        <TextBlock
+                            Text="Keep budgets in Google Drive to use them on any device and share them with others."
+                            TextWrapping="Wrap"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Visibility="{x:Bind local:ViewVisibility.When(Vm.ShowGoogleDriveSignIn), Mode=OneWay}" />
+                        <TextBlock
+                            Text="{x:Bind Vm.GoogleDriveError, Mode=OneWay}"
+                            TextWrapping="Wrap"
+                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Visibility="{x:Bind local:ViewVisibility.When(Vm.HasGoogleDriveError), Mode=OneWay}" />
+                    </StackPanel>
+                    <Button
+                        Grid.Column="1"
+                        VerticalAlignment="Top"
+                        Click="ConnectGoogleDrive_Click"
+                        IsEnabled="{x:Bind local:ViewVisibility.Not(Vm.IsGoogleDriveSigningIn), Mode=OneWay}"
+                        Visibility="{x:Bind local:ViewVisibility.When(Vm.ShowGoogleDriveSignIn), Mode=OneWay}"
+                        AutomationProperties.AutomationId="ConnectGoogleDriveButton">
+                        <TextBlock Text="{x:Bind Vm.GoogleDriveSignInText, Mode=OneWay}" />
+                    </Button>
+                    <Button
+                        Grid.Column="1"
+                        VerticalAlignment="Top"
+                        Click="RefreshGoogleDrive_Click"
+                        IsEnabled="{x:Bind local:ViewVisibility.Not(Vm.IsGoogleDriveRefreshing), Mode=OneWay}"
+                        Visibility="{x:Bind local:ViewVisibility.When(Vm.IsGoogleDriveSignedIn), Mode=OneWay}"
+                        AutomationProperties.Name="Refresh Google Drive budgets"
+                        AutomationProperties.AutomationId="RefreshGoogleDriveButton">
+                        <FontIcon Glyph="&#xE72C;" FontSize="14" />
+                    </Button>
+                </Grid>
+                <ListView
+                    x:Name="CloudBudgetsList"
+                    Grid.Row="3"
+                    Margin="0,12,0,0"
+                    Padding="0"
+                    ItemsSource="{x:Bind Vm.CloudBudgets, Mode=OneWay}"
+                    SelectionMode="None"
+                    Visibility="{x:Bind local:ViewVisibility.When(Vm.IsGoogleDriveSignedIn), Mode=OneWay}"
+                    AutomationProperties.AutomationId="CloudBudgetsList">
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem">
+                            <Setter Property="Padding" Value="0" />
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        </Style>
+                    </ListView.ItemContainerStyle>
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="viewModels:CloudBudgetItem">
+                            <Grid Margin="0,0,0,8" ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Button
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch"
+                                    Click="OpenCloudBudget_Click"
+                                    AutomationProperties.AutomationId="{x:Bind Id, Mode=OneWay}"
+                                    AutomationProperties.Name="{x:Bind Title, Mode=OneWay}">
+                                    <Grid Padding="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <FontIcon Margin="0,0,16,0" Glyph="&#xE753;" />
+                                        <StackPanel Grid.Column="1" Spacing="2">
+                                            <TextBlock
+                                                Text="{x:Bind Title, Mode=OneWay}"
+                                                Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                            <TextBlock
+                                                Text="{x:Bind Location, Mode=OneWay}"
+                                                TextTrimming="CharacterEllipsis"
+                                                Style="{StaticResource CaptionTextBlockStyle}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Button>
+                                <Button
+                                    Grid.Column="1"
+                                    VerticalAlignment="Stretch"
+                                    Click="ShareCloudBudget_Click"
+                                    Visibility="{x:Bind local:ViewVisibility.When(CanShare), Mode=OneWay}"
+                                    AutomationProperties.Name="Share"
+                                    ToolTipService.ToolTip="Share">
+                                    <FontIcon Glyph="&#xE72D;" FontSize="14" />
+                                </Button>
+                            </Grid>
                         </DataTemplate>
                     </ListView.ItemTemplate>
                 </ListView>

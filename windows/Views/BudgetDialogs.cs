@@ -38,6 +38,13 @@ internal static class BudgetDialogs
         };
         StackPanel form = CreateForm(("Title", titleBox), ("Template", templateBox));
         form.Children.Add(templateDescription);
+        CheckBox googleDriveBox = new()
+        {
+            Content = "Save to Google Drive",
+            Visibility = ViewVisibility.When(viewModel.CanCreateInGoogleDrive),
+        };
+        AutomationProperties.SetAutomationId(googleDriveBox, "SaveToGoogleDriveCheckBox");
+        form.Children.Add(googleDriveBox);
         templateBox.SelectionChanged += (_, _) =>
         {
             if (templateBox.SelectedIndex >= 0)
@@ -58,6 +65,16 @@ internal static class BudgetDialogs
             return;
         }
         BudgetTemplate template = templates[templateBox.SelectedIndex];
+
+        if (googleDriveBox.IsChecked == true && viewModel.CanCreateInGoogleDrive)
+        {
+            await RunWithErrorDialogAsync(
+                owner,
+                viewModel,
+                () => viewModel.CreateCloudBudgetAsync(titleBox.Text, template),
+                "Budget created in Google Drive.");
+            return;
+        }
 
         var picker = new FileSavePicker(App.WindowId)
         {
@@ -121,6 +138,155 @@ internal static class BudgetDialogs
             viewModel,
             () => viewModel.OpenBudgetAsync(path),
             "Budget opened.");
+    }
+
+    public static Task OpenCloudBudgetAsync(
+        FrameworkElement owner,
+        AppViewModel viewModel,
+        CloudBudgetItem budget) =>
+        RunWithErrorDialogAsync(
+            owner,
+            viewModel,
+            () => viewModel.OpenCloudBudgetAsync(budget),
+            "Budget opened.");
+
+    /// <summary>Invites people to a Google Drive budget and manages who has access.</summary>
+    public static async Task ShareCloudBudgetAsync(
+        FrameworkElement owner,
+        AppViewModel viewModel,
+        CloudBudgetItem budget)
+    {
+        TextBox emailBox = CreateTextBox("name@example.com", "ShareEmailBox");
+        emailBox.InputScope = new Microsoft.UI.Xaml.Input.InputScope
+        {
+            Names = { new Microsoft.UI.Xaml.Input.InputScopeName(Microsoft.UI.Xaml.Input.InputScopeNameValue.EmailSmtpAddress) },
+        };
+        ComboBox roleBox = new()
+        {
+            ItemsSource = new ObservableCollection<string> { "Can edit", "Can view" },
+            SelectedIndex = 0,
+        };
+        AutomationProperties.SetName(roleBox, "Permission");
+        TextBox messageBox = CreateTextBox("Optional message", "ShareMessageBox");
+        TextBlock status = new()
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = Application.Current.Resources["SystemFillColorCriticalBrush"] as Microsoft.UI.Xaml.Media.Brush,
+        };
+        StackPanel people = new() { Spacing = 6 };
+
+        StackPanel form = budget.CanShare
+            ? CreateForm(("Email address", emailBox), ("Permission", roleBox), ("Message", messageBox))
+            : new StackPanel { Spacing = 12, MinWidth = 420 };
+        if (budget.CanShare)
+        {
+            form.Children.Add(new TextBlock
+            {
+                Text = "They receive an email from Google, and Budget Warden lists the budget for them under budgets shared with them.",
+                TextWrapping = TextWrapping.Wrap,
+                Style = Application.Current.Resources["CaptionTextBlockStyle"] as Style,
+            });
+        }
+        form.Children.Add(status);
+        form.Children.Add(new TextBlock
+        {
+            Text = "People with access",
+            Style = Application.Current.Resources["BodyStrongTextBlockStyle"] as Style,
+        });
+        form.Children.Add(people);
+
+        async Task ReloadAsync()
+        {
+            people.Children.Clear();
+            try
+            {
+                foreach (BwCloudShare share in await viewModel.ListSharesAsync(budget))
+                {
+                    people.Children.Add(ShareRow(share));
+                }
+            }
+            catch (BoltException error)
+            {
+                status.Text = AppViewModel.CloudMessage(error);
+            }
+        }
+
+        UIElement ShareRow(BwCloudShare share)
+        {
+            string role = share.Role switch
+            {
+                BwCloudShareRole.Owner => "Owner",
+                BwCloudShareRole.Writer => "Can edit",
+                BwCloudShareRole.Commenter => "Can comment",
+                _ => "Can view",
+            };
+            Grid row = new() { ColumnSpacing = 8 };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.Children.Add(new TextBlock
+            {
+                Text = $"{share.DisplayName ?? share.Email ?? share.Kind} · {role}",
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+            if (budget.CanShare && share.Role != BwCloudShareRole.Owner)
+            {
+                Button remove = new() { Content = "Remove" };
+                AutomationProperties.SetName(remove, $"Remove access for {share.Email ?? share.DisplayName}");
+                remove.Click += async (_, _) =>
+                {
+                    remove.IsEnabled = false;
+                    try
+                    {
+                        await viewModel.RemoveShareAsync(budget, share);
+                    }
+                    catch (BoltException error)
+                    {
+                        status.Text = AppViewModel.CloudMessage(error);
+                    }
+                    await ReloadAsync();
+                };
+                Grid.SetColumn(remove, 1);
+                row.Children.Add(remove);
+            }
+            return row;
+        }
+
+        ContentDialog dialog = CreateDialog(owner, $"Share “{budget.Title}”", new ScrollViewer { Content = form }, "Send invite");
+        dialog.CloseButtonText = "Done";
+        dialog.IsPrimaryButtonEnabled = false;
+        if (!budget.CanShare)
+        {
+            dialog.PrimaryButtonText = string.Empty;
+        }
+        emailBox.TextChanged += (_, _) => dialog.IsPrimaryButtonEnabled = emailBox.Text.Contains('@');
+        dialog.PrimaryButtonClick += async (_, args) =>
+        {
+            // Keep the dialog open to show the updated list.
+            args.Cancel = true;
+            ContentDialogButtonClickDeferral deferral = args.GetDeferral();
+            dialog.IsPrimaryButtonEnabled = false;
+            try
+            {
+                await viewModel.ShareCloudBudgetAsync(budget, emailBox.Text, roleBox.SelectedIndex == 0, messageBox.Text);
+                emailBox.Text = string.Empty;
+                messageBox.Text = string.Empty;
+                status.Text = string.Empty;
+                await ReloadAsync();
+            }
+            catch (BoltException error)
+            {
+                status.Text = AppViewModel.CloudMessage(error);
+                dialog.IsPrimaryButtonEnabled = true;
+            }
+            finally
+            {
+                deferral.Complete();
+            }
+        };
+
+        _ = ReloadAsync();
+        await dialog.ShowAsync();
     }
 
     public static async Task ShowCategoryAsync(
@@ -377,7 +543,7 @@ internal static class BudgetDialogs
         Exception? error = await viewModel.RunAsync(action, successMessage);
         if (error is not null && viewModel.ShowWelcome)
         {
-            await ShowMessageAsync(owner, "Budget Warden", error.Message);
+            await ShowMessageAsync(owner, "Budget Warden", AppViewModel.CloudMessage(error));
         }
     }
 
