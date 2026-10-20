@@ -58,7 +58,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.lazarovco.budgetwarden.android.data.GoogleDriveUiState
 import com.lazarovco.budgetwarden.android.data.StoredBudget
+import com.lazarovco.budgetwarden.core.BWCloudBudget
 import com.lazarovco.budgetwarden.android.domain.AmountMode
 import com.lazarovco.budgetwarden.android.domain.Budget
 import com.lazarovco.budgetwarden.android.domain.Category
@@ -78,6 +80,11 @@ internal fun BudgetListScreen(
     onOpenBudget: () -> Unit,
     onSelectBudget: (StoredBudget) -> Unit,
     onDeleteBudget: (StoredBudget) -> Unit,
+    drive: GoogleDriveUiState = GoogleDriveUiState(),
+    onConnectGoogleDrive: () -> Unit = {},
+    onRefreshGoogleDrive: () -> Unit = {},
+    onOpenCloudBudget: (BWCloudBudget) -> Unit = {},
+    onShareCloudBudget: (BWCloudBudget) -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -102,7 +109,7 @@ internal fun BudgetListScreen(
         },
         modifier = modifier.fillMaxSize(),
     ) { innerPadding ->
-        if (storedBudgets.isEmpty()) {
+        if (storedBudgets.isEmpty() && !drive.enabled) {
             EmptyState(
                 title = "No Budgets",
                 message = "Create a budget or open an existing .budget file.",
@@ -116,6 +123,11 @@ internal fun BudgetListScreen(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
+                if (storedBudgets.isNotEmpty() && drive.enabled) {
+                    item(key = "local-header") {
+                        Text(stringResource(R.string.local_budgets), style = MaterialTheme.typography.titleSmall)
+                    }
+                }
                 items(storedBudgets, key = { it.uri.toString() }) { stored ->
                     BudgetRow(
                         stored = stored,
@@ -123,6 +135,13 @@ internal fun BudgetListScreen(
                         onDelete = { onDeleteBudget(stored) },
                     )
                 }
+                googleDriveSection(
+                    drive = drive,
+                    onConnect = onConnectGoogleDrive,
+                    onRefresh = onRefreshGoogleDrive,
+                    onOpen = onOpenCloudBudget,
+                    onShare = onShareCloudBudget,
+                )
             }
         }
     }

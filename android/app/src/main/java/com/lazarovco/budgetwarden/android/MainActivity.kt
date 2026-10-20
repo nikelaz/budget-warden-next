@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -48,6 +49,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -68,6 +71,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.lazarovco.budgetwarden.core.BWCategory
+import com.lazarovco.budgetwarden.core.BWCloudBudget
+import com.lazarovco.budgetwarden.core.budgetFromPreviousBudget
+import com.lazarovco.budgetwarden.core.budgetFromTemplateId
 import com.lazarovco.budgetwarden.core.BWMoneyAmount
 import com.lazarovco.budgetwarden.core.BWTransaction
 import com.lazarovco.budgetwarden.core.templateCatalog as loadTemplateCatalog
@@ -98,6 +104,8 @@ import java.util.Currency
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private const val BUDGET_MIME_TYPE = "application/vnd.lazarovco.budgetwarden.budget"
 private const val JSON_MIME_TYPE = "application/json"
@@ -126,6 +134,10 @@ fun BudgetWardenAndroidApp() {
     val sessionState by sessionViewModel.state.collectAsStateWithLifecycle()
     val mcpServer = remember { (context.applicationContext as BudgetWardenApplication).mcpServer }
     val mcpState by mcpServer.state.collectAsStateWithLifecycle()
+    val googleDrive = remember { (context.applicationContext as BudgetWardenApplication).googleDrive }
+    val driveState by googleDrive.state.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    var sharingCloudBudget by remember { mutableStateOf<BWCloudBudget?>(null) }
     val preferences = remember {
         context.getSharedPreferences(BudgetWardenApplication.PREFERENCES_NAME, Context.MODE_PRIVATE)
     }
@@ -157,6 +169,52 @@ fun BudgetWardenAndroidApp() {
 
     fun mutateBudget(operation: (Budget) -> Budget) {
         sessionViewModel.mutateBudget(operation)
+    }
+
+    val authorizeGoogleDrive = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult(),
+    ) { result ->
+        scope.launch {
+            if (result.resultCode == android.app.Activity.RESULT_OK) {
+                googleDrive.completeSignIn(result.data)
+            } else {
+                googleDrive.cancelSignIn()
+            }
+        }
+    }
+
+    fun connectGoogleDrive() {
+        scope.launch {
+            googleDrive.beginSignIn()?.let { intent ->
+                authorizeGoogleDrive.launch(IntentSenderRequest.Builder(intent).build())
+            }
+        }
+    }
+
+    fun openCloudBudget(budget: BWCloudBudget) {
+        scope.launch {
+            runCatching { googleDrive.open(budget) }
+                .onSuccess(::openBudget)
+                .onFailure { snackbarHostState.showSnackbar(it.message ?: resources.getString(R.string.error_open_budget)) }
+        }
+    }
+
+    // Upload every save of a cloud budget, and pull other people's changes.
+    LaunchedEffect(googleDrive, currentBudget?.url, currentBudget?.revisionId) {
+        currentBudget?.url?.let { googleDrive.sync(Uri.parse(it)) }
+    }
+    val openBudgetUrl by rememberUpdatedState(currentBudget?.url)
+    LaunchedEffect(googleDrive) {
+        while (true) {
+            delay(60_000)
+            openBudgetUrl?.let { googleDrive.sync(Uri.parse(it)) }
+        }
+    }
+    LaunchedEffect(googleDrive, sessionViewModel) {
+        googleDrive.changes.collect { uri -> sessionViewModel.reloadBudget(uri) }
+    }
+    LaunchedEffect(googleDrive, driveState.signedIn) {
+        googleDrive.refresh()
     }
 
     LaunchedEffect(mcpServer, currentBudget?.url, currencyCode) {
@@ -216,8 +274,13 @@ fun BudgetWardenAndroidApp() {
         val budget = currentBudget
         if (budget == null) {
             BudgetListScreen(
-                storedBudgets = storedBudgets,
+                storedBudgets = storedBudgets.filterNot { googleDrive.isCloudBudget(it.uri) },
                 modifier = Modifier.padding(outerPadding),
+                drive = driveState,
+                onConnectGoogleDrive = ::connectGoogleDrive,
+                onRefreshGoogleDrive = { scope.launch { googleDrive.refresh() } },
+                onOpenCloudBudget = ::openCloudBudget,
+                onShareCloudBudget = { sharingCloudBudget = it },
                 onCreateBudget = { createBudgetOpen = true },
                 onOpenBudget = {
                     openDocument.launch(arrayOf(BUDGET_MIME_TYPE, JSON_MIME_TYPE, "*/*"))
@@ -326,6 +389,11 @@ fun BudgetWardenAndroidApp() {
                             onMcpEnabledChange = mcpServer::setEnabled,
                             onMcpAllowNetworkChange = mcpServer::setAllowNetwork,
                             onRegenerateMcpUrl = mcpServer::regenerateUrl,
+                            driveState = driveState,
+                            cloudBudget = budget.url?.let { googleDrive.budget(Uri.parse(it)) },
+                            onConnectGoogleDrive = ::connectGoogleDrive,
+                            onSignOutGoogleDrive = googleDrive::signOut,
+                            onShareCloudBudget = { sharingCloudBudget = it },
                             onCurrencyChange = {
                                 currencyCode = it
                                 preferences.edit().putString("currency_code", it).apply()
@@ -352,14 +420,40 @@ fun BudgetWardenAndroidApp() {
             budgets = storedBudgets.map { it.budget },
             templates = templateCatalog,
             onDismiss = { createBudgetOpen = false },
-            onCreate = { title, template, previous ->
+            canSaveToGoogleDrive = driveState.signedIn,
+            onCreate = { title, template, previous, inGoogleDrive ->
                 createBudgetOpen = false
+                if (inGoogleDrive) {
+                    scope.launch {
+                        runCatching {
+                            val created = template.templateId?.let { budgetFromTemplateId(it, title.trim()) }
+                                ?: previous?.let { budgetFromPreviousBudget(it, title.trim()) }
+                                ?: budgetFromTemplateId(TemplateSelection.BASIC.templateId!!, title.trim())
+                            googleDrive.create(repository.normalizedFileName(title), encodeBudget(created))
+                        }
+                            .onSuccess(::openBudget)
+                            .onFailure {
+                                snackbarHostState.showSnackbar(
+                                    it.message ?: resources.getString(R.string.error_create_budget),
+                                )
+                            }
+                    }
+                    return@CreateBudgetDialog
+                }
                 pendingCreationTitle = title
                 pendingCreationTemplate = template.templateId
                 pendingCreationUsesPrevious = template.templateId == null
                 pendingPreviousBudgetJson = previous?.let(::encodeBudget)
                 createDocument.launch(repository.normalizedFileName(title))
             },
+        )
+    }
+
+    sharingCloudBudget?.let { budget ->
+        GoogleDriveShareDialog(
+            controller = googleDrive,
+            budget = budget,
+            onDismiss = { sharingCloudBudget = null },
         )
     }
 
