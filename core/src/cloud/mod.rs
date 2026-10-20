@@ -27,6 +27,8 @@ pub mod http;
 pub mod native;
 mod oauth;
 mod sync;
+#[cfg(any(test, feature = "test-support"))]
+pub mod testing;
 
 pub use drive::BUDGET_MIME_TYPE;
 pub use google::*;

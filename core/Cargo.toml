@@ -7,6 +7,8 @@ edition = "2024"
 # Blocking HTTPS client for Rust hosts (Linux, CLI). Mobile and Windows apps
 # perform requests through `BWHttpClient` instead.
 native-http = ["dep:ureq"]
+# In-memory Google Drive for tests of crates that host cloud budgets.
+test-support = []
 
 [lib]
 crate-type = ["rlib", "cdylib", "staticlib"]

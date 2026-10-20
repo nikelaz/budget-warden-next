@@ -9,12 +9,15 @@ use chrono::{Datelike, Local};
 use gtk::{Align, Orientation};
 use uuid::Uuid;
 
+use crate::cloud::CloudController;
 use crate::mcp::{McpController, McpEvent, McpSnapshot};
 use crate::store::{
     AppPage, AppState, BudgetTemplate, ReportMode, TransactionSort, budget_date_range,
     category_date_range, money_text, parse_date, parse_money, read_budget, supported_currencies,
     today_text,
 };
+
+mod cloud_ui;
 
 #[derive(Clone)]
 struct MainView {
@@ -192,6 +195,8 @@ pub struct AppUi {
     category_windows: RefCell<Vec<CategoryWindow>>,
     search: RefCell<Option<gtk::SearchEntry>>,
     mcp: RefCell<McpController>,
+    cloud: RefCell<CloudController>,
+    share_dialog: RefCell<Option<cloud_ui::ShareDialog>>,
 }
 
 const MCP_EVENT_POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -210,6 +215,7 @@ impl AppUi {
             .unwrap_or_else(gtk::glib::home_dir)
             .join("Budget Warden");
         let mcp = McpController::new(state.settings_dir(), budgets_dir);
+        let cloud = CloudController::new(state.settings_dir());
         let ui = Rc::new(Self {
             app: app.clone(),
             window,
@@ -225,11 +231,14 @@ impl AppUi {
             category_windows: RefCell::new(Vec::new()),
             search: RefCell::new(None),
             mcp: RefCell::new(mcp),
+            cloud: RefCell::new(cloud),
+            share_dialog: RefCell::new(None),
         });
         ui.install_actions();
         ui.sync_mcp();
         ui.mcp.borrow_mut().apply();
         ui.watch_mcp_events();
+        ui.watch_cloud();
         ui
     }
 
@@ -306,6 +315,8 @@ impl AppUi {
             ("quit", "<Primary>q"),
             ("search", "<Primary>f"),
             ("about", ""),
+            ("share-budget", ""),
+            ("upload-budget", ""),
         ] {
             let action = gtk::gio::SimpleAction::new(name, None);
             let ui = self.clone();
@@ -314,6 +325,12 @@ impl AppUi {
                 "open-budget" => ui.open_file_dialog(),
                 "preferences" => ui.show_preferences(),
                 "about" => ui.show_about(),
+                "share-budget" => {
+                    if let Some(id) = ui.open_cloud_id() {
+                        ui.show_share_dialog(id);
+                    }
+                }
+                "upload-budget" => ui.upload_open_budget(),
                 "search" => {
                     if ui.state.borrow().budget.is_some() {
                         ui.state.borrow_mut().page = AppPage::Transactions;
@@ -345,6 +362,14 @@ impl AppUi {
             }
         });
         self.app.add_action(&recent);
+        let cloud = gtk::gio::SimpleAction::new("open-cloud", Some(gtk::glib::VariantTy::STRING));
+        let ui = self.clone();
+        cloud.connect_activate(move |_, parameter| {
+            if let Some(id) = parameter.and_then(|value| value.str()) {
+                ui.open_cloud_budget(id.to_string());
+            }
+        });
+        self.app.add_action(&cloud);
     }
 
     fn app_menu(&self) -> gtk::gio::Menu {
@@ -365,8 +390,20 @@ impl AppUi {
         let menu = gtk::gio::Menu::new();
         menu.append(Some("Open Budget…"), Some("app.open-budget"));
         menu.append(Some("New Budget…"), Some("app.new-budget"));
+        let cloud = self.cloud.borrow();
+        if cloud.is_signed_in() {
+            let actions = gtk::gio::Menu::new();
+            if let Some(id) = self.open_cloud_id() {
+                if cloud.budget(&id).is_some_and(|budget| budget.can_share) {
+                    actions.append(Some("Share…"), Some("app.share-budget"));
+                }
+            } else if self.state.borrow().budget.is_some() {
+                actions.append(Some("Copy to Google Drive"), Some("app.upload-budget"));
+            }
+            menu.append_section(None, &actions);
+        }
         let recent = gtk::gio::Menu::new();
-        for path in &self.state.borrow().recent_files {
+        for path in &cloud.local_files(&self.state.borrow().recent_files) {
             let title = path
                 .file_stem()
                 .and_then(|name| name.to_str())
@@ -379,11 +416,23 @@ impl AppUi {
             recent.append_item(&item);
         }
         menu.append_section(Some("Recent Budgets"), &recent);
+        if cloud.is_signed_in() && !cloud.budgets.is_empty() {
+            let drive = gtk::gio::Menu::new();
+            for budget in &cloud.budgets {
+                let item = gtk::gio::MenuItem::new(Some(&budget.title), None);
+                item.set_action_and_target_value(Some("app.open-cloud"), Some(&budget.id.to_variant()));
+                drive.append_item(&item);
+            }
+            menu.append_section(Some("Google Drive"), &drive);
+        }
         menu
     }
 
     fn refresh(self: &Rc<Self>) {
         self.sync_mcp();
+        if self.state.borrow_mut().take_saved_since_sync() {
+            self.sync_open_cloud_budget();
+        }
         let budget = self.state.borrow().budget.clone();
         let Some(budget) = budget else {
             self.window.set_content(Some(&self.welcome()));
@@ -445,7 +494,7 @@ impl AppUi {
         let status = adw::StatusPage::builder()
             .icon_name("document-open-symbolic")
             .title("Budget Warden")
-            .description("Plan your money. Keep your budgets in portable local files.")
+            .description("Plan your money. Keep budgets in portable files on this computer or in Google Drive.")
             .build();
         let actions = gtk::Box::new(Orientation::Horizontal, 12);
         actions.set_halign(Align::Center);
@@ -460,7 +509,13 @@ impl AppUi {
         actions.append(&open);
         status.set_child(Some(&actions));
         body.append(&status);
-        let recent = self.state.borrow().recent_files.clone();
+        if let Some(cloud) = self.cloud_welcome_group() {
+            body.append(&cloud);
+        }
+        let recent = self
+            .cloud
+            .borrow()
+            .local_files(&self.state.borrow().recent_files);
         if !recent.is_empty() {
             let group = adw::PreferencesGroup::builder()
                 .title("Recent Budgets")
@@ -1707,6 +1762,10 @@ impl AppUi {
             }
         });
         group.add(&template);
+        let location = combo_row("Save To", &["This Computer", "Google Drive"]);
+        location.set_widget_name("budget-location");
+        location.set_visible(self.cloud.borrow().is_signed_in());
+        group.add(&location);
         form.body.append(&group);
         require_title(&title, &form.save);
         let ui = self.clone();
@@ -1721,6 +1780,19 @@ impl AppUi {
             let Some(template) = templates.get(template.selected() as usize).cloned() else {
                 return;
             };
+            if location.is_visible() && location.selected() == 1 {
+                let encoded = ui.state.borrow().new_budget_json(&title, &template);
+                match encoded {
+                    Ok(json) => {
+                        ui.cloud.borrow().create(budget_file_name(&title), json);
+                        if let Some(dialog) = weak_dialog.upgrade() {
+                            dialog.close();
+                        }
+                    }
+                    Err(message) => inline_error(&error, &message),
+                }
+                return;
+            }
             let chooser = budget_file_dialog("Save Budget");
             chooser.set_initial_name(Some(&budget_file_name(&title)));
             save.set_sensitive(false);
@@ -1818,6 +1890,7 @@ impl AppUi {
         );
         group.add(&currency);
         page.add(&group);
+        page.add(&self.cloud_preferences_group());
         page.add(&self.mcp_preferences_group());
         dialog.add(&page);
         let ui = self.clone();
