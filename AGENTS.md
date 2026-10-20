@@ -8,7 +8,7 @@ Budget Warden is a native budgeting app for macOS, iOS, Android, Linux, and Wind
 
 | Path | Responsibility |
 | --- | --- |
-| `core/` | Rust shared domain: models, validation, codec, CRDT, reporting, money, templates, legacy migration, and the MCP server (`src/mcp/`). |
+| `core/` | Rust shared domain: models, validation, codec, CRDT, reporting, money, templates, legacy migration, the MCP server (`src/mcp/`), and Google Drive cloud budgets (`src/cloud/`). |
 | `core/boltffi.toml` | FFI-generation configuration. Apple output is `core/dist/apple`; Android output is `core/dist/android`. |
 | `apple-core/` | `BWAppleCore` Swift package: Apple-facing helpers and re-export of generated `BWCore`. |
 | `mac/` | SwiftUI macOS app. `ViewModels/BWStore.swift` owns budget mutations and file persistence. |
@@ -33,6 +33,8 @@ Apple projects reference `../apple-core` as a local Swift package. `apple-core` 
 
 - Budget format, validation, reporting, money, templates, or migration: start in `core/src/`. Regenerate bindings when its exported FFI changes.
 - MCP server protocol and tools: `core/src/mcp/`. Each app implements `BWMcpHost` for storage and shows the server in settings: `apple-core/src/BWMcpServerController.swift` (macOS/iOS), `android/.../data/McpServerController.kt`, `windows/ViewModels/AppViewModel.Mcp.cs`, and `linux/src/mcp.rs`.
+- Google Drive sign-in, listing, sync, and sharing: `core/src/cloud/` (see `docs/cloud-sync.md`). Hosts supply HTTP and credential storage and show cloud budgets on their welcome screens: `apple-core/src/BWGoogleDriveController.swift` (macOS/iOS), `android/.../data/GoogleDriveController.kt`, `windows/ViewModels/AppViewModel.Cloud.cs`, `linux/src/cloud.rs`, and `cli/src/cloud.rs`. Test hosts against `bw_core::cloud::testing::FakeDrive` (feature `test-support`).
+- iCloud Drive budgets (Apple only): `apple-core/src/BWICloudBudgetLibrary.swift`.
 - Apple-only presentation/convenience behavior: `apple-core/src/`, then the relevant app under `mac/` or `ios/`.
 - Apple app flows and persistence: begin in that app’s `ViewModels/BWStore.swift`; UI lives in `Views/`.
 - Android UI: top-level Kotlin screen files and `ui/theme/`; document-provider I/O and recent-file persistence: `android/.../data/`; core behavior changes belong in `core/src/`.
@@ -50,7 +52,7 @@ Apple projects reference `../apple-core` as a local Swift package. `apple-core` 
 
 ## Tests
 
-- Rust: run Cargo tests from `core/`.
+- Rust: run Cargo tests from `core/` (`--features native-http -- --ignored` also reaches the real Drive API).
 - CLI: run `cargo test --manifest-path cli/Cargo.toml` from the repository root.
 - Swift package: run Swift tests from `apple-core/` after generated Apple bindings exist.
 - Android: use the Gradle wrapper in `android/` for unit tests.

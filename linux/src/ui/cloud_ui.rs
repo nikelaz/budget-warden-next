@@ -147,10 +147,10 @@ impl AppUi {
             }
             CloudEvent::Shares(id, result) => self.show_shares(&id, result),
             CloudEvent::ShareRemoved(id, result) => {
-                if let Err(error) = result {
-                    if let Some(dialog) = self.share_dialog.borrow().as_ref() {
-                        inline_error(&dialog.error, &error);
-                    }
+                if let Err(error) = result
+                    && let Some(dialog) = self.share_dialog.borrow().as_ref()
+                {
+                    inline_error(&dialog.error, &error);
                 }
                 self.cloud.borrow().load_shares(id);
             }

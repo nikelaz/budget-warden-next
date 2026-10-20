@@ -1,6 +1,6 @@
 # Budget Warden
 
-Budget Warden is a source-available native macOS, iOS, Android, Linux, and Windows budgeting app with a standalone Rust command-line client. Budgets are stored as portable local `.budget` files.
+Budget Warden is a source-available native macOS, iOS, Android, Linux, and Windows budgeting app with a standalone Rust command-line client. Budgets are stored as portable `.budget` files, locally or in iCloud Drive and Google Drive.
 
 ## Architecture
 
@@ -24,10 +24,20 @@ linux/ (GTK 4/libadwaita desktop app linking directly to bw_core)
 - `core/` is the canonical Rust implementation for models, validation, codec, CRDT, reporting, money, templates, and legacy migration. `boltffi.toml` configures Apple and Android binding generation.
 - `apple-core/` wraps and re-exports the generated `BWCore` Swift package for the Apple apps.
 - `mac/` and `ios/` are Xcode projects that consume `apple-core` as a local Swift package. Open `BudgetWarden.xcworkspace` for the combined Apple workspace.
-- `android/` is a Gradle Android app using Jetpack Compose and the generated Rust core Kotlin/JNI bindings. Kotlin owns Android document-provider I/O and recent-file preferences; there is no app-managed cloud synchronization.
+- `android/` is a Gradle Android app using Jetpack Compose and the generated Rust core Kotlin/JNI bindings. Kotlin owns Android document-provider I/O, recent-file preferences, and Google Play services sign-in for Google Drive.
 - `windows/` is a WinUI 3 app that consumes the generated Rust core directly through a local BoltFFI C# NuGet package. See `windows/README.md` for generation, build, and test commands.
 - `cli/` contains the `budget-warden` executable. It links directly to `core/` through `bw_core`, owns command dispatch, JSON protocol, local file persistence, and CLI-only preferences, and builds independently from generated bindings.
 - `linux/` contains the GTK 4/libadwaita desktop app. It links directly to `core/` through `bw_core`, owns Linux presentation and local preferences, and reads and writes the same `.budget` files without generated bindings. See [linux/README.md](linux/README.md) for Linux dependencies and build instructions.
+
+## Cloud budgets
+
+Budgets can live in Google Drive on every client and in iCloud Drive on macOS and iOS. Each app lists them next to local budgets on its welcome screen, discovers budgets other people shared with the user, and can share a budget from the app: by email for Google Drive, and through the system share sheet's iCloud collaboration for iCloud Drive.
+
+- Google Drive is implemented once in `core/src/cloud/`. A cloud budget opens from a working copy that the app saves like any local file; sync CRDT-merges it with the newest Drive copy after every save and every minute, so edits from several people and devices converge. Hosts supply HTTP (`BWHttpClient`) and secure credential storage (`BWGoogleCredentialStore`).
+- iCloud Drive budgets are files in the app's iCloud container, shown in iCloud Drive as "Budget Warden". `apple-core`'s `BWICloudBudgetLibrary` lists them, downloads them before opening, and merges conflicting iCloud versions with the CRDT.
+- The CLI exposes Google Drive through `budget-warden cloud …` commands.
+
+Google Drive needs OAuth clients, a verified consent screen for the restricted `drive` scope, and per-platform build settings; iCloud needs the iCloud Documents capability. See [docs/cloud-sync.md](docs/cloud-sync.md) for the design and the release checklist.
 
 ## MCP server
 

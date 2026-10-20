@@ -5,7 +5,7 @@ description: Use the Budget Warden command-line interface to inspect and safely 
 
 # Budget Warden
 
-Use `budget-warden` to inspect and modify Budget Warden `.budget` files. The CLI is noninteractive and intended for scripts and agents. It reads and writes local filesystem paths; it does not access GUI recent-file lists, cloud authentication, or document providers.
+Use `budget-warden` to inspect and modify Budget Warden `.budget` files. The CLI is noninteractive and intended for scripts and agents. It reads and writes local filesystem paths; it does not access GUI recent-file lists, iCloud, or document providers. Google Drive budgets are reached through `cloud` commands: `cloud list` shows them, `cloud sync --id FILE_ID` returns a local working copy to pass as `--file`, and `cloud sync --file WORKING_COPY` uploads the edits. Signing in (`cloud sign-in`) needs a browser and the user; exit status 7 means the user must sign in.
 
 ## Find the executable and discover commands
 

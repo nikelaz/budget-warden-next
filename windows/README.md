@@ -45,6 +45,22 @@ profile; from a terminal, use `BuildAndRun.ps1`. Direct execution has no
 package identity and causes Windows App SDK activation to fail with
 `REGDB_E_CLASSNOTREG`.
 
+## Google Drive
+
+Google Drive budgets need a Google OAuth "Desktop app" client. Pass it to the
+build as MSBuild properties, which are embedded as assembly metadata:
+
+```powershell
+dotnet build -p:BWGoogleClientId=CLIENT_ID.apps.googleusercontent.com -p:BWGoogleClientSecret=CLIENT_SECRET
+```
+
+`BUDGET_WARDEN_GOOGLE_CLIENT_ID` and `BUDGET_WARDEN_GOOGLE_CLIENT_SECRET`
+override them at run time. Without a client ID the app hides Google Drive.
+Sign-in opens the default browser and returns through a `127.0.0.1` loopback
+redirect; the token is kept in the Windows Credential Locker and working copies
+under `%LOCALAPPDATA%\Budget Warden\Cloud`. See
+[docs/cloud-sync.md](../docs/cloud-sync.md).
+
 ## Publish and run a Release NativeAOT build
 
 `Release` publishing enables .NET NativeAOT for this project. Publish the x64
