@@ -13,6 +13,7 @@ import Foundation
 extension BWBudget: @retroactive Identifiable {}
 extension BWCategory: @retroactive Identifiable {}
 extension BWTransaction: @retroactive Identifiable {}
+extension BWCloudBudget: @retroactive Identifiable {}
 
 public extension BWBudget {
     func orderedCategories(for type: BWCategoryType? = nil) -> [BWCategory] {
@@ -61,5 +62,18 @@ extension BWMoneyAmount: @retroactive Comparable {
 
     public func formattedMoneyAmount(currency: BWCurrency) -> String {
         unsignedValue.formattedMoneyAmount(currency: currency)
+    }
+}
+
+/// Forwards "a budget file changed" notifications from cloud storage to the
+/// app's store, which is created after the cloud controllers.
+@MainActor
+public final class BWBudgetChangeRelay {
+    public var handler: ((URL) -> Void)?
+
+    public init() {}
+
+    public func notify(_ url: URL) {
+        handler?(url)
     }
 }
