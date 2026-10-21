@@ -234,7 +234,7 @@ struct BWWindowWelcome: Scene {
             .disabled(drive.isSigningIn)
             .accessibilityIdentifier("connectGoogleDriveButton")
         } else if drive.budgets.isEmpty {
-            placeholder("Create a budget in Google Drive, or ask someone to share one with you.")
+            placeholder("Create a budget in Google Drive, or add one someone shared with you.")
         }
         ForEach(drive.budgets) { budget in
             budgetButton(
@@ -257,6 +257,22 @@ struct BWWindowWelcome: Scene {
                     }
                 }
             }
+        }
+        if drive.isSignedIn, drive.canAddSharedBudgets {
+            Button {
+                Task {
+                    let added = await drive.addSharedBudgets()
+                    if added.count == 1, await store.openGoogleDriveBudget(added[0], windowStore: windowStore) {
+                        openMainWindow()
+                    }
+                }
+            } label: {
+                Label(drive.isAddingSharedBudgets ? "Choosing…" : "Add Shared Budget…", systemImage: "plus")
+            }
+            .buttonStyle(.borderless)
+            .disabled(drive.isAddingSharedBudgets)
+            .help("Choose a budget someone shared with you in Google Drive")
+            .accessibilityIdentifier("addSharedGoogleBudgetButton")
         }
     }
 

@@ -50,6 +50,9 @@ public final class BWGoogleDriveController {
     public private(set) var budgets: [BWCloudBudget]
     public private(set) var isRefreshing = false
     public private(set) var isSigningIn = false
+    /// This build can add budgets others shared with the user.
+    public private(set) var canAddSharedBudgets: Bool
+    public private(set) var isAddingSharedBudgets = false
     /// The latest listing or sync problem, for display next to the list.
     public private(set) var lastError: String?
 
@@ -64,10 +67,13 @@ public final class BWGoogleDriveController {
     /// - Parameters:
     ///   - clientID: OAuth client ID of an iOS-type Google client. The
     ///     `BWGoogleClientID` Info.plist key supplies it by default.
+    ///   - pickerURL: The hosted shared-budget picker page (`picker/`), from
+    ///     the `BWGooglePickerURL` Info.plist key by default.
     ///   - keychainService: Keychain service that holds the sign-in.
     ///   - budgetDidChange: Sync rewrote the working copy at a URL.
     public init(
         clientID: String? = Bundle.main.object(forInfoDictionaryKey: "BWGoogleClientID") as? String,
+        pickerURL: String? = Bundle.main.object(forInfoDictionaryKey: "BWGooglePickerURL") as? String,
         cacheDirectory: URL = BWGoogleDriveController.defaultCacheDirectory(),
         keychainService: String = "com.lazarovco.budgetwarden.google-drive",
         budgetDidChange: @escaping @MainActor (URL) -> Void
@@ -76,11 +82,14 @@ public final class BWGoogleDriveController {
         // An unexpanded build setting means the build has no client ID.
         let resolvedClientID = trimmed.hasPrefix("$(") ? "" : trimmed
         self.clientID = resolvedClientID
+        let picker = pickerURL?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let resolvedPickerURL = picker.isEmpty || picker.hasPrefix("$(") ? nil : picker
         let drive = BWGoogleDrive(config: BWGoogleDriveConfig(
             clientId: resolvedClientID,
             clientSecret: nil,
             cacheDirectory: cacheDirectory.path,
-            folderName: "Budget Warden"
+            folderName: "Budget Warden",
+            pickerUrl: resolvedPickerURL
         ))
         drive.connect(
             http: BWURLSessionHTTPClient(),
@@ -89,6 +98,7 @@ public final class BWGoogleDriveController {
         engine = BWGoogleDriveEngine(drive: drive)
         self.budgetDidChange = budgetDidChange
         isConfigured = drive.isConfigured()
+        canAddSharedBudgets = drive.isPickerConfigured()
         isSignedIn = drive.isSignedIn()
         accountEmail = drive.account()?.email
         budgets = drive.cachedBudgets()
@@ -128,6 +138,40 @@ public final class BWGoogleDriveController {
             // The user closed the sign-in sheet.
         } catch {
             lastError = BWCloudError(error).message
+        }
+    }
+
+    /// Opens the Google Picker so the user can choose budgets someone shared
+    /// with them; Budget Warden only reaches Drive files it created or that
+    /// the user chooses there. Returns the added budgets.
+    @discardableResult
+    public func addSharedBudgets() async -> [BWCloudBudget] {
+        guard isSignedIn, canAddSharedBudgets, !isAddingSharedBudgets else { return [] }
+        isAddingSharedBudgets = true
+        lastError = nil
+        defer {
+            isAddingSharedBudgets = false
+            authenticationSession = nil
+        }
+        do {
+            let returnURI = googleAppleCallbackScheme(clientId: clientID) + ":/picked"
+            let pickerURL = try await engine.run { drive in
+                try drive.sharedBudgetPickerUrl(returnUri: returnURI)
+            }
+            guard let url = URL(string: pickerURL) else { return [] }
+            let callback = try await authenticate(at: url)
+            let added = try await engine.run { drive in
+                try drive.addPickedBudgets(callbackUrl: callback.absoluteString)
+            }
+            for budget in added {
+                remember(budget)
+            }
+            return added
+        } catch let error as ASWebAuthenticationSessionError where error.code == .canceledLogin {
+            return []
+        } catch {
+            lastError = BWCloudError(error).message
+            return []
         }
     }
 

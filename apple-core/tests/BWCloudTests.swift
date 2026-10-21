@@ -70,11 +70,13 @@ struct BWCloudTests {
         defer { try? FileManager.default.removeItem(at: cache) }
         let controller = BWGoogleDriveController(
             clientID: "$(BW_GOOGLE_CLIENT_ID)",
+            pickerURL: "$(BW_GOOGLE_PICKER_URL)",
             cacheDirectory: cache,
             keychainService: "com.lazarovco.budgetwarden.tests.\(UUID().uuidString)",
             budgetDidChange: { _ in }
         )
         #expect(!controller.isConfigured)
+        #expect(!controller.canAddSharedBudgets)
         #expect(!controller.isSignedIn)
         #expect(controller.budgets.isEmpty)
         #expect(controller.budgetID(for: cache.appendingPathComponent("x.budget")) == nil)

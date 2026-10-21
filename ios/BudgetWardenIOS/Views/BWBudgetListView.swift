@@ -179,7 +179,7 @@ struct BWBudgetListView: View {
                 .disabled(drive.isSigningIn)
                 .accessibilityIdentifier("connectGoogleDriveButton")
             } else if drive.budgets.isEmpty {
-                Text("Create a budget in Google Drive, or ask someone to share one with you.")
+                Text("Create a budget in Google Drive, or add one someone shared with you.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -207,6 +207,20 @@ struct BWBudgetListView: View {
                         .tint(.blue)
                     }
                 }
+            }
+            if drive.isSignedIn, drive.canAddSharedBudgets {
+                Button {
+                    Task {
+                        let added = await drive.addSharedBudgets()
+                        if added.count == 1 {
+                            await store.openGoogleDriveBudget(added[0])
+                        }
+                    }
+                } label: {
+                    Label(drive.isAddingSharedBudgets ? "Choosing…" : "Add Shared Budget…", systemImage: "plus")
+                }
+                .disabled(drive.isAddingSharedBudgets)
+                .accessibilityIdentifier("addSharedGoogleBudgetButton")
             }
         } header: {
             Text("Google Drive")

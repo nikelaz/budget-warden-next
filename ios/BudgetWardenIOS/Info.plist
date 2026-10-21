@@ -4,6 +4,8 @@
 <dict>
 	<key>BWGoogleClientID</key>
 	<string>$(BW_GOOGLE_CLIENT_ID)</string>
+	<key>BWGooglePickerURL</key>
+	<string>$(BW_GOOGLE_PICKER_URL)</string>
 	<key>NSUbiquitousContainers</key>
 	<dict>
 		<key>iCloud.com.lazarovco.BudgetWarden</key>

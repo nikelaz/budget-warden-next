@@ -354,6 +354,7 @@
 				);
 				MARKETING_VERSION = 3.0.0;
 				BW_GOOGLE_CLIENT_ID = "";
+				BW_GOOGLE_PICKER_URL = "";
 				PRODUCT_BUNDLE_IDENTIFIER = com.lazarovco.budgetwarden;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -389,6 +390,7 @@
 				);
 				MARKETING_VERSION = 3.0.0;
 				BW_GOOGLE_CLIENT_ID = "";
+				BW_GOOGLE_PICKER_URL = "";
 				PRODUCT_BUNDLE_IDENTIFIER = com.lazarovco.budgetwarden;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
