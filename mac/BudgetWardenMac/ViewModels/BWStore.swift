@@ -18,6 +18,21 @@ enum BWBudgetTemplateSelection: Hashable {
     case previousBudget(BWBudget)
 }
 
+/// Where a new budget is stored.
+enum BWBudgetLocation: Hashable, CaseIterable {
+    case thisMac
+    case iCloud
+    case googleDrive
+
+    var title: String {
+        switch self {
+        case .thisMac: "This Mac"
+        case .iCloud: "iCloud Drive"
+        case .googleDrive: "Google Drive"
+        }
+    }
+}
+
 @MainActor
 final class BWStore: ObservableObject {
     private static let recentBookmarksKey = "BW_RECENT_BUDGET_BOOKMARKS_V1"
@@ -28,7 +43,10 @@ final class BWStore: ObservableObject {
         didSet { shareBudgetsWithMcp() }
     }
     @Published var recentFiles: [URL] = NSDocumentController.shared.recentDocumentURLs {
-        didSet { shareBudgetsWithMcp() }
+        didSet {
+            shareBudgetsWithMcp()
+            iCloud.includeSharedBudgets(among: recentFiles)
+        }
     }
     @Published var selectedCurrency: BWCurrency {
         didSet {
@@ -44,10 +62,22 @@ final class BWStore: ObservableObject {
 
     private var mcpServer: BWMcpServerController?
 
+    /// Budgets in Google Drive, including ones shared with the user.
+    let googleDrive: BWGoogleDriveController
+    /// Budgets in iCloud Drive.
+    let iCloud: BWICloudBudgetLibrary
+    private let cloudChanges: BWBudgetChangeRelay
+    private var cloudSyncTimer: AnyCancellable?
+
     private var currentSecurityScopedURL: URL?
     var hasAttemptedLegacyMigration = false
 
     init() {
+        let cloudChanges = BWBudgetChangeRelay()
+        self.cloudChanges = cloudChanges
+        googleDrive = BWGoogleDriveController { url in cloudChanges.notify(url) }
+        iCloud = BWICloudBudgetLibrary { url in cloudChanges.notify(url) }
+
         let defaults = UserDefaults.standard
         selectedCurrency = defaults.string(forKey: Self.currencyKey)
             .flatMap(BWCurrency.init(rawValue:)) ?? .defaultCurrency
@@ -71,12 +101,60 @@ final class BWStore: ObservableObject {
         mcpServer = BWMcpServerController(
             keyPrefix: "BW_MCP_",
             newBudgetDirectory: { BWStore.mcpBudgetDirectory() },
-            budgetDidChange: { [weak self] url in self?.reloadBudgetChangedByMcp(at: url) },
+            budgetDidChange: { [weak self] url in self?.reloadBudget(changedAt: url) },
             budgetWasCreated: { [weak self] url in self?.rememberRecent(url) },
             showBudget: { [weak self] url in self?.showBudgetRequestedByMcp(at: url) }
         )
         shareBudgetsWithMcp()
         refreshMcpState()
+
+        cloudChanges.handler = { [weak self] url in self?.reloadBudget(changedAt: url) }
+        iCloud.start()
+        iCloud.includeSharedBudgets(among: recentFiles)
+        Task { await googleDrive.refresh() }
+        // Pull other people's changes into an open cloud budget.
+        cloudSyncTimer = Timer.publish(every: 60, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in self?.syncOpenCloudBudget() }
+    }
+
+    // MARK: Cloud budgets
+
+    /// Recent budgets that are not listed under iCloud Drive or Google Drive.
+    var localRecentFiles: [URL] {
+        recentFiles.filter { !googleDrive.isCloudURL($0) && !iCloud.contains($0) }
+    }
+
+    private var openBudgetURL: URL? {
+        currentBudget?.url.map { URL(fileURLWithPath: $0) }
+    }
+
+    /// The open budget, when it is stored in Google Drive.
+    var openGoogleDriveBudget: BWCloudBudget? {
+        openBudgetURL
+            .flatMap { googleDrive.budgetID(for: $0) }
+            .flatMap { googleDrive.budget(withID: $0) }
+    }
+
+    /// The open budget's file, when it is stored in iCloud Drive.
+    var openICloudBudgetURL: URL? {
+        openBudgetURL.flatMap { iCloud.contains($0) ? (currentSecurityScopedURL ?? $0) : nil }
+    }
+
+    func syncOpenCloudBudget() {
+        if let url = openBudgetURL {
+            googleDrive.sync(budgetAt: url)
+        }
+    }
+
+    func openGoogleDriveBudget(_ budget: BWCloudBudget, windowStore: BWWindowStore) async -> Bool {
+        do {
+            let url = try await googleDrive.open(budget)
+            return await openBudget(at: url, windowStore: windowStore)
+        } catch {
+            windowStore.setError(error)
+            return false
+        }
     }
 
     // MARK: MCP server
@@ -117,11 +195,14 @@ final class BWStore: ObservableObject {
         )
     }
 
-    private func reloadBudgetChangedByMcp(at url: URL) {
+    /// Re-reads the open budget after the MCP server or cloud sync changed
+    /// its file.
+    private func reloadBudget(changedAt url: URL) {
         guard
             let path = currentBudget?.url,
             URL(fileURLWithPath: path).standardizedFileURL == url.standardizedFileURL,
-            let reloaded = try? readBudget(at: URL(fileURLWithPath: path))
+            let reloaded = try? readBudget(at: URL(fileURLWithPath: path)),
+            reloaded.revisionId != currentBudget?.revisionId
         else {
             return
         }
@@ -150,8 +231,13 @@ final class BWStore: ObservableObject {
     func createBudget(
         title: String,
         template: BWBudgetTemplateSelection,
+        location: BWBudgetLocation = .thisMac,
         windowStore: BWWindowStore
     ) async -> Bool {
+        if location != .thisMac {
+            return await createCloudBudget(title: title, template: template, location: location, windowStore: windowStore)
+        }
+
         let panel = NSSavePanel()
         panel.allowedContentTypes = [Self.budgetFileType]
         panel.canCreateDirectories = true
@@ -160,19 +246,7 @@ final class BWStore: ObservableObject {
         guard panel.runModal() == .OK, let url = panel.url else { return false }
 
         do {
-            var newBudget: BWBudget
-            switch template {
-            case .builtIn(let id):
-                newBudget = try BWCore.budgetFromTemplateId(
-                    templateId: id,
-                    title: title
-                )
-            case .previousBudget(let budget):
-                newBudget = try BWCore.budgetFromPreviousBudget(
-                    budget: budget,
-                    title: title
-                )
-            }
+            var newBudget = try Self.newBudget(title: title, template: template)
             newBudget.url = url.path
             try writeBudget(newBudget, to: url)
             selectBudget(newBudget)
@@ -181,6 +255,40 @@ final class BWStore: ObservableObject {
         } catch {
             windowStore.setError(error)
             return false
+        }
+    }
+
+    private func createCloudBudget(
+        title: String,
+        template: BWBudgetTemplateSelection,
+        location: BWBudgetLocation,
+        windowStore: BWWindowStore
+    ) async -> Bool {
+        do {
+            let json = try encodeBudget(budget: Self.newBudget(title: title, template: template))
+            let fileName = Self.fileName(for: title)
+            let url: URL
+            if location == .googleDrive {
+                url = try await googleDrive.createBudget(fileName: fileName, json: json)
+            } else {
+                url = try await iCloud.createBudget(fileName: fileName, json: json)
+            }
+            return await openBudget(at: url, windowStore: windowStore)
+        } catch let error as FfiError {
+            windowStore.setError(BWError.core(error.message))
+            return false
+        } catch {
+            windowStore.setError(error)
+            return false
+        }
+    }
+
+    private static func newBudget(title: String, template: BWBudgetTemplateSelection) throws -> BWBudget {
+        switch template {
+        case .builtIn(let id):
+            return try BWCore.budgetFromTemplateId(templateId: id, title: title)
+        case .previousBudget(let budget):
+            return try BWCore.budgetFromPreviousBudget(budget: budget, title: title)
         }
     }
 
@@ -209,6 +317,9 @@ final class BWStore: ObservableObject {
 
     func openBudget(at url: URL, windowStore: BWWindowStore) async -> Bool {
         do {
+            if iCloud.contains(url) {
+                try await iCloud.prepareForOpening(url)
+            }
             try openBudget(at: url)
             return true
         } catch {
@@ -227,6 +338,7 @@ final class BWStore: ObservableObject {
             currentSecurityScopedURL = scoped ? url : nil
             currentBudget = opened
             rememberRecent(url)
+            iCloud.watch(iCloud.contains(url) ? url : nil)
         } catch {
             if scoped { url.stopAccessingSecurityScopedResource() }
             throw error
@@ -389,6 +501,7 @@ final class BWStore: ObservableObject {
             }
             currentBudget = updated
             rememberRecent(url)
+            googleDrive.sync(budgetAt: url)
             return true
         } catch let error as FfiError {
             windowStore.setError(BWError.core(error.message))

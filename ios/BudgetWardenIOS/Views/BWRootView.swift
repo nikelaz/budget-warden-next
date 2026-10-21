@@ -36,9 +36,22 @@ struct BWRootView: View {
         .task {
             await store.migrateLegacyBudgetsIfNeeded()
         }
+        .task {
+            // Pull other people's changes into an open cloud budget.
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                if scenePhase == .active {
+                    store.syncCloudBudgets()
+                }
+            }
+        }
         .onChange(of: scenePhase) { oldPhase, newPhase in
             if oldPhase == .background, newPhase != .background {
                 store.restartMcpServerIfEnabled()
+            }
+            if newPhase == .active, oldPhase != .active {
+                store.syncCloudBudgets()
+                Task { await store.googleDrive.refresh() }
             }
         }
         .onOpenURL(perform: openBudget)

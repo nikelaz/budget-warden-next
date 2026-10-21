@@ -285,6 +285,8 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
 				MARKETING_VERSION = 3.0.0;
+				BW_GOOGLE_CLIENT_ID = "";
+				BW_GOOGLE_PICKER_URL = "";
 				PRODUCT_BUNDLE_IDENTIFIER = com.lazarovco.budgetwarden;
 				PRODUCT_NAME = "Budget Warden";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -325,6 +327,8 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
 				MARKETING_VERSION = 3.0.0;
+				BW_GOOGLE_CLIENT_ID = "";
+				BW_GOOGLE_PICKER_URL = "";
 				PRODUCT_BUNDLE_IDENTIFIER = com.lazarovco.budgetwarden;
 				PRODUCT_NAME = "Budget Warden";
 				PROVISIONING_PROFILE_SPECIFIER = "";

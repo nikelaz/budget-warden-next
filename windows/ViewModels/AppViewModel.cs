@@ -87,6 +87,7 @@ public sealed partial class AppViewModel : ObservableObject
         SelectedCurrency = CurrencyOptions.FirstOrDefault(item => item.Code == SelectedCurrencyCode)
             ?? CurrencyOptions[0];
         InitializeMcpServer();
+        InitializeCloud();
     }
 
     partial void OnSearchTextChanged(string value) => RefreshTransactions();
@@ -121,7 +122,7 @@ public sealed partial class AppViewModel : ObservableObject
         }
         catch (Exception error) when (error is BoltException or IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
         {
-            StatusMessage = error.Message;
+            StatusMessage = CloudMessage(error);
             IsStatusOpen = true;
             return error;
         }

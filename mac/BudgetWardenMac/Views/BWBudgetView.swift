@@ -38,6 +38,7 @@ struct BudgetView: View {
     @State var isInspectorPresented: Bool = true
     @State private var inspectorPanel: BWBudgetInspectorPanel = .reporting
     @State private var categoryPendingDeletion: BWCategory?
+    @State private var sharingGoogleBudget: BWCloudBudget?
 
     private func openCreateCategoryDialog() {
         isCreatingCategoryDialogOpen = true
@@ -404,6 +405,22 @@ struct BudgetView: View {
             }
           
             ToolbarItemGroup(placement: .primaryAction) {
+                if let budget = store.openGoogleDriveBudget, budget.canShare {
+                    Button {
+                        sharingGoogleBudget = budget
+                    } label: {
+                        Image(systemName: "person.badge.plus")
+                    }
+                    .help("Share")
+                    .accessibilityIdentifier("shareBudgetButton")
+                } else if let url = store.openICloudBudgetURL {
+                    ShareLink(item: url) {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .help("Share")
+                    .accessibilityIdentifier("shareBudgetButton")
+                }
+
                 Button {
                     isInspectorPresented = !isInspectorPresented
                 } label: {
@@ -421,6 +438,12 @@ struct BudgetView: View {
         .onChange(of: store.currentBudget?.id) { _, _ in
             selection = nil
             inspectorPanel = .reporting
+        }
+        .sheet(item: $sharingGoogleBudget) { budget in
+            BWGoogleDriveShareView(controller: store.googleDrive, budget: budget) {
+                sharingGoogleBudget = nil
+            }
+            .frame(minWidth: 420, minHeight: 420)
         }
         .inspector(
             isPresented: $isInspectorPresented,

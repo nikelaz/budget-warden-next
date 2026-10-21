@@ -48,6 +48,39 @@
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1"
+                CornerRadius="{ThemeResource ControlCornerRadius}"
+                Visibility="{x:Bind local:ViewVisibility.When(Vm.IsGoogleDriveConfigured), Mode=OneWay}">
+                <StackPanel Spacing="12">
+                    <TextBlock
+                        Text="Google Drive"
+                        Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <TextBlock
+                        Text="Budgets in Google Drive sync between your devices and the people you share them with."
+                        TextWrapping="Wrap"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBlock
+                        Text="{x:Bind Vm.GoogleDriveAccount, Mode=OneWay}"
+                        Visibility="{x:Bind local:ViewVisibility.When(Vm.IsGoogleDriveSignedIn), Mode=OneWay}" />
+                    <Button
+                        Content="Sign out of Google Drive"
+                        Click="SignOutGoogleDrive_Click"
+                        Visibility="{x:Bind local:ViewVisibility.When(Vm.IsGoogleDriveSignedIn), Mode=OneWay}"
+                        AutomationProperties.AutomationId="SignOutGoogleDriveButton" />
+                    <Button
+                        Click="SignInGoogleDrive_Click"
+                        IsEnabled="{x:Bind local:ViewVisibility.Not(Vm.IsGoogleDriveSigningIn), Mode=OneWay}"
+                        Visibility="{x:Bind local:ViewVisibility.When(Vm.ShowGoogleDriveSignIn), Mode=OneWay}"
+                        AutomationProperties.AutomationId="SignInGoogleDriveButton">
+                        <TextBlock Text="{x:Bind Vm.GoogleDriveSignInText, Mode=OneWay}" />
+                    </Button>
+                </StackPanel>
+            </Border>
+            <Border
+                Padding="24"
+                MaxWidth="720"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
                 CornerRadius="{ThemeResource ControlCornerRadius}">
                 <StackPanel Spacing="12">
                     <TextBlock

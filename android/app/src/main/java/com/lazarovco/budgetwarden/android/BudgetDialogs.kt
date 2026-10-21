@@ -56,9 +56,11 @@ internal fun CreateBudgetDialog(
     budgets: List<Budget>,
     templates: List<BWTemplateCatalogEntry>,
     onDismiss: () -> Unit,
-    onCreate: (String, TemplateSelection, Budget?) -> Unit,
+    onCreate: (String, TemplateSelection, Budget?, Boolean) -> Unit,
+    canSaveToGoogleDrive: Boolean = false,
 ) {
     var title by rememberSaveable { mutableStateOf(currentMonthTitle()) }
+    var saveToGoogleDrive by rememberSaveable { mutableStateOf(false) }
     var templateId by rememberSaveable { mutableStateOf(TemplateSelection.BASIC.templateId) }
     var previousBudgetId by rememberSaveable { mutableStateOf(budgets.firstOrNull()?.id) }
     var templateExpanded by rememberSaveable { mutableStateOf(false) }
@@ -154,6 +156,19 @@ internal fun CreateBudgetDialog(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                if (canSaveToGoogleDrive) {
+                    Text(stringResource(R.string.save_to), style = MaterialTheme.typography.labelLarge)
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        listOf(false to R.string.save_to_device, true to R.string.google_drive)
+                            .forEachIndexed { index, (value, label) ->
+                                SegmentedButton(
+                                    selected = saveToGoogleDrive == value,
+                                    onClick = { saveToGoogleDrive = value },
+                                    shape = SegmentedButtonDefaults.itemShape(index, 2),
+                                ) { Text(stringResource(label)) }
+                            }
+                    }
+                }
             }
         },
         confirmButton = {
@@ -161,7 +176,12 @@ internal fun CreateBudgetDialog(
                 onClick = {
                     submitted = true
                     if (titleIsValid) {
-                        onCreate(title, TemplateSelection(templateId), selectedPreviousBudget)
+                        onCreate(
+                            title,
+                            TemplateSelection(templateId),
+                            selectedPreviousBudget,
+                            canSaveToGoogleDrive && saveToGoogleDrive,
+                        )
                     }
                 },
             ) {
