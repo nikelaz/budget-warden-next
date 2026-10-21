@@ -180,6 +180,7 @@ fn capabilities() -> Result<Outcome, ApiError> {
         "cloud sign-in",
         "cloud sign-out",
         "cloud list",
+        "cloud add-shared",
         "cloud sync",
         "cloud upload",
         "cloud share",

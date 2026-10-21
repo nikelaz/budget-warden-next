@@ -31,10 +31,11 @@ pub(crate) const AUTHORIZATION_ENDPOINT: &str = "https://accounts.google.com/o/o
 pub(crate) const TOKEN_ENDPOINT: &str = "https://oauth2.googleapis.com/token";
 pub(crate) const REVOCATION_ENDPOINT: &str = "https://oauth2.googleapis.com/revoke";
 
-/// Full Drive access. Needed to discover and edit budgets that other people
-/// shared with the user; `drive.file` only reaches files this app created or
-/// the user picked. This is a restricted scope: see `docs/cloud-sync.md`.
-pub const GOOGLE_DRIVE_SCOPE: &str = "https://www.googleapis.com/auth/drive";
+/// Access to files Budget Warden created and files the user chose for it in
+/// the Google Picker (see `picker/`). A non-sensitive scope, so it needs no
+/// restricted-scope verification; budgets shared by others are added through
+/// the picker instead of being listed automatically.
+pub const GOOGLE_DRIVE_SCOPE: &str = "https://www.googleapis.com/auth/drive.file";
 
 /// Refresh access tokens this long before Google says they expire.
 const EXPIRY_MARGIN_MS: i64 = 60_000;
@@ -259,7 +260,11 @@ impl Default for BWGoogleLoopbackReceiver {
     }
 }
 
-const LOOPBACK_SUCCESS_PAGE: &str = "<!doctype html><html><head><meta charset=\"utf-8\"><title>Budget Warden</title></head><body style=\"font-family:system-ui;text-align:center;padding:3em\"><h1>You're signed in</h1><p>You can close this window and return to Budget Warden.</p></body></html>";
+const LOOPBACK_SUCCESS_PAGE: &str = "<!doctype html><html><head><meta charset=\"utf-8\"><title>Budget Warden</title></head><body style=\"font-family:system-ui;text-align:center;padding:3em\"><h1>All set</h1><p>You can close this window and return to Budget Warden.</p></body></html>";
+
+/// Query parameters that mark a browser request as the result the receiver
+/// waits for: an OAuth redirect, or the shared-budget picker's answer.
+const RESULT_PARAMETERS: [&str; 4] = ["code", "error", "ids", "cancelled"];
 
 #[export]
 impl BWGoogleLoopbackReceiver {
@@ -327,7 +332,7 @@ impl BWGoogleLoopbackReceiver {
 }
 
 /// Serves one browser request. Returns its request target when it carries
-/// the OAuth result; other requests (such as `/favicon.ico`) get a 404.
+/// a result; other requests (such as `/favicon.ico`) get a 404.
 fn answer_redirect(mut stream: TcpStream) -> Option<String> {
     let _ = stream.set_nonblocking(false);
     let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
@@ -351,7 +356,7 @@ fn answer_redirect(mut stream: TcpStream) -> Option<String> {
         .to_string();
     let carries_result = query_pairs(&target)
         .iter()
-        .any(|(key, _)| key == "code" || key == "error");
+        .any(|(key, _)| RESULT_PARAMETERS.contains(&key.as_str()));
     let (status, body) = if carries_result {
         ("200 OK", LOOPBACK_SUCCESS_PAGE)
     } else {
@@ -449,7 +454,22 @@ mod tests {
         });
         let url = receiver.wait_for_redirect(10).unwrap();
         assert_eq!(authorization_code(&url, "s").unwrap(), "abc");
-        assert!(client.join().unwrap().contains("You're signed in"));
+        assert!(client.join().unwrap().contains("All set"));
+
+        // The picker's answer is accepted the same way.
+        let redirect = receiver.start().unwrap();
+        let address = redirect.trim_start_matches("http://").to_string();
+        let client = std::thread::spawn(move || {
+            let mut stream = TcpStream::connect(&address).unwrap();
+            stream
+                .write_all(b"GET /picked?ids=f1,f2 HTTP/1.1\r\nHost: x\r\n\r\n")
+                .unwrap();
+            let mut answer = String::new();
+            let _ = std::io::Read::read_to_string(&mut stream, &mut answer);
+        });
+        let url = receiver.wait_for_redirect(10).unwrap();
+        client.join().unwrap();
+        assert!(url.ends_with("/picked?ids=f1,f2"));
     }
 
     #[test]

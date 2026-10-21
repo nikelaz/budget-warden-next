@@ -317,6 +317,7 @@ impl AppUi {
             ("about", ""),
             ("share-budget", ""),
             ("upload-budget", ""),
+            ("add-shared-budget", ""),
         ] {
             let action = gtk::gio::SimpleAction::new(name, None);
             let ui = self.clone();
@@ -331,6 +332,7 @@ impl AppUi {
                     }
                 }
                 "upload-budget" => ui.upload_open_budget(),
+                "add-shared-budget" => ui.cloud.borrow_mut().add_shared(),
                 "search" => {
                     if ui.state.borrow().budget.is_some() {
                         ui.state.borrow_mut().page = AppPage::Transactions;
@@ -399,6 +401,9 @@ impl AppUi {
                 }
             } else if self.state.borrow().budget.is_some() {
                 actions.append(Some("Copy to Google Drive"), Some("app.upload-budget"));
+            }
+            if cloud.can_add_shared() {
+                actions.append(Some("Add Shared Budget…"), Some("app.add-shared-budget"));
             }
             menu.append_section(None, &actions);
         }

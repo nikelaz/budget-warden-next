@@ -37,6 +37,7 @@ fn device(server: &FakeDrive) -> Device {
         client_secret: Some("secret".into()),
         cache_directory: directory.to_string_lossy().into_owned(),
         folder_name: "Budget Warden".into(),
+        picker_url: Some("https://example.com/pick".into()),
     });
     let credentials = MemoryCredentials::default();
     drive.connect(Box::new(server.clone()), Box::new(credentials.clone()));
@@ -184,6 +185,7 @@ fn unconfigured_builds_and_signed_out_calls_explain_themselves() {
         client_secret: None,
         cache_directory: device.directory.to_string_lossy().into_owned(),
         folder_name: "Budget Warden".into(),
+        picker_url: Some("https://example.com/pick".into()),
     });
     assert!(!unconfigured.is_configured());
     assert!(
@@ -345,7 +347,7 @@ fn a_lost_upload_race_heals_on_the_next_sync() {
 }
 
 #[test]
-fn shared_budgets_are_discovered_and_editable_by_writers_only() {
+fn shared_budgets_are_added_through_the_picker_and_editable_by_writers_only() {
     let server = FakeDrive::default();
     let owner = signed_in(&server, "ana@example.com");
     let writer = signed_in(&server, "ben@example.com");
@@ -402,6 +404,57 @@ fn shared_budgets_are_discovered_and_editable_by_writers_only() {
         ]
     );
     assert!(owner.drive.list_budgets().unwrap()[0].is_shared);
+
+    // Invitations link to the picker with the budget preselected.
+    let messages = server.state.lock().unwrap().invitation_messages.clone();
+    assert_eq!(
+        messages[0],
+        format!(
+            "Our budget\n\nOpen it in Budget Warden: https://example.com/pick?file={}",
+            created.id
+        )
+    );
+    assert_eq!(
+        messages[1],
+        format!(
+            "Open it in Budget Warden: https://example.com/pick?file={}",
+            created.id
+        )
+    );
+
+    // drive.file only reaches budgets the recipient picked for the app.
+    assert!(writer.drive.list_budgets().unwrap().is_empty());
+    assert!(writer.drive.open_budget(created.id.clone()).is_err());
+    let picker = writer
+        .drive
+        .shared_budget_picker_url(Some("http://127.0.0.1:5000".into()))
+        .unwrap();
+    assert_eq!(
+        picker,
+        "https://example.com/pick?return_to=http%3A%2F%2F127.0.0.1%3A5000&login_hint=ben%40example.com"
+    );
+    assert!(
+        writer
+            .drive
+            .add_picked_budgets(format!("http://127.0.0.1:5000/?ids={}", created.id))
+            .is_err(),
+        "a budget nobody picked stays out of reach"
+    );
+    server.pick("ben@example.com", &created.id);
+    assert!(
+        writer
+            .drive
+            .add_picked_budgets("http://127.0.0.1:5000/?cancelled=1".into())
+            .unwrap()
+            .is_empty()
+    );
+    let added = writer
+        .drive
+        .add_picked_budgets(format!("http://127.0.0.1:5000/?ids={}", created.id))
+        .unwrap();
+    assert_eq!(added.len(), 1);
+    assert_eq!(writer.drive.cached_budgets(), added);
+    server.pick("cy@example.com", &created.id);
 
     let discovered = writer.drive.list_budgets().unwrap();
     assert_eq!(discovered.len(), 1);
@@ -564,4 +617,55 @@ fn platform_token_sources_replace_the_oauth_flow() {
         .create_budget("Play".into(), new_budget_json("Play"))
         .unwrap();
     assert!(calls.lock().unwrap().iter().all(|forced| !forced));
+}
+
+#[test]
+fn picker_links_need_a_configured_page_and_only_add_budgets() {
+    let server = FakeDrive::default();
+    let device = signed_in(&server, "ana@example.com");
+    assert!(device.drive.is_picker_configured());
+    assert_eq!(
+        device.drive.shared_budget_picker_url(None).unwrap(),
+        "https://example.com/pick"
+    );
+    assert!(
+        device
+            .drive
+            .add_picked_budgets("http://127.0.0.1:1/?error=popup_closed".into())
+            .unwrap_err()
+            .contains("popup_closed")
+    );
+
+    // A non-budget file chosen in the picker is rejected.
+    let created = device
+        .drive
+        .create_budget("A".into(), new_budget_json("A"))
+        .unwrap();
+    server
+        .state
+        .lock()
+        .unwrap()
+        .files
+        .get_mut(&created.id)
+        .unwrap()
+        .name = "notes.txt".into();
+    server
+        .state
+        .lock()
+        .unwrap()
+        .files
+        .get_mut(&created.id)
+        .unwrap()
+        .mime_type = "text/plain".into();
+    assert!(device.drive.add_budgets(vec![created.id.clone()]).is_err());
+
+    let unconfigured = BWGoogleDrive::new(BWGoogleDriveConfig {
+        client_id: "test-client".into(),
+        client_secret: None,
+        cache_directory: device.directory.to_string_lossy().into_owned(),
+        folder_name: "Budget Warden".into(),
+        picker_url: None,
+    });
+    assert!(!unconfigured.is_picker_configured());
+    assert!(unconfigured.shared_budget_picker_url(None).is_err());
 }

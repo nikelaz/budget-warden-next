@@ -86,6 +86,16 @@ impl AppUi {
                 self.cloud.borrow_mut().refresh();
                 self.refresh_cloud_lists();
             }
+            CloudEvent::Added(Ok(budgets)) => {
+                self.refresh_cloud_lists();
+                if let [budget] = budgets.as_slice() {
+                    self.open_cloud_budget(budget.id.clone());
+                }
+            }
+            CloudEvent::Added(Err(error)) => {
+                self.refresh_cloud_lists();
+                self.show_error(&error);
+            }
             CloudEvent::SignedIn(Err(error)) => {
                 self.refresh_cloud_lists();
                 if error != "Google sign-in was cancelled." {
@@ -228,7 +238,7 @@ impl AppUi {
         if budgets.is_empty() {
             group.add(&action_row(
                 "No cloud budgets yet",
-                "Create a budget in Google Drive, or ask someone to share one with you.",
+                "Create a budget in Google Drive, or add one someone shared with you.",
             ));
         }
         let (shared, mine): (Vec<_>, Vec<_>) = budgets
@@ -236,6 +246,36 @@ impl AppUi {
             .partition(|budget| budget.shared_with_me);
         for budget in mine.into_iter().chain(shared) {
             group.add(&self.cloud_budget_row(&budget));
+        }
+        if self.cloud.borrow().can_add_shared() {
+            let adding = self.cloud.borrow().is_adding_shared();
+            let row = action_row(
+                "Add Shared Budget…",
+                if adding {
+                    "Choose the budget in your browser…"
+                } else {
+                    "Choose a budget someone shared with you in Google Drive"
+                },
+            );
+            row.add_prefix(&gtk::Image::from_icon_name("list-add-symbolic"));
+            let button = gtk::Button::builder()
+                .label(if adding { "Cancel" } else { "Choose" })
+                .valign(Align::Center)
+                .build();
+            let ui = self.clone();
+            button.connect_clicked(move |_| {
+                {
+                    let mut cloud = ui.cloud.borrow_mut();
+                    if cloud.is_adding_shared() {
+                        cloud.cancel_add_shared();
+                    } else {
+                        cloud.add_shared();
+                    }
+                }
+                ui.refresh_cloud_lists();
+            });
+            row.add_suffix(&button);
+            group.add(&row);
         }
         Some(group)
     }

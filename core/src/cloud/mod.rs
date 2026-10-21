@@ -34,7 +34,7 @@ pub use drive::BUDGET_MIME_TYPE;
 pub use google::*;
 pub use http::{BWHttpClient, BWHttpHeader, BWHttpRequest, BWHttpResponse};
 pub use oauth::{
-    BWGoogleSignInRequest, BWGoogleLoopbackReceiver, GOOGLE_DRIVE_SCOPE, is_cloud_sign_in_required,
+    BWGoogleLoopbackReceiver, BWGoogleSignInRequest, GOOGLE_DRIVE_SCOPE, is_cloud_sign_in_required,
 };
 
 /// Prefix of errors that mean the user must sign in (again). Hosts test for

@@ -30,6 +30,7 @@ pub(crate) fn command_name(command: &CloudCommand) -> &'static str {
         CloudCommand::SignIn(_) => "sign-in",
         CloudCommand::SignOut => "sign-out",
         CloudCommand::List(_) => "list",
+        CloudCommand::AddShared(_) => "add-shared",
         CloudCommand::Sync(_) => "sync",
         CloudCommand::Upload(_) => "upload",
         CloudCommand::Share(_) => "share",
@@ -50,11 +51,15 @@ fn drive(context: &Context) -> BWGoogleDrive {
     drive
 }
 
+fn sign_in_required(message: impl Into<String>) -> ApiError {
+    ApiError::new("sign_in_required", message, 7)
+        .details(json!({"hint": "Run `budget-warden cloud sign-in`."}))
+}
+
 /// Maps a core cloud error to a CLI error with a stable code.
 fn cloud_error(message: String) -> ApiError {
     if is_cloud_sign_in_required(message.clone()) {
-        return ApiError::new("sign_in_required", cloud_error_message(message), 7)
-            .details(json!({"hint": "Run `budget-warden cloud sign-in`."}));
+        return sign_in_required(cloud_error_message(message));
     }
     let retryable = message.contains("Could not reach") || message.contains("busy");
     ApiError::new("cloud_error", message, if retryable { 6 } else { 4 }).retryable(retryable)
@@ -111,6 +116,37 @@ pub(crate) fn run(mut context: Context, command: CloudCommand) -> Result<Outcome
             let was_signed_in = drive.is_signed_in();
             drive.sign_out();
             json!({"signed_out": was_signed_in})
+        }
+        CloudCommand::AddShared(args) => {
+            require_configured(&drive)?;
+            if !drive.is_signed_in() {
+                return Err(sign_in_required(
+                    "Sign in to Google Drive to add shared budgets.",
+                ));
+            }
+            let receiver = BWGoogleLoopbackReceiver::new();
+            let redirect = receiver.start().map_err(cloud_error)?;
+            let url = drive
+                .shared_budget_picker_url(Some(format!("{redirect}/picked")))
+                .map_err(|message| ApiError::new("cloud_not_configured", message, 2))?;
+            let mut stderr = std::io::stderr().lock();
+            if args.no_browser || open_in_browser(&url).is_err() {
+                let _ = writeln!(
+                    stderr,
+                    "Open this URL to choose budgets shared with you:\n{url}"
+                );
+            } else {
+                let _ = writeln!(
+                    stderr,
+                    "Choose the budgets shared with you in your browser."
+                );
+            }
+            drop(stderr);
+            let callback = receiver
+                .wait_for_redirect(args.timeout)
+                .map_err(cloud_error)?;
+            let added = drive.add_picked_budgets(callback).map_err(cloud_error)?;
+            json!({"added": added.iter().map(budget_value).collect::<Vec<_>>()})
         }
         CloudCommand::List(args) => {
             let budgets = if args.offline {

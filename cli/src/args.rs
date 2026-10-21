@@ -495,8 +495,10 @@ pub enum CloudCommand {
     SignIn(CloudSignInArgs),
     /// Signs out and removes local working copies of cloud budgets.
     SignOut,
-    /// Lists budgets in Google Drive, including ones shared with you.
+    /// Lists budgets in Google Drive: yours and those you added.
     List(CloudListArgs),
+    /// Chooses budgets someone shared with you in the browser and adds them.
+    AddShared(CloudSignInArgs),
     /// Downloads or syncs a cloud budget and prints its local working copy.
     Sync(CloudSyncArgs),
     /// Uploads a local budget to Google Drive as a new cloud budget.

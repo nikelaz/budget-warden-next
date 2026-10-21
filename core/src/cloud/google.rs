@@ -57,6 +57,9 @@ pub struct BWGoogleDriveConfig {
     pub cache_directory: String,
     /// Drive folder for new budgets, created in My Drive when missing.
     pub folder_name: String,
+    /// Address of the hosted shared-budget picker page (`picker/` in the
+    /// repository), or `None` when this build cannot add shared budgets.
+    pub picker_url: Option<String>,
 }
 
 #[data]
@@ -567,6 +570,16 @@ impl BWGoogleDrive {
                 return Err("Ownership cannot be transferred from Budget Warden.".to_string());
             }
         };
+        // Budget Warden only sees files the recipient picks for it, so the
+        // invitation links to the picker with this budget preselected.
+        let message = match (self.picker_link(&[file_id.as_str()], None), message) {
+            (Some(link), Some(note)) if !note.trim().is_empty() => Some(format!(
+                "{}\n\nOpen it in Budget Warden: {link}",
+                note.trim()
+            )),
+            (Some(link), _) => Some(format!("Open it in Budget Warden: {link}")),
+            (None, note) => note,
+        };
         let response = self.send(drive::create_permission_request(
             &file_id,
             &email,
@@ -578,6 +591,78 @@ impl BWGoogleDrive {
         }
         self.mark_shared(&file_id);
         Ok(share(drive::parse_permission(&response)?))
+    }
+
+    /// Whether this build can add budgets shared by others.
+    pub fn is_picker_configured(&self) -> bool {
+        self.picker_base().is_some()
+    }
+
+    /// The picker page to open so the user can choose budgets shared with
+    /// them (or uploaded outside Budget Warden). The page sends the browser
+    /// to `return_uri` with the chosen file IDs; pass that URL to
+    /// [`Self::add_picked_budgets`]. Without a `return_uri` the page asks the
+    /// user to return to the app, which should then call
+    /// [`Self::list_budgets`].
+    pub fn shared_budget_picker_url(&self, return_uri: Option<String>) -> Result<String, String> {
+        self.picker_link(&[], return_uri.as_deref()).ok_or_else(|| {
+            "Adding shared budgets is not available in this build of Budget Warden.".to_string()
+        })
+    }
+
+    /// Adds the budgets chosen in the picker, given the URL it returned to.
+    /// A cancelled picker adds nothing.
+    pub fn add_picked_budgets(&self, callback_url: String) -> Result<Vec<BWCloudBudget>, String> {
+        let pairs = super::http::query_pairs(&callback_url);
+        let value = |name: &str| {
+            pairs
+                .iter()
+                .find(|(key, _)| key == name)
+                .map(|(_, value)| value.clone())
+        };
+        if let Some(error) = value("error") {
+            return Err(format!("Could not choose budgets in Google Drive: {error}"));
+        }
+        let ids: Vec<String> = value("ids")
+            .unwrap_or_default()
+            .split(',')
+            .map(str::trim)
+            .filter(|id| !id.is_empty())
+            .map(str::to_string)
+            .collect();
+        self.add_budgets(ids)
+    }
+
+    /// Adds budgets the user granted Budget Warden access to by ID.
+    pub fn add_budgets(&self, file_ids: Vec<String>) -> Result<Vec<BWCloudBudget>, String> {
+        let mut files = Vec::new();
+        for id in file_ids {
+            let file = self.metadata(&id)?;
+            let is_budget = file.mime_type.as_deref() == Some(drive::BUDGET_MIME_TYPE)
+                || file.name.to_lowercase().ends_with(".budget");
+            if !is_budget {
+                return Err(format!("{} is not a Budget Warden budget.", file.name));
+            }
+            files.push(file);
+        }
+        let _state = lock(&self.state_lock);
+        let mut state = self.cache.load_state();
+        let mut added = Vec::new();
+        for file in files {
+            let previous = state.files.get(&file.id).cloned();
+            let cached = CachedFile {
+                local_name: previous
+                    .as_ref()
+                    .map(|cached| cached.local_name.clone())
+                    .unwrap_or_else(|| sync::local_file_name(&file.name)),
+                snapshot_version: previous.and_then(|cached| cached.snapshot_version),
+                file,
+            };
+            added.push(self.summary(&cached.file.id, &cached));
+            state.files.insert(cached.file.id.clone(), cached);
+        }
+        self.cache.save_state(&state)?;
+        Ok(added)
     }
 
     /// People and groups with access to a budget, the owner first.
@@ -613,6 +698,40 @@ impl BWGoogleDrive {
 const FOLDER_MISSING: &str = "folder-missing";
 
 impl BWGoogleDrive {
+    fn picker_base(&self) -> Option<&str> {
+        self.config
+            .picker_url
+            .as_deref()
+            .map(str::trim)
+            .filter(|url| !url.is_empty())
+    }
+
+    /// The picker page, optionally preselecting `file_ids` and returning to
+    /// `return_uri`.
+    fn picker_link(&self, file_ids: &[&str], return_uri: Option<&str>) -> Option<String> {
+        let base = self.picker_base()?;
+        let ids = file_ids.join(",");
+        let email = self.account().and_then(|account| account.email);
+        let mut pairs: Vec<(&str, &str)> = Vec::new();
+        if !ids.is_empty() {
+            pairs.push(("file", &ids));
+        }
+        if let Some(return_uri) = return_uri {
+            pairs.push(("return_to", return_uri));
+        }
+        if let Some(email) = email.as_deref().filter(|_| return_uri.is_some()) {
+            pairs.push(("login_hint", email));
+        }
+        if pairs.is_empty() {
+            return Some(base.to_string());
+        }
+        let separator = if base.contains('?') { '&' } else { '?' };
+        Some(format!(
+            "{base}{separator}{}",
+            super::http::encode_pairs(&pairs)
+        ))
+    }
+
     fn connection(&self) -> Result<Connection, String> {
         lock(&self.connection)
             .as_ref()

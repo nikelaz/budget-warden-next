@@ -10,7 +10,7 @@
 //! An in-memory Google Drive and OAuth server for tests, available to other
 //! crates through the `test-support` feature.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
@@ -48,7 +48,11 @@ pub struct FakeDriveState {
     pub downloads: usize,
     pub uploads: usize,
     pub notifications: Vec<String>,
+    /// The `emailMessage` of each invitation, in order.
+    pub invitation_messages: Vec<String>,
     pub requests: Vec<String>,
+    /// (user, file id) pairs the user chose for the app in the picker.
+    pub picked: BTreeSet<(String, String)>,
 }
 
 /// Serves the Drive and OAuth endpoints the core uses, for any number of
@@ -114,6 +118,16 @@ impl FakeDrive {
         (state.downloads, state.uploads)
     }
 
+    /// Simulates `email` choosing a file for Budget Warden in the Google
+    /// Picker, which grants the app `drive.file` access to it.
+    pub fn pick(&self, email: &str, file_id: &str) {
+        self.state
+            .lock()
+            .unwrap()
+            .picked
+            .insert((email.to_string(), file_id.to_string()));
+    }
+
     /// Lets `token` act as `email` without an OAuth flow.
     pub fn grant_access_token(&self, token: &str, email: &str) {
         self.state
@@ -138,6 +152,18 @@ impl FakeDrive {
             "sharingUser": { "emailAddress": file.owner },
             "capabilities": { "canEdit": role == "owner" || role == "writer", "canShare": role == "owner" || role == "writer" },
         })
+    }
+
+    /// The user's role as seen through the `drive.file` scope: the app only
+    /// reaches files the user owns through it or picked for it.
+    fn app_role(
+        picked: &BTreeSet<(String, String)>,
+        id: &str,
+        file: &FakeFile,
+        user: &str,
+    ) -> Option<String> {
+        let reachable = file.owner == user || picked.contains(&(user.to_string(), id.to_string()));
+        reachable.then(|| Self::role(file, user)).flatten()
     }
 
     fn role(file: &FakeFile, user: &str) -> Option<String> {
@@ -218,7 +244,9 @@ impl FakeDrive {
             let files: Vec<Value> = state
                 .files
                 .iter()
-                .filter(|(_, file)| !file.trashed && Self::role(file, &user).is_some())
+                .filter(|(id, file)| {
+                    !file.trashed && Self::app_role(&state.picked, id, file, &user).is_some()
+                })
                 .filter(|(_, file)| {
                     if q.contains("google-apps.folder") {
                         file.mime_type == "application/vnd.google-apps.folder"
@@ -304,7 +332,7 @@ impl FakeDrive {
         let Some(file) = state.files.get(&id).cloned() else {
             return error(404, "File not found");
         };
-        let Some(role) = Self::role(&file, &user) else {
+        let Some(role) = Self::app_role(&state.picked, &id, &file, &user) else {
             return error(404, "File not found");
         };
 
@@ -343,6 +371,9 @@ impl FakeDrive {
                 let email = permission["emailAddress"].as_str().unwrap().to_string();
                 let role = permission["role"].as_str().unwrap().to_string();
                 state.notifications.push(email.clone());
+                state
+                    .invitation_messages
+                    .push(query.get("emailMessage").cloned().unwrap_or_default());
                 let file = state.files.get_mut(&id).unwrap();
                 file.permissions
                     .push((permission_id.clone(), email.clone(), role.clone()));
@@ -380,6 +411,11 @@ impl BWHttpClient for FakeDrive {
     fn execute(&self, request: BWHttpRequest) -> Result<BWHttpResponse, String> {
         Ok(self.handle(request))
     }
+}
+
+/// Decoded query parameters of `url`, for tests that play a browser.
+pub fn query(url: &str) -> Vec<(String, String)> {
+    query_pairs(url)
 }
 
 /// Credentials kept in memory.

@@ -138,8 +138,9 @@ impl BWGoogleCredentialStore for FileCredentialStore {
 
 /// Google Drive configuration for a desktop build. The OAuth "Desktop app"
 /// client comes from `BUDGET_WARDEN_GOOGLE_CLIENT_ID` and
-/// `BUDGET_WARDEN_GOOGLE_CLIENT_SECRET`, read at run time and otherwise
-/// baked in at compile time.
+/// `BUDGET_WARDEN_GOOGLE_CLIENT_SECRET`, and the hosted shared-budget picker
+/// from `BUDGET_WARDEN_GOOGLE_PICKER_URL`; each is read at run time and
+/// otherwise baked in at compile time.
 pub fn desktop_google_config(cache_directory: &Path) -> BWGoogleDriveConfig {
     let setting = |runtime: Option<String>, compiled: Option<&str>| {
         runtime
@@ -159,6 +160,10 @@ pub fn desktop_google_config(cache_directory: &Path) -> BWGoogleDriveConfig {
         ),
         cache_directory: cache_directory.to_string_lossy().into_owned(),
         folder_name: "Budget Warden".to_string(),
+        picker_url: setting(
+            std::env::var("BUDGET_WARDEN_GOOGLE_PICKER_URL").ok(),
+            option_env!("BUDGET_WARDEN_GOOGLE_PICKER_URL"),
+        ),
     }
 }
 

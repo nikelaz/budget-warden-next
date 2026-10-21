@@ -1395,6 +1395,11 @@ fn cloud_commands_report_configuration_and_sign_in_state_without_network() {
             .starts_with("SIGN_IN_REQUIRED")
     );
 
+    let (output, add_shared) =
+        run_cloud(&sandbox, client, &["cloud", "add-shared", "--no-browser"]);
+    assert_eq!(output.status.code(), Some(7));
+    assert_eq!(add_shared["error"]["code"], "sign_in_required");
+
     let (output, offline) = run_cloud(&sandbox, client, &["cloud", "list", "--offline"]);
     assert_success(&output, &offline);
     assert_eq!(offline["data"]["budgets"], serde_json::json!([]));

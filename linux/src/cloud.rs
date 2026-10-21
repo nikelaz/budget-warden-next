@@ -24,6 +24,8 @@ const SIGN_IN_TIMEOUT_SECONDS: i32 = 300;
 pub enum CloudEvent {
     Listed(Result<Vec<BWCloudBudget>, String>),
     SignedIn(Result<BWGoogleAccount, String>),
+    /// Budgets the user chose in the shared-budget picker.
+    Added(Result<Vec<BWCloudBudget>, String>),
     SignedOut,
     Opened(Result<BWCloudSyncResult, String>),
     Synced(Result<BWCloudSyncResult, String>),
@@ -33,8 +35,12 @@ pub enum CloudEvent {
     ShareRemoved(String, Result<(), String>),
 }
 
+/// Opens a URL in the user's browser.
+pub type UrlOpener = Arc<dyn Fn(&str) -> Result<(), String> + Send + Sync>;
+
 pub struct CloudController {
     drive: Arc<BWGoogleDrive>,
+    open_url: UrlOpener,
     sender: Sender<CloudEvent>,
     receiver: Receiver<CloudEvent>,
     /// Budgets from the latest listing, or the cache before the first one.
@@ -44,6 +50,7 @@ pub struct CloudController {
     /// The latest listing or sync error, for the welcome screen.
     pub last_error: Option<String>,
     sign_in: Option<Arc<BWGoogleLoopbackReceiver>>,
+    picking: Option<Arc<BWGoogleLoopbackReceiver>>,
     syncing: Arc<Mutex<HashSet<String>>>,
     sync_again: Arc<Mutex<HashSet<String>>>,
 }
@@ -62,8 +69,14 @@ impl CloudController {
     }
 
     pub fn with_drive(drive: Arc<BWGoogleDrive>) -> Self {
+        Self::with_drive_and_browser(drive, Arc::new(open_in_browser))
+    }
+
+    /// Uses `open_url` instead of the system browser, for tests.
+    pub fn with_drive_and_browser(drive: Arc<BWGoogleDrive>, open_url: UrlOpener) -> Self {
         let (sender, receiver) = mpsc::channel();
         Self {
+            open_url,
             budgets: drive.cached_budgets(),
             drive,
             sender,
@@ -71,6 +84,7 @@ impl CloudController {
             refreshing: false,
             last_error: None,
             sign_in: None,
+            picking: None,
             syncing: Arc::default(),
             sync_again: Arc::default(),
         }
@@ -86,6 +100,15 @@ impl CloudController {
 
     pub fn is_signing_in(&self) -> bool {
         self.sign_in.is_some()
+    }
+
+    /// Whether this build can add budgets others shared with the user.
+    pub fn can_add_shared(&self) -> bool {
+        self.drive.is_picker_configured()
+    }
+
+    pub fn is_adding_shared(&self) -> bool {
+        self.picking.is_some()
     }
 
     pub fn account(&self) -> Option<BWGoogleAccount> {
@@ -122,6 +145,14 @@ impl CloudController {
                     }
                 }
                 CloudEvent::SignedIn(_) => self.sign_in = None,
+                CloudEvent::Added(result) => {
+                    self.picking = None;
+                    if let Ok(budgets) = result {
+                        for budget in budgets {
+                            self.remember(budget.clone());
+                        }
+                    }
+                }
                 CloudEvent::SignedOut => {
                     self.budgets.clear();
                     self.last_error = None;
@@ -172,16 +203,44 @@ impl CloudController {
         }
         let receiver = Arc::new(BWGoogleLoopbackReceiver::new());
         self.sign_in = Some(receiver.clone());
+        let open_url = self.open_url.clone();
         self.spawn(move |drive| {
             let result = (|| {
                 let redirect = receiver.start()?;
                 let request = drive.begin_sign_in(redirect)?;
-                open_in_browser(&request.authorization_url)?;
+                open_url(&request.authorization_url)?;
                 let callback = receiver.wait_for_redirect(SIGN_IN_TIMEOUT_SECONDS)?;
                 drive.complete_sign_in(callback)
             })();
             CloudEvent::SignedIn(result.map_err(cloud_error_message))
         });
+    }
+
+    /// Opens the shared-budget picker in the browser. Budget Warden only
+    /// reaches Google Drive files it created or that the user chooses there.
+    pub fn add_shared(&mut self) {
+        if self.picking.is_some() {
+            return;
+        }
+        let receiver = Arc::new(BWGoogleLoopbackReceiver::new());
+        self.picking = Some(receiver.clone());
+        let open_url = self.open_url.clone();
+        self.spawn(move |drive| {
+            let result = (|| {
+                let redirect = receiver.start()?;
+                let url = drive.shared_budget_picker_url(Some(format!("{redirect}/picked")))?;
+                open_url(&url)?;
+                let callback = receiver.wait_for_redirect(SIGN_IN_TIMEOUT_SECONDS)?;
+                drive.add_picked_budgets(callback)
+            })();
+            CloudEvent::Added(result.map_err(cloud_error_message))
+        });
+    }
+
+    pub fn cancel_add_shared(&mut self) {
+        if let Some(receiver) = self.picking.take() {
+            receiver.cancel();
+        }
     }
 
     pub fn cancel_sign_in(&mut self) {
