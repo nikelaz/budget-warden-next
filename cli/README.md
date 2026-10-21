@@ -89,11 +89,12 @@ The request schema is [protocol/v1.schema.json](protocol/v1.schema.json), the re
 
 ## Google Drive
 
-`cloud` commands keep budgets in Google Drive. Configure a Google OAuth "Desktop app" client with `BUDGET_WARDEN_GOOGLE_CLIENT_ID` and `BUDGET_WARDEN_GOOGLE_CLIENT_SECRET` (read at build time and overridable at run time), then sign in once in the browser:
+`cloud` commands keep budgets in Google Drive. Configure a Google OAuth "Desktop app" client with `BUDGET_WARDEN_GOOGLE_CLIENT_ID` and `BUDGET_WARDEN_GOOGLE_CLIENT_SECRET` (read at build time and overridable at run time) and the hosted picker page with `BUDGET_WARDEN_GOOGLE_PICKER_URL`, then sign in once in the browser:
 
 ```sh
 budget-warden cloud sign-in            # opens the browser; --no-browser prints the URL
-budget-warden cloud list               # your budgets and budgets shared with you
+budget-warden cloud list               # your budgets and shared budgets you added
+budget-warden cloud add-shared         # choose budgets shared with you in the browser picker
 budget-warden cloud sync --id FILE_ID  # downloads or syncs; prints the working copy path
 budget-warden transaction create --file WORKING_COPY ...
 budget-warden cloud sync --file WORKING_COPY

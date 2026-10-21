@@ -31,13 +31,13 @@ linux/ (GTK 4/libadwaita desktop app linking directly to bw_core)
 
 ## Cloud budgets
 
-Budgets can live in Google Drive on every client and in iCloud Drive on macOS and iOS. Each app lists them next to local budgets on its welcome screen, discovers budgets other people shared with the user, and can share a budget from the app: by email for Google Drive, and through the system share sheet's iCloud collaboration for iCloud Drive.
+Budgets can live in Google Drive on every client and in iCloud Drive on macOS and iOS. Each app lists them next to local budgets on its welcome screen and can share a budget from the app: by email for Google Drive, and through the system share sheet's iCloud collaboration for iCloud Drive. Google Drive uses the non-sensitive `drive.file` scope, so a budget someone shared with you is added once by choosing it in the Google Picker (a static page in `picker/`, linked from the invitation email and from **Add Shared Budget…**).
 
 - Google Drive is implemented once in `core/src/cloud/`. A cloud budget opens from a working copy that the app saves like any local file; sync CRDT-merges it with the newest Drive copy after every save and every minute, so edits from several people and devices converge. Hosts supply HTTP (`BWHttpClient`) and secure credential storage (`BWGoogleCredentialStore`).
 - iCloud Drive budgets are files in the app's iCloud container, shown in iCloud Drive as "Budget Warden". `apple-core`'s `BWICloudBudgetLibrary` lists them, downloads them before opening, and merges conflicting iCloud versions with the CRDT.
 - The CLI exposes Google Drive through `budget-warden cloud …` commands.
 
-Google Drive needs OAuth clients, a verified consent screen for the restricted `drive` scope, and per-platform build settings; iCloud needs the iCloud Documents capability. See [docs/cloud-sync.md](docs/cloud-sync.md) for the design and the release checklist.
+Google Drive needs OAuth clients and an API key in one Cloud project, the hosted picker page, and per-platform build settings; iCloud needs the iCloud Documents capability. See [docs/cloud-sync.md](docs/cloud-sync.md) for the design and the release checklist.
 
 ## MCP server
 

@@ -45,15 +45,17 @@ when launched with `cargo run`.
 - Search, date and amount filters, sorting, editing, moving, and deleting
   transactions
 - Currency preference, recent budgets, keyboard shortcuts, and schema migration
-- Google Drive budgets on the welcome screen, including budgets shared with you,
-  with sign-in in the browser, sync after every save and every minute, creating
-  or copying budgets to Drive, and sharing by email (see
+- Google Drive budgets on the welcome screen, with sign-in in the browser, sync
+  after every save and every minute, creating or copying budgets to Drive,
+  sharing by email, and adding budgets shared with you through the Google
+  Picker (see
   [docs/cloud-sync.md](../docs/cloud-sync.md))
 
 Google Drive needs a Google OAuth "Desktop app" client. Set
 `BUDGET_WARDEN_GOOGLE_CLIENT_ID` and `BUDGET_WARDEN_GOOGLE_CLIENT_SECRET` when
 building (they can also be overridden at run time); without them the app hides
-Google Drive.
+Google Drive. `BUDGET_WARDEN_GOOGLE_PICKER_URL` points at the hosted picker page
+(`picker/`) used by **Add Shared Budget…**.
 
 The app stores its device ID, currency choice, and recent file list under
 `$XDG_CONFIG_HOME/budget-warden` (or `~/.config/budget-warden`). Budget data

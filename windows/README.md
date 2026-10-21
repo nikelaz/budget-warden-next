@@ -51,11 +51,12 @@ Google Drive budgets need a Google OAuth "Desktop app" client. Pass it to the
 build as MSBuild properties, which are embedded as assembly metadata:
 
 ```powershell
-dotnet build -p:BWGoogleClientId=CLIENT_ID.apps.googleusercontent.com -p:BWGoogleClientSecret=CLIENT_SECRET
+dotnet build -p:BWGoogleClientId=CLIENT_ID.apps.googleusercontent.com -p:BWGoogleClientSecret=CLIENT_SECRET -p:BWGooglePickerUrl=https://YOUR_HOST/pick/
 ```
 
-`BUDGET_WARDEN_GOOGLE_CLIENT_ID` and `BUDGET_WARDEN_GOOGLE_CLIENT_SECRET`
-override them at run time. Without a client ID the app hides Google Drive.
+`BUDGET_WARDEN_GOOGLE_CLIENT_ID`, `BUDGET_WARDEN_GOOGLE_CLIENT_SECRET`, and
+`BUDGET_WARDEN_GOOGLE_PICKER_URL` override them at run time. The picker page
+(`picker/`) lets users add budgets someone shared with them. Without a client ID the app hides Google Drive.
 Sign-in opens the default browser and returns through a `127.0.0.1` loopback
 redirect; the token is kept in the Windows Credential Locker and working copies
 under `%LOCALAPPDATA%\Budget Warden\Cloud`. See
