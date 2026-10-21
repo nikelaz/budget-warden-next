@@ -33,6 +33,7 @@ public sealed partial class AppViewModel
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowGoogleDriveSignIn))]
     [NotifyPropertyChangedFor(nameof(CanCreateInGoogleDrive))]
+    [NotifyPropertyChangedFor(nameof(CanAddSharedBudget))]
     public partial bool IsGoogleDriveSignedIn { get; private set; }
 
     [ObservableProperty]
@@ -41,6 +42,14 @@ public sealed partial class AppViewModel
 
     [ObservableProperty]
     public partial string GoogleDriveAccount { get; private set; } = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanAddSharedBudget))]
+    public partial bool IsSharedBudgetPickerConfigured { get; private set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AddSharedBudgetText))]
+    public partial bool IsAddingSharedBudget { get; private set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasGoogleDriveError))]
@@ -54,6 +63,8 @@ public sealed partial class AppViewModel
     public partial CloudBudgetItem? OpenCloudBudget { get; private set; }
 
     public bool ShowGoogleDriveSignIn => IsGoogleDriveConfigured && !IsGoogleDriveSignedIn;
+    public bool CanAddSharedBudget => IsSharedBudgetPickerConfigured && IsGoogleDriveSignedIn;
+    public string AddSharedBudgetText => IsAddingSharedBudget ? "Choose in your browser…" : "Add shared budget…";
     public bool CanCreateInGoogleDrive => IsGoogleDriveSignedIn;
     public bool HasGoogleDriveError => GoogleDriveError is not null;
     public bool CanShareOpenBudget => OpenCloudBudget?.CanShare == true;
@@ -69,9 +80,11 @@ public sealed partial class AppViewModel
             BuildSetting("BUDGET_WARDEN_GOOGLE_CLIENT_ID", "BWGoogleClientId") ?? string.Empty,
             BuildSetting("BUDGET_WARDEN_GOOGLE_CLIENT_SECRET", "BWGoogleClientSecret"),
             cache,
-            "Budget Warden"));
+            "Budget Warden",
+            BuildSetting("BUDGET_WARDEN_GOOGLE_PICKER_URL", "BWGooglePickerUrl")));
         _drive.Connect(new HttpClientTransport(), new PasswordVaultCredentialStore());
         IsGoogleDriveConfigured = _drive.IsConfigured();
+        IsSharedBudgetPickerConfigured = _drive.IsPickerConfigured();
         RefreshGoogleDriveAccount();
         ShowCloudBudgets(_drive.CachedBudgets());
 
@@ -144,6 +157,52 @@ public sealed partial class AppViewModel
     }
 
     public void CancelGoogleDriveSignIn() => _signIn?.Cancel();
+
+    /// <summary>
+    /// Opens the Google Picker in the browser so the user can choose budgets
+    /// someone shared with them. Budget Warden only reaches Drive files it
+    /// created or that the user chooses there. Opens the budget when exactly
+    /// one was chosen.
+    /// </summary>
+    public async Task AddSharedBudgetAsync()
+    {
+        if (_drive is not { } drive || IsAddingSharedBudget)
+        {
+            return;
+        }
+
+        BwGoogleLoopbackReceiver receiver = new();
+        _signIn = receiver;
+        IsAddingSharedBudget = true;
+        GoogleDriveError = null;
+        try
+        {
+            string redirect = receiver.Start();
+            string url = drive.SharedBudgetPickerUrl($"{redirect}/picked");
+            await Windows.System.Launcher.LaunchUriAsync(new Uri(url));
+            string callback = await Task.Run(() => receiver.WaitForRedirect(SignInTimeoutSeconds));
+            BwCloudBudget[] added = await Task.Run(() => drive.AddPickedBudgets(callback));
+            foreach (BwCloudBudget budget in added)
+            {
+                RememberCloudBudget(budget);
+            }
+
+            if (added.Length == 1 && CloudBudgets.FirstOrDefault(item => item.Id == added[0].Id) is { } item)
+            {
+                await OpenCloudBudgetAsync(item);
+            }
+        }
+        catch (BoltException error)
+        {
+            ReportCloudError(error);
+        }
+        finally
+        {
+            receiver.Dispose();
+            _signIn = null;
+            IsAddingSharedBudget = false;
+        }
+    }
 
     public async Task SignOutOfGoogleDriveAsync()
     {

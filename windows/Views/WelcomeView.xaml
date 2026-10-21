@@ -167,6 +167,18 @@
                         <FontIcon Glyph="&#xE72C;" FontSize="14" />
                     </Button>
                 </Grid>
+                <HyperlinkButton
+                    Grid.Row="2"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Bottom"
+                    Margin="0,0,44,0"
+                    Click="AddSharedBudget_Click"
+                    IsEnabled="{x:Bind local:ViewVisibility.Not(Vm.IsAddingSharedBudget), Mode=OneWay}"
+                    Visibility="{x:Bind local:ViewVisibility.When(Vm.CanAddSharedBudget), Mode=OneWay}"
+                    ToolTipService.ToolTip="Choose a budget someone shared with you in Google Drive"
+                    AutomationProperties.AutomationId="AddSharedBudgetButton">
+                    <TextBlock Text="{x:Bind Vm.AddSharedBudgetText, Mode=OneWay}" />
+                </HyperlinkButton>
                 <ListView
                     x:Name="CloudBudgetsList"
                     Grid.Row="3"

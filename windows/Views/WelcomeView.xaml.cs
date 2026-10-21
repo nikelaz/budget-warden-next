@@ -28,6 +28,9 @@ public sealed partial class WelcomeView : UserControl
     private async void RefreshGoogleDrive_Click(object sender, RoutedEventArgs e) =>
         await Vm.RefreshCloudBudgetsAsync();
 
+    private async void AddSharedBudget_Click(object sender, RoutedEventArgs e) =>
+        await Vm.AddSharedBudgetAsync();
+
     private async void OpenCloudBudget_Click(object sender, RoutedEventArgs e)
     {
         if (sender is FrameworkElement { DataContext: CloudBudgetItem budget })
