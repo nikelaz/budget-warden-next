@@ -53,6 +53,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Alignment
@@ -216,6 +218,10 @@ fun BudgetWardenAndroidApp() {
     LaunchedEffect(googleDrive, driveState.signedIn) {
         googleDrive.refresh()
     }
+    // Budgets chosen in the browser picker appear when the user comes back.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        scope.launch { googleDrive.refresh() }
+    }
 
     LaunchedEffect(mcpServer, currentBudget?.url, currencyCode) {
         mcpServer.updateBudgets(currentBudget?.url?.let(Uri::parse), currencyCode)
@@ -281,6 +287,11 @@ fun BudgetWardenAndroidApp() {
                 onRefreshGoogleDrive = { scope.launch { googleDrive.refresh() } },
                 onOpenCloudBudget = ::openCloudBudget,
                 onShareCloudBudget = { sharingCloudBudget = it },
+                onAddSharedBudget = {
+                    googleDrive.sharedBudgetPickerUri()?.let { uri ->
+                        runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, uri)) }
+                    }
+                },
                 onCreateBudget = { createBudgetOpen = true },
                 onOpenBudget = {
                     openDocument.launch(arrayOf(BUDGET_MIME_TYPE, JSON_MIME_TYPE, "*/*"))

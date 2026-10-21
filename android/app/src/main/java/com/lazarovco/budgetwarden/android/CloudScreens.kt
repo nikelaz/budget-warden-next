@@ -57,6 +57,7 @@ internal fun LazyListScope.googleDriveSection(
     onRefresh: () -> Unit,
     onOpen: (BWCloudBudget) -> Unit,
     onShare: (BWCloudBudget) -> Unit,
+    onAddShared: () -> Unit = {},
 ) {
     if (!drive.enabled) return
     item(key = "google-drive-header") {
@@ -102,6 +103,20 @@ internal fun LazyListScope.googleDriveSection(
     }
     items(drive.budgets, key = { "google-drive-${it.id}" }) { budget ->
         CloudBudgetRow(budget = budget, onOpen = { onOpen(budget) }, onShare = { onShare(budget) })
+    }
+    if (drive.canAddShared) {
+        item(key = "google-drive-add-shared") {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                OutlinedButton(onClick = onAddShared, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.add_shared_budget))
+                }
+                Text(
+                    stringResource(R.string.add_shared_budget_description),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 

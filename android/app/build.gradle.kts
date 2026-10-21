@@ -30,6 +30,9 @@ android {
             "GOOGLE_DRIVE_ENABLED",
             (providers.gradleProperty("bw.googleDrive").orNull ?: "true").toBoolean().toString(),
         )
+        // The hosted shared-budget picker page (picker/ in the repository).
+        val pickerUrl = providers.gradleProperty("bw.googlePickerUrl").orNull.orEmpty()
+        buildConfigField("String", "GOOGLE_PICKER_URL", "\"${pickerUrl.replace("\"", "")}\"")
     }
 
     buildTypes {

@@ -95,7 +95,7 @@
     <string name="connect_google_drive">Connect Google Drive</string>
     <string name="signing_in">Signing in…</string>
     <string name="sign_out_google_drive">Sign Out of Google Drive</string>
-    <string name="google_drive_empty">Create a budget in Google Drive, or ask someone to share one with you.</string>
+    <string name="google_drive_empty">Create a budget in Google Drive, or add one someone shared with you.</string>
     <string name="refresh">Refresh</string>
     <string name="share">Share</string>
     <string name="share_budget_title">Share “%1$s”</string>
@@ -113,4 +113,6 @@
     <string name="save_to">Save to</string>
     <string name="save_to_device">This device</string>
     <string name="local_budgets">On this device</string>
+    <string name="add_shared_budget">Add Shared Budget…</string>
+    <string name="add_shared_budget_description">Choose a budget someone shared with you in Google Drive, then come back to Budget Warden.</string>
 </resources>

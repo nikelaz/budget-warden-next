@@ -43,6 +43,8 @@ internal data class GoogleDriveUiState(
     val enabled: Boolean = false,
     val signedIn: Boolean = false,
     val signingIn: Boolean = false,
+    /** This build can add budgets others shared with the user. */
+    val canAddShared: Boolean = false,
     val email: String? = null,
     val budgets: List<BWCloudBudget> = emptyList(),
     val refreshing: Boolean = false,
@@ -70,11 +72,17 @@ internal class GoogleDriveController(context: Context) {
             clientSecret = null,
             cacheDirectory = File(applicationContext.filesDir, "cloud").path,
             folderName = "Budget Warden",
+            pickerUrl = BuildConfig.GOOGLE_PICKER_URL.ifBlank { null },
         ),
     )
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val scheduler = CoalescingSyncScheduler(scope, ::syncNow)
-    private val _state = MutableStateFlow(GoogleDriveUiState(enabled = BuildConfig.GOOGLE_DRIVE_ENABLED))
+    private val _state = MutableStateFlow(
+        GoogleDriveUiState(
+            enabled = BuildConfig.GOOGLE_DRIVE_ENABLED,
+            canAddShared = BuildConfig.GOOGLE_PICKER_URL.isNotBlank(),
+        ),
+    )
     private val _changes = MutableSharedFlow<Uri>(
         extraBufferCapacity = 16,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
@@ -157,6 +165,14 @@ internal class GoogleDriveController(context: Context) {
     }
 
     // Budgets
+
+    /**
+     * The Google Picker page where the user chooses budgets someone shared
+     * with them. Budget Warden only reaches Drive files it created or that
+     * the user chooses there; [refresh] lists them after the user returns.
+     */
+    fun sharedBudgetPickerUri(): Uri? =
+        runCatching { Uri.parse(drive.sharedBudgetPickerUrl(null)) }.getOrNull()
 
     /** Lists the user's Google Drive budgets, including shared ones. */
     suspend fun refresh() {
@@ -286,7 +302,7 @@ private class PlayServicesTokenSource(private val context: Context) : BWGoogleTo
     }
 
     private companion object {
-        const val DRIVE_SCOPE = "https://www.googleapis.com/auth/drive"
+        const val DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
     }
 }
 

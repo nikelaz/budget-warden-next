@@ -85,6 +85,7 @@ internal fun BudgetListScreen(
     onRefreshGoogleDrive: () -> Unit = {},
     onOpenCloudBudget: (BWCloudBudget) -> Unit = {},
     onShareCloudBudget: (BWCloudBudget) -> Unit = {},
+    onAddSharedBudget: () -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -141,6 +142,7 @@ internal fun BudgetListScreen(
                     onRefresh = onRefreshGoogleDrive,
                     onOpen = onOpenCloudBudget,
                     onShare = onShareCloudBudget,
+                    onAddShared = onAddSharedBudget,
                 )
             }
         }
