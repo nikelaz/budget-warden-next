@@ -172,7 +172,7 @@ impl AppUi {
         if self.state.borrow().budget.is_none() {
             self.refresh();
         } else if let Some(main) = self.main.borrow().as_ref() {
-            main.recent.set_menu_model(Some(&self.recent_menu()));
+            self.refresh_header(main);
         }
     }
 

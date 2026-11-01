@@ -30,7 +30,9 @@ struct MainView {
     sidebar: gtk::ListBox,
     title: adw::WindowTitle,
     actions: gtk::Box,
-    recent: gtk::MenuButton,
+    switcher: gtk::MenuButton,
+    switcher_title: gtk::Label,
+    menu: gtk::MenuButton,
     content: gtk::Box,
 }
 
@@ -374,12 +376,25 @@ impl AppUi {
         self.app.add_action(&cloud);
     }
 
+    /// The primary menu: actions on the open budget and app-wide items.
+    /// Opening and switching budgets lives in the budget switcher.
     fn app_menu(&self) -> gtk::gio::Menu {
         let menu = gtk::gio::Menu::new();
-        let files = gtk::gio::Menu::new();
-        files.append(Some("New Budget…"), Some("app.new-budget"));
-        files.append(Some("Open Budget…"), Some("app.open-budget"));
-        menu.append_section(None, &files);
+        let cloud = self.cloud.borrow();
+        if cloud.is_signed_in() {
+            let budget = gtk::gio::Menu::new();
+            if let Some(id) = self.open_cloud_id() {
+                if cloud.budget(&id).is_some_and(|budget| budget.can_share) {
+                    budget.append(Some("Share…"), Some("app.share-budget"));
+                }
+            } else if self.state.borrow().budget.is_some() {
+                budget.append(Some("Copy to Google Drive"), Some("app.upload-budget"));
+            }
+            if cloud.can_add_shared() {
+                budget.append(Some("Add Shared Budget…"), Some("app.add-shared-budget"));
+            }
+            menu.append_section(None, &budget);
+        }
         let settings = gtk::gio::Menu::new();
         settings.append(Some("Preferences"), Some("app.preferences"));
         settings.append(Some("About Budget Warden"), Some("app.about"));
@@ -388,27 +403,22 @@ impl AppUi {
         menu
     }
 
-    fn recent_menu(&self) -> gtk::gio::Menu {
+    /// The budget switcher: other budgets to switch to, then open or create one.
+    fn switcher_menu(&self) -> gtk::gio::Menu {
         let menu = gtk::gio::Menu::new();
-        menu.append(Some("Open Budget…"), Some("app.open-budget"));
-        menu.append(Some("New Budget…"), Some("app.new-budget"));
         let cloud = self.cloud.borrow();
-        if cloud.is_signed_in() {
-            let actions = gtk::gio::Menu::new();
-            if let Some(id) = self.open_cloud_id() {
-                if cloud.budget(&id).is_some_and(|budget| budget.can_share) {
-                    actions.append(Some("Share…"), Some("app.share-budget"));
-                }
-            } else if self.state.borrow().budget.is_some() {
-                actions.append(Some("Copy to Google Drive"), Some("app.upload-budget"));
-            }
-            if cloud.can_add_shared() {
-                actions.append(Some("Add Shared Budget…"), Some("app.add-shared-budget"));
-            }
-            menu.append_section(None, &actions);
-        }
+        let open_path = self
+            .state
+            .borrow()
+            .budget
+            .as_ref()
+            .and_then(|budget| budget.url.clone())
+            .map(PathBuf::from);
         let recent = gtk::gio::Menu::new();
         for path in &cloud.local_files(&self.state.borrow().recent_files) {
+            if open_path.as_ref() == Some(path) {
+                continue;
+            }
             let title = path
                 .file_stem()
                 .and_then(|name| name.to_str())
@@ -420,17 +430,48 @@ impl AppUi {
             );
             recent.append_item(&item);
         }
-        menu.append_section(Some("Recent Budgets"), &recent);
-        if cloud.is_signed_in() && !cloud.budgets.is_empty() {
+        if recent.n_items() > 0 {
+            menu.append_section(Some("Recent Budgets"), &recent);
+        }
+        if cloud.is_signed_in() {
+            let open_id = open_path
+                .as_ref()
+                .and_then(|path| cloud.budget_id_for_path(path));
             let drive = gtk::gio::Menu::new();
             for budget in &cloud.budgets {
+                if open_id.as_ref() == Some(&budget.id) {
+                    continue;
+                }
                 let item = gtk::gio::MenuItem::new(Some(&budget.title), None);
                 item.set_action_and_target_value(Some("app.open-cloud"), Some(&budget.id.to_variant()));
                 drive.append_item(&item);
             }
-            menu.append_section(Some("Google Drive"), &drive);
+            if drive.n_items() > 0 {
+                menu.append_section(Some("Google Drive"), &drive);
+            }
         }
+        let files = gtk::gio::Menu::new();
+        files.append(Some("Open Budget…"), Some("app.open-budget"));
+        files.append(Some("New Budget…"), Some("app.new-budget"));
+        menu.append_section(None, &files);
         menu
+    }
+
+    /// Updates the sidebar header after the open budget, recent budgets, or
+    /// cloud budgets change.
+    fn refresh_header(&self, main: &MainView) {
+        let title = self
+            .state
+            .borrow()
+            .budget
+            .as_ref()
+            .map(|budget| budget.title.trim().to_string())
+            .filter(|title| !title.is_empty())
+            .unwrap_or_else(|| "Budget".to_string());
+        main.switcher_title.set_label(&title);
+        main.switcher.set_tooltip_text(Some(&format!("{title} — Switch Budget")));
+        main.switcher.set_menu_model(Some(&self.switcher_menu()));
+        main.menu.set_menu_model(Some(&self.app_menu()));
     }
 
     fn refresh(self: &Rc<Self>) {
@@ -475,7 +516,7 @@ impl AppUi {
             *self.main.borrow_mut() = Some(main.clone());
             main
         };
-        main.recent.set_menu_model(Some(&self.recent_menu()));
+        self.refresh_header(&main);
         self.render_page(!changed);
         let windows = self.category_windows.borrow().clone();
         for handle in windows {
@@ -552,19 +593,24 @@ impl AppUi {
         split.set_sidebar_width_fraction(0.22);
         let sidebar_toolbar = adw::ToolbarView::new();
         let sidebar_header = adw::HeaderBar::new();
-        let recent = gtk::MenuButton::builder()
-            .icon_name("document-open-symbolic")
-            .tooltip_text("Open or Switch Budget")
-            .menu_model(&self.recent_menu())
-            .build();
-        sidebar_header.pack_start(&recent);
         let menu = gtk::MenuButton::builder()
             .icon_name("open-menu-symbolic")
             .tooltip_text("Main Menu")
-            .menu_model(&self.app_menu())
+            .primary(true)
             .build();
         sidebar_header.pack_end(&menu);
-        sidebar_header.set_title_widget(Some(&gtk::Label::new(Some("Budget Warden"))));
+        let switcher_title = gtk::Label::new(None);
+        switcher_title.add_css_class("heading");
+        switcher_title.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        let switcher_content = gtk::Box::new(Orientation::Horizontal, 6);
+        switcher_content.append(&switcher_title);
+        switcher_content.append(&gtk::Image::from_icon_name("pan-down-symbolic"));
+        let switcher = gtk::MenuButton::builder()
+            .child(&switcher_content)
+            .css_classes(["flat"])
+            .build();
+        switcher.update_property(&[gtk::accessible::Property::Label("Switch Budget")]);
+        sidebar_header.set_title_widget(Some(&switcher));
         sidebar_toolbar.add_top_bar(&sidebar_header);
         let sidebar = gtk::ListBox::new();
         sidebar.add_css_class("navigation-sidebar");
@@ -723,7 +769,9 @@ impl AppUi {
             sidebar,
             title,
             actions,
-            recent,
+            switcher,
+            switcher_title,
+            menu,
             content,
         }
     }
