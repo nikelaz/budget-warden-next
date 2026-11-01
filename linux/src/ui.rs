@@ -1155,7 +1155,7 @@ impl AppUi {
             *self.search.borrow_mut() = Some(search.clone());
         }
         let filter_button = gtk::MenuButton::builder()
-            .icon_name("view-filter-symbolic")
+            .icon_name("view-sort-descending-symbolic")
             .tooltip_text("Filter and Sort")
             .build();
         controls.append(&filter_button);
