@@ -70,6 +70,9 @@ pub struct AppState {
     pub currency: String,
     pub page: AppPage,
     pub report_mode: ReportMode,
+    /// The open budget was saved since the UI last checked, so a cloud
+    /// budget needs to sync.
+    saved_since_sync: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -133,6 +136,7 @@ impl AppState {
             currency,
             page: AppPage::Budget,
             report_mode: ReportMode::Planned,
+            saved_since_sync: false,
         })
     }
 
@@ -164,33 +168,27 @@ impl AppState {
         template: &BudgetTemplate,
         path: &Path,
     ) -> Result<(), String> {
-        let title = title.trim();
-        if title.is_empty() {
-            return Err("Enter a budget title.".to_string());
-        }
         let path = absolute_path(path)?;
         if path.exists() {
             return Err("A file already exists at that location.".to_string());
         }
-        let mut budget = match template {
-            BudgetTemplate::BasicMonthly => {
-                budget_from_template(BWTemplateType::BasicMonthly, title.to_string())
-            }
-            BudgetTemplate::Empty => budget_from_template(BWTemplateType::Empty, title.to_string()),
-            BudgetTemplate::BuiltIn(template_id) => {
-                budget_from_template_id(template_id.clone(), title.to_string())?
-            }
-            BudgetTemplate::Previous(previous_path) => {
-                let previous = read_budget(previous_path)?;
-                budget_from_previous_budget(previous, title.to_string())?
-            }
-        };
+        let mut budget = new_budget(title, template)?;
         budget.url = Some(path.to_string_lossy().into_owned());
         write_budget_exclusive(&budget, &path)?;
         self.budget = Some(budget);
         self.page = AppPage::Budget;
         self.remember_recent(path);
         Ok(())
+    }
+
+    /// Encodes a new budget that is not saved anywhere yet, for uploading.
+    pub fn new_budget_json(&self, title: &str, template: &BudgetTemplate) -> Result<String, String> {
+        encode_budget(&new_budget(title, template)?)
+    }
+
+    /// Whether the open budget was saved since the last call.
+    pub fn take_saved_since_sync(&mut self) -> bool {
+        std::mem::take(&mut self.saved_since_sync)
     }
 
     pub fn category(&self, id: Uuid) -> Option<BWCategory> {
@@ -363,6 +361,7 @@ impl AppState {
         updated.url = Some(path.to_string_lossy().into_owned());
         write_budget(&updated, &path)?;
         self.budget = Some(updated);
+        self.saved_since_sync = true;
         self.remember_recent(path);
         Ok(())
     }
@@ -395,6 +394,26 @@ impl AppState {
             eprintln!("Could not save recent budgets: {error}");
         }
     }
+}
+
+fn new_budget(title: &str, template: &BudgetTemplate) -> Result<BWBudget, String> {
+    let title = title.trim();
+    if title.is_empty() {
+        return Err("Enter a budget title.".to_string());
+    }
+    Ok(match template {
+        BudgetTemplate::BasicMonthly => {
+            budget_from_template(BWTemplateType::BasicMonthly, title.to_string())
+        }
+        BudgetTemplate::Empty => budget_from_template(BWTemplateType::Empty, title.to_string()),
+        BudgetTemplate::BuiltIn(template_id) => {
+            budget_from_template_id(template_id.clone(), title.to_string())?
+        }
+        BudgetTemplate::Previous(previous_path) => {
+            let previous = read_budget(previous_path)?;
+            budget_from_previous_budget(previous, title.to_string())?
+        }
+    })
 }
 
 pub fn read_budget(path: &Path) -> Result<BWBudget, String> {
@@ -774,6 +793,7 @@ mod tests {
                 currency: "USD".to_string(),
                 page: AppPage::Budget,
                 report_mode: ReportMode::Planned,
+                saved_since_sync: false,
             }
         }
 

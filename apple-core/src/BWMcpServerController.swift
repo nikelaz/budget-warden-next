@@ -296,8 +296,8 @@ final class BWMcpFileHost: BWMcpHost, @unchecked Sendable {
     private func coordinatedRead(at url: URL) throws -> Data {
         var coordinationError: NSError?
         var result: Result<Data, Error>?
-        NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &coordinationError) {
-            result = Result { try Data(contentsOf: $0) }
+        NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &coordinationError) { coordinatedURL in
+            result = Result { try Data(contentsOf: coordinatedURL) }
         }
         if let coordinationError {
             throw coordinationError

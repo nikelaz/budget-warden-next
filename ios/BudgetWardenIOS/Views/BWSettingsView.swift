@@ -51,6 +51,27 @@ struct BWSettingsView: View {
                 .buttonStyle(.plain)
             }
 
+            if store.googleDrive.isConfigured {
+                Section {
+                    let drive = store.googleDrive
+                    if drive.isSignedIn {
+                        LabeledContent("Account", value: drive.accountEmail ?? "Signed in")
+                        Button("Sign Out of Google Drive", role: .destructive) {
+                            Task { await drive.signOut() }
+                        }
+                    } else {
+                        Button(drive.isSigningIn ? "Signing In…" : "Sign In to Google Drive") {
+                            Task { await drive.signIn() }
+                        }
+                        .disabled(drive.isSigningIn)
+                    }
+                } header: {
+                    Text("Google Drive")
+                } footer: {
+                    Text("Budgets in Google Drive sync between your devices and the people you share them with.")
+                }
+            }
+
             Section {
                 Toggle("Enable MCP Server", isOn: Binding(
                     get: { store.mcpSettings?.isEnabled ?? false },

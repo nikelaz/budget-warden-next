@@ -1,5 +1,6 @@
 pub mod args;
 mod batch;
+mod cloud;
 mod commands;
 pub mod config;
 pub mod error;

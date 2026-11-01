@@ -20,6 +20,8 @@ struct BWCreateBudgetView: View {
     @State private var document: BWBudgetFileDocument?
     @State private var isExporterPresented = false
     @State private var errorMessage: String?
+    @State private var location: BWBudgetLocation = .files
+    @State private var isCreating = false
 
     private var isValid: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -57,6 +59,17 @@ struct BWCreateBudgetView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+
+                if availableLocations.count > 1 {
+                    Section("Save To") {
+                        Picker("Location", selection: $location) {
+                            ForEach(availableLocations, id: \.self) { location in
+                                Text(location.title).tag(location)
+                            }
+                        }
+                        .accessibilityIdentifier("createBudgetLocationPicker")
+                    }
+                }
             }
             .navigationTitle("New Budget")
             .navigationBarTitleDisplayMode(.inline)
@@ -68,9 +81,9 @@ struct BWCreateBudgetView: View {
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Create", action: prepareDocument)
+                    Button("Create", action: create)
                         .accessibilityIdentifier("createBudgetSaveButton")
-                        .disabled(!isValid)
+                        .disabled(!isValid || isCreating)
                 }
             }
         }
@@ -97,6 +110,30 @@ struct BWCreateBudgetView: View {
             }
         } message: {
             Text(errorMessage ?? "")
+        }
+    }
+
+    private var availableLocations: [BWBudgetLocation] {
+        BWBudgetLocation.allCases.filter { location in
+            switch location {
+            case .files: true
+            case .iCloud: store.iCloud.isAvailable
+            case .googleDrive: store.googleDrive.isSignedIn
+            }
+        }
+    }
+
+    private func create() {
+        guard location != .files else {
+            prepareDocument()
+            return
+        }
+        isCreating = true
+        Task {
+            defer { isCreating = false }
+            if await store.createCloudBudget(title: title, template: selectedTemplate, location: location) {
+                dismiss()
+            }
         }
     }
 

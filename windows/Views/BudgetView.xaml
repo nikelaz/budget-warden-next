@@ -138,6 +138,12 @@
                 </Button>
             </CommandBar.Content>
             <AppBarButton
+                Icon="Share"
+                Label="Share"
+                Click="ShareBudget_Click"
+                Visibility="{x:Bind local:ViewVisibility.When(Vm.CanShareOpenBudget), Mode=OneWay}"
+                AutomationProperties.AutomationId="ShareBudgetButton" />
+            <AppBarButton
                 Icon="Add"
                 Label="New Category"
                 Click="NewCategory_Click"

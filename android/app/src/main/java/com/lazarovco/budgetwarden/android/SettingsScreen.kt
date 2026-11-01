@@ -38,7 +38,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import com.lazarovco.budgetwarden.android.data.GoogleDriveUiState
 import com.lazarovco.budgetwarden.android.data.McpServerUiState
+import com.lazarovco.budgetwarden.core.BWCloudBudget
 import com.lazarovco.budgetwarden.android.domain.Budget
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -54,6 +56,11 @@ internal fun SettingsScreen(
     onCurrencyChange: (String) -> Unit,
     onRenameBudget: (String) -> Unit,
     onDeleteBudget: () -> Unit,
+    driveState: GoogleDriveUiState = GoogleDriveUiState(),
+    cloudBudget: BWCloudBudget? = null,
+    onConnectGoogleDrive: () -> Unit = {},
+    onSignOutGoogleDrive: () -> Unit = {},
+    onShareCloudBudget: (BWCloudBudget) -> Unit = {},
 ) {
     var title by remember(budget.id, budget.title) { mutableStateOf(budget.title) }
     var titleHadFocus by remember(budget.id) { mutableStateOf(false) }
@@ -114,6 +121,14 @@ internal fun SettingsScreen(
                 }
             }
         }
+
+        GoogleDriveSettings(
+            drive = driveState,
+            cloudBudget = cloudBudget,
+            onConnect = onConnectGoogleDrive,
+            onSignOut = onSignOutGoogleDrive,
+            onShare = onShareCloudBudget,
+        )
 
         McpServerSettings(
             state = mcpState,

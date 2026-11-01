@@ -22,6 +22,17 @@ android {
         versionName = "3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Google Drive needs an Android OAuth client registered for this
+        // package and signing certificate. Pass -Pbw.googleDrive=false to hide it.
+        buildConfigField(
+            "boolean",
+            "GOOGLE_DRIVE_ENABLED",
+            (providers.gradleProperty("bw.googleDrive").orNull ?: "true").toBoolean().toString(),
+        )
+        // The hosted shared-budget picker page (picker/ in the repository).
+        val pickerUrl = providers.gradleProperty("bw.googlePickerUrl").orNull.orEmpty()
+        buildConfigField("String", "GOOGLE_PICKER_URL", "\"${pickerUrl.replace("\"", "")}\"")
     }
 
     buildTypes {
@@ -40,6 +51,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
     buildFeatures {
+        buildConfig = true
         compose = true
     }
     sourceSets {
@@ -83,6 +95,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.play.services.auth)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.truth)

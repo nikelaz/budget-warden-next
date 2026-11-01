@@ -25,6 +25,7 @@ struct BWMainTabsView: View {
     @State private var transactionEditor: BWTransactionEditor?
     @State private var transactionPendingEdit: BWTransactionListItem?
     @State private var transactionSearchText: String = ""
+    @State private var sharingGoogleBudget: BWCloudBudget?
     @Namespace private var editorNavigationNamespace
 
     private var budget: BWBudget? {
@@ -135,6 +136,22 @@ struct BWMainTabsView: View {
                     } label: {
                         Label("Open Budget", systemImage: "folder")
                     }
+
+                    if let cloudBudget = store.openGoogleDriveBudget, cloudBudget.canShare {
+                        Divider()
+                        Button {
+                            sharingGoogleBudget = cloudBudget
+                        } label: {
+                            Label("Share", systemImage: "person.badge.plus")
+                        }
+                        .accessibilityIdentifier("titleMenuShareButton")
+                    } else if let url = store.openICloudBudgetURL {
+                        Divider()
+                        ShareLink(item: url) {
+                            Label("Share", systemImage: "square.and.arrow.up")
+                        }
+                        .accessibilityIdentifier("titleMenuShareButton")
+                    }
                 }
 
                 if selectedTab == .budget {
@@ -186,6 +203,11 @@ struct BWMainTabsView: View {
                         .accessibilityIdentifier("newTransactionButton")
                         .disabled(budget.categories.isEmpty)
                     }
+                }
+            }
+            .sheet(item: $sharingGoogleBudget) { cloudBudget in
+                BWGoogleDriveShareView(controller: store.googleDrive, budget: cloudBudget) {
+                    sharingGoogleBudget = nil
                 }
             }
         }

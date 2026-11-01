@@ -9,4 +9,6 @@ public static class ViewVisibility
 
     public static Visibility WhenNot(bool value) =>
         value ? Visibility.Collapsed : Visibility.Visible;
+
+    public static bool Not(bool value) => !value;
 }

@@ -121,6 +121,12 @@ public sealed partial class SettingsView : UserControl
         Clipboard.SetContent(package);
     }
 
+    private async void SignInGoogleDrive_Click(object sender, RoutedEventArgs e) =>
+        await Vm.SignInToGoogleDriveAsync();
+
+    private async void SignOutGoogleDrive_Click(object sender, RoutedEventArgs e) =>
+        await Vm.SignOutOfGoogleDriveAsync();
+
     private void RegenerateMcpUrl_Click(object sender, RoutedEventArgs e) =>
         Vm.RegenerateMcpServerUrl();
 

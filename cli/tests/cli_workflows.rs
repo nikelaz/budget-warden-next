@@ -1337,3 +1337,92 @@ fn failed_stdout_write_returns_io_exit_code() {
     assert_eq!(output.status.code(), Some(6));
     assert!(String::from_utf8_lossy(&output.stderr).contains("Could not write command response"));
 }
+
+fn run_cloud(sandbox: &Sandbox, client_id: Option<&str>, args: &[&str]) -> (Output, Value) {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_budget-warden"));
+    command
+        .arg("--config-dir")
+        .arg(sandbox.path("config"))
+        .args(args)
+        .env_remove("BUDGET_WARDEN_GOOGLE_CLIENT_SECRET");
+    match client_id {
+        Some(id) => command.env("BUDGET_WARDEN_GOOGLE_CLIENT_ID", id),
+        None => command.env("BUDGET_WARDEN_GOOGLE_CLIENT_ID", ""),
+    };
+    let output = command.output().expect("run budget-warden");
+    let value = serde_json::from_slice(&output.stdout).expect("one JSON response on stdout");
+    (output, value)
+}
+
+#[test]
+fn cloud_commands_report_configuration_and_sign_in_state_without_network() {
+    let sandbox = Sandbox::new();
+    let capabilities = run_success(&sandbox, &["capabilities"]);
+    let commands = capabilities["data"]["commands"].as_array().unwrap();
+    for command in [
+        "cloud status",
+        "cloud sign-in",
+        "cloud sync",
+        "cloud share",
+        "cloud unshare",
+    ] {
+        assert!(commands.iter().any(|value| value == command), "{command}");
+    }
+
+    let (output, status) = run_cloud(&sandbox, None, &["cloud", "status"]);
+    assert_success(&output, &status);
+    assert_eq!(status["data"]["configured"], false);
+    assert_eq!(status["data"]["signed_in"], false);
+    assert!(
+        status["data"]["working_directory"]
+            .as_str()
+            .unwrap()
+            .starts_with(sandbox.path("config").to_str().unwrap())
+    );
+
+    let (output, unconfigured) = run_cloud(&sandbox, None, &["cloud", "list"]);
+    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(unconfigured["error"]["code"], "cloud_not_configured");
+
+    let client = Some("test.apps.googleusercontent.com");
+    let (output, signed_out) = run_cloud(&sandbox, client, &["cloud", "list"]);
+    assert_eq!(output.status.code(), Some(7));
+    assert_eq!(signed_out["error"]["code"], "sign_in_required");
+    assert!(
+        !signed_out["error"]["message"]
+            .as_str()
+            .unwrap()
+            .starts_with("SIGN_IN_REQUIRED")
+    );
+
+    let (output, add_shared) =
+        run_cloud(&sandbox, client, &["cloud", "add-shared", "--no-browser"]);
+    assert_eq!(output.status.code(), Some(7));
+    assert_eq!(add_shared["error"]["code"], "sign_in_required");
+
+    let (output, offline) = run_cloud(&sandbox, client, &["cloud", "list", "--offline"]);
+    assert_success(&output, &offline);
+    assert_eq!(offline["data"]["budgets"], serde_json::json!([]));
+
+    let local = sandbox.path("local.budget");
+    create_budget(&sandbox, &local, "Local", "basic-monthly");
+    let (output, not_cloud) = run_cloud(
+        &sandbox,
+        client,
+        &["cloud", "sync", "--file", local.to_str().unwrap()],
+    );
+    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(not_cloud["error"]["code"], "usage_error");
+
+    let (output, bad_email) = run_cloud(
+        &sandbox,
+        client,
+        &["cloud", "share", "--id", "file1", "--email", "nobody"],
+    );
+    assert_eq!(output.status.code(), Some(4));
+    assert_eq!(bad_email["error"]["code"], "cloud_error");
+
+    let (output, signed_out) = run_cloud(&sandbox, client, &["cloud", "sign-out"]);
+    assert_success(&output, &signed_out);
+    assert_eq!(signed_out["data"]["signed_out"], false);
+}

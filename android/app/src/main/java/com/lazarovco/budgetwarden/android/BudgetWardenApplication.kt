@@ -1,6 +1,7 @@
 package com.lazarovco.budgetwarden.android
 
 import android.app.Application
+import com.lazarovco.budgetwarden.android.data.GoogleDriveController
 import com.lazarovco.budgetwarden.android.data.McpServerController
 import com.lazarovco.budgetwarden.core.FfiException
 import com.lazarovco.budgetwarden.core.initializeCore
@@ -9,6 +10,9 @@ import java.util.UUID
 class BudgetWardenApplication : Application() {
     /** The MCP server lives as long as the app process. */
     internal val mcpServer: McpServerController by lazy { McpServerController(this) }
+
+    /** Google Drive budgets, shared by every screen. */
+    internal val googleDrive: GoogleDriveController by lazy { GoogleDriveController(this) }
 
     override fun onCreate() {
         super.onCreate()

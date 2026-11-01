@@ -30,6 +30,20 @@ struct BWPreferencesView: View {
                 .pickerStyle(.menu)
                 .frame(width: 280)
 
+                if store.googleDrive.isConfigured {
+                    Section {
+                        googleDriveAccount
+                    } header: {
+                        Text("Google Drive")
+                            .padding(.top, 12)
+                    } footer: {
+                        Text("Budgets in Google Drive sync between your devices and the people you share them with.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
                 Section {
                     Toggle("Enable MCP server", isOn: Binding(
                         get: { store.mcpSettings?.isEnabled ?? false },
@@ -61,6 +75,28 @@ struct BWPreferencesView: View {
             }
         }
         .padding()
+    }
+
+    @ViewBuilder
+    private var googleDriveAccount: some View {
+        let drive = store.googleDrive
+        if drive.isSignedIn {
+            LabeledContent("Account") {
+                HStack {
+                    Text(drive.accountEmail ?? "Signed in")
+                    Button("Sign Out", role: .destructive) {
+                        Task { await drive.signOut() }
+                    }
+                }
+            }
+        } else {
+            LabeledContent("Account") {
+                Button(drive.isSigningIn ? "Signing In…" : "Sign In") {
+                    Task { await drive.signIn() }
+                }
+                .disabled(drive.isSigningIn)
+            }
+        }
     }
 
     @ViewBuilder

@@ -10,7 +10,7 @@ name = "budget-warden"
 path = "src/main.rs"
 
 [dependencies]
-bw_core = { path = "../core" }
+bw_core = { path = "../core", features = ["native-http"] }
 chrono = "0.4.45"
 clap = { version = "4.5", features = ["derive"] }
 fs2 = "0.4"

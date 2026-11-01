@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>BWGoogleClientID</key>
+	<string>$(BW_GOOGLE_CLIENT_ID)</string>
+	<key>BWGooglePickerURL</key>
+	<string>$(BW_GOOGLE_PICKER_URL)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -49,6 +53,18 @@
 	<true/>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Budget Warden lets MCP clients on your local network connect to its MCP server when you allow other devices.</string>
+	<key>NSUbiquitousContainers</key>
+	<dict>
+		<key>iCloud.com.lazarovco.BudgetWarden</key>
+		<dict>
+			<key>NSUbiquitousContainerIsDocumentScopePublic</key>
+			<true/>
+			<key>NSUbiquitousContainerName</key>
+			<string>Budget Warden</string>
+			<key>NSUbiquitousContainerSupportedFolderLevels</key>
+			<string>Any</string>
+		</dict>
+	</dict>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

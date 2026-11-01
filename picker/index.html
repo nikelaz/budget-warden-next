@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Add a Budget · Budget Warden</title>
+  <style>
+    :root { color-scheme: light dark; --text: #1d1d1f; --muted: #6e6e73; --bg: #f5f5f7; --accent: #0a66d8; }
+    @media (prefers-color-scheme: dark) { :root { --text: #f5f5f7; --muted: #a1a1a6; --bg: #1c1c1e; --accent: #4c9bff; } }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--text);
+           font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    main { max-width: 32rem; padding: 2rem 1.25rem; text-align: center; }
+    h1 { font-size: 1.5rem; margin: 0 0 .5rem; }
+    p { color: var(--muted); margin: 0 0 1.25rem; }
+    button { font: inherit; padding: .6rem 1.4rem; border: 0; border-radius: 999px; background: var(--accent); color: #fff; cursor: pointer; }
+    button[hidden] { display: none; }
+  </style>
+  <script src="config.js"></script>
+</head>
+<body>
+  <main>
+    <h1 id="title">Add a budget from Google Drive</h1>
+    <p id="message">Choose the budgets someone shared with you. Budget Warden can then open and sync them.</p>
+    <button id="choose" type="button" hidden>Choose Budgets</button>
+  </main>
+  <script>
+  "use strict";
+  // Budget Warden asks for drive.file: it reaches only files it created and
+  // files chosen here. Choosing a file grants the app access to it.
+  const SCOPE = "https://www.googleapis.com/auth/drive.file";
+  const BUDGET_MIME = "application/vnd.lazarovco.budgetwarden.budget";
+  const config = window.BUDGET_WARDEN_PICKER || {};
+  const title = document.getElementById("title");
+  const message = document.getElementById("message");
+  const choose = document.getElementById("choose");
+
+  // Only hand results back to the app itself: a loopback port (desktop apps)
+  // or the reversed Google client ID scheme (macOS and iOS).
+  function isAppReturn(url) {
+    return /^http:\/\/(127\.0\.0\.1|localhost|\[::1\]):\d{1,5}(\/[\w\/.-]*)?$/.test(url)
+      || /^com\.googleusercontent\.apps\.[A-Za-z0-9-]+:\/[\w\/-]*$/.test(url);
+  }
+
+  function show(heading, text) {
+    title.textContent = heading;
+    message.textContent = text;
+  }
+
+  function finish(result) {
+    if (request.returnTo && isAppReturn(request.returnTo)) {
+      const separator = request.returnTo.includes("?") ? "&" : "?";
+      const query = result.ids ? "ids=" + encodeURIComponent(result.ids.join(","))
+        : result.error ? "error=" + encodeURIComponent(result.error) : "cancelled=1";
+      window.location.replace(request.returnTo + separator + query);
+      return;
+    }
+    if (result.ids) {
+      show("All set", "Return to Budget Warden. The budget is listed under Google Drive; pull to refresh or press Refresh if it doesn't appear yet.");
+    } else if (result.error) {
+      show("Something went wrong", result.error);
+    } else {
+      show("Nothing was added", "You can close this window.");
+    }
+    choose.hidden = !!result.ids;
+  }
+
+  // The request arrives in the query string; after Google sign-in it comes
+  // back in the OAuth state, next to the access token in the fragment.
+  const query = new URLSearchParams(window.location.search);
+  const fragment = new URLSearchParams(window.location.hash.slice(1));
+  let request = { file: query.get("file"), returnTo: query.get("return_to"), loginHint: query.get("login_hint") };
+  if (fragment.has("state")) {
+    try { request = JSON.parse(atob(fragment.get("state"))); } catch (_) { /* keep the query request */ }
+  }
+  history.replaceState(null, "", window.location.pathname);
+
+  function signIn() {
+    const pageURL = window.location.origin + window.location.pathname;
+    const parameters = new URLSearchParams({
+      client_id: config.clientId,
+      redirect_uri: pageURL,
+      response_type: "token",
+      scope: SCOPE,
+      include_granted_scopes: "true",
+      state: btoa(JSON.stringify(request)),
+    });
+    if (request.loginHint) parameters.set("login_hint", request.loginHint);
+    window.location.replace("https://accounts.google.com/o/oauth2/v2/auth?" + parameters);
+  }
+
+  function openPicker(token) {
+    const picker = google.picker;
+    const views = [];
+    if (request.file) {
+      views.push(new picker.DocsView(picker.ViewId.DOCS).setFileIds(request.file).setMode(picker.DocsViewMode.LIST));
+    }
+    views.push(new picker.DocsView(picker.ViewId.DOCS).setOwnedByMe(false).setMimeTypes(BUDGET_MIME).setMode(picker.DocsViewMode.LIST));
+    views.push(new picker.DocsView(picker.ViewId.DOCS).setQuery(".budget").setMode(picker.DocsViewMode.LIST));
+    let builder = new picker.PickerBuilder()
+      .setAppId(config.appId)
+      .setDeveloperKey(config.apiKey)
+      .setOAuthToken(token)
+      .setTitle("Choose budgets for Budget Warden")
+      .enableFeature(picker.Feature.MULTISELECT_ENABLED)
+      .setCallback(function (data) {
+        if (data.action === picker.Action.PICKED) {
+          finish({ ids: data.docs.map(function (doc) { return doc.id; }) });
+        } else if (data.action === picker.Action.CANCEL) {
+          finish({});
+        }
+      });
+    views.forEach(function (view) { builder = builder.addView(view); });
+    builder.build().setVisible(true);
+  }
+
+  if (fragment.has("error")) {
+    finish({ error: fragment.get("error") === "access_denied" ? "Google sign-in was cancelled." : fragment.get("error") });
+  } else if (!fragment.has("access_token")) {
+    if (!config.clientId || config.clientId.startsWith("WEB_CLIENT_ID")) {
+      show("Not configured", "This picker page has no Google client configured yet.");
+    } else {
+      signIn();
+    }
+  } else {
+    const token = fragment.get("access_token");
+    const script = document.createElement("script");
+    script.src = "https://apis.google.com/js/api.js";
+    script.onload = function () {
+      gapi.load("picker", function () {
+        choose.hidden = false;
+        choose.onclick = function () { openPicker(token); };
+        openPicker(token);
+      });
+    };
+    script.onerror = function () { finish({ error: "Could not load Google Drive. Check your connection and try again." }); };
+    document.head.appendChild(script);
+  }
+  </script>
+</body>
+</html>

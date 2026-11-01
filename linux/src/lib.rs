@@ -1,3 +1,4 @@
+pub mod cloud;
 pub mod mcp;
 pub mod reporting;
 pub mod store;

@@ -22,6 +22,8 @@ struct CreateBudgetView: View {
     @State private var selectedTemplate: BWBudgetTemplateSelection = .builtIn("basic-monthly")
     private let templateCatalog = BWCore.templateCatalog()
     @State private var recentTemplates: [BWBudgetTemplateSelection] = []
+    @State private var location: BWBudgetLocation = .thisMac
+    @State private var isSaving = false
 
     let onCreateSuccess: () -> Void
 
@@ -74,6 +76,16 @@ struct CreateBudgetView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+
+                if availableLocations.count > 1 {
+                    Picker("Save To", selection: $location) {
+                        ForEach(availableLocations, id: \.self) { location in
+                            Text(location.title).tag(location)
+                        }
+                    }
+                    .padding(.top, 10)
+                    .accessibilityIdentifier("budgetLocationPicker")
+                }
             }
 
             HStack {
@@ -85,10 +97,13 @@ struct CreateBudgetView: View {
                 .keyboardShortcut(.cancelAction)
 
                 Button("Save") {
+                    isSaving = true
                     Task(priority: .userInitiated) {
+                        defer { isSaving = false }
                         if await store.createBudget(
                             title: title,
                             template: selectedTemplate,
+                            location: location,
                             windowStore: windowStore
                         ) {
                             onCreateSuccess()
@@ -96,12 +111,22 @@ struct CreateBudgetView: View {
                     }
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(!isValid)
+                .disabled(!isValid || isSaving)
             }
         }
         .padding(20)
         .task(id: store.recentFiles) {
             recentTemplates = store.recentBudgetTemplates()
+        }
+    }
+
+    private var availableLocations: [BWBudgetLocation] {
+        BWBudgetLocation.allCases.filter { location in
+            switch location {
+            case .thisMac: true
+            case .iCloud: store.iCloud.isAvailable
+            case .googleDrive: store.googleDrive.isSignedIn
+            }
         }
     }
 

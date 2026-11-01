@@ -35,6 +35,10 @@ impl Context {
         self.core_initialized = true;
         Ok(())
     }
+
+    pub(crate) fn config_dir(&self) -> Option<&Path> {
+        self.config_dir.as_deref()
+    }
 }
 
 pub fn command_name(command: &Command) -> String {
@@ -76,6 +80,7 @@ pub fn command_name(command: &Command) -> String {
             }
         ),
         Command::Apply(_) => "apply".into(),
+        Command::Cloud { command } => format!("cloud {}", crate::cloud::command_name(command)),
     }
 }
 
@@ -130,6 +135,7 @@ pub fn dispatch(cli: Cli) -> Result<Outcome, ApiError> {
         Command::Config { command } => run_config(context, command),
         Command::Recent { command } => run_recent(context, command),
         Command::Apply(args) => crate::batch::run_apply(context, args),
+        Command::Cloud { command } => crate::cloud::run(context, command),
     }
 }
 
@@ -170,6 +176,16 @@ fn capabilities() -> Result<Outcome, ApiError> {
         "recent add",
         "recent remove",
         "apply",
+        "cloud status",
+        "cloud sign-in",
+        "cloud sign-out",
+        "cloud list",
+        "cloud add-shared",
+        "cloud sync",
+        "cloud upload",
+        "cloud share",
+        "cloud shares",
+        "cloud unshare",
     ];
     let templates = bw_core::templates::template_catalog()
         .iter()

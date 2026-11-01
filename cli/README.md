@@ -27,7 +27,7 @@ Commands are noninteractive. JSON is the default and each completed command writ
 
 For file-backed operations, metadata includes the budget identity and revision. Lists include that revision so a caller can detect that a later page came from a different snapshot. Money is encoded as a decimal string with scale two; report values such as `left_to_budget` retain their sign. Inputs also accept `--*-minor-units` integer strings, or in JSON an object such as `{"minor_units":"1234"}`. No floating-point amounts are accepted.
 
-Exit status is `0` for success, `1` for an unexpected error, `2` for usage or input errors, `3` for a missing file or entity, `4` for decode/validation/domain failures, `5` for revision conflicts or lock timeouts, and `6` for filesystem or permission failures. Error envelopes use stable codes; core error strings are retained as details and are not parsed to guess subtypes. Write errors report `commit_outcome` as `not_written`, `written`, or `unknown` when relevant.
+Exit status is `0` for success, `1` for an unexpected error, `2` for usage or input errors, `3` for a missing file or entity, `4` for decode/validation/domain failures, `5` for revision conflicts or lock timeouts, `6` for filesystem, permission, or network failures, and `7` when Google Drive needs the user to sign in. Error envelopes use stable codes; core error strings are retained as details and are not parsed to guess subtypes. Write errors report `commit_outcome` as `not_written`, `written`, or `unknown` when relevant.
 
 Argument and JSON commands use the same core APIs. Structured requests reject unknown fields. UUIDs identify mutation targets; names are search filters and never choose an arbitrary entity.
 
@@ -87,13 +87,33 @@ cat changes.json | budget-warden apply --input -
 
 The request schema is [protocol/v1.schema.json](protocol/v1.schema.json), the response envelope is [protocol/v1-envelope.schema.json](protocol/v1-envelope.schema.json), and common response data is described in [protocol/v1-output.schema.json](protocol/v1-output.schema.json). `capabilities` returns these versioned schemas. A failed operation identifies its zero-based index and leaves the budget file unwritten. Dry-run executes the same domain operations and validation; returned IDs and revision are provisional. Conditional writes check the revision before applying and again before commit. If a commit outcome is `unknown`, inspect the budget and revision before retrying a creation request.
 
+## Google Drive
+
+`cloud` commands keep budgets in Google Drive. Configure a Google OAuth "Desktop app" client with `BUDGET_WARDEN_GOOGLE_CLIENT_ID` and `BUDGET_WARDEN_GOOGLE_CLIENT_SECRET` (read at build time and overridable at run time) and the hosted picker page with `BUDGET_WARDEN_GOOGLE_PICKER_URL`, then sign in once in the browser:
+
+```sh
+budget-warden cloud sign-in            # opens the browser; --no-browser prints the URL
+budget-warden cloud list               # your budgets and shared budgets you added
+budget-warden cloud add-shared         # choose budgets shared with you in the browser picker
+budget-warden cloud sync --id FILE_ID  # downloads or syncs; prints the working copy path
+budget-warden transaction create --file WORKING_COPY ...
+budget-warden cloud sync --file WORKING_COPY
+budget-warden cloud upload --file ./october.budget
+budget-warden cloud share --id FILE_ID --email ana@example.com --role writer
+budget-warden cloud shares --id FILE_ID
+budget-warden cloud unshare --id FILE_ID --share-id SHARE_ID
+budget-warden cloud sign-out
+```
+
+Cloud budgets are edited through local working copies under `<config dir>/cloud`; `cloud sync` CRDT-merges a working copy with Google Drive in both directions. Credentials are stored in `<config dir>/google-credentials.json` with owner-only permissions. Exit status `7` (`sign_in_required`) means the user must run `cloud sign-in`; `cloud_not_configured` means the build has no client ID. `cloud list --offline` lists the last known budgets without network access. See [docs/cloud-sync.md](../docs/cloud-sync.md).
+
 ## Files and concurrency
 
 Reads do not create CLI settings and can run with a read-only home directory. The device UUID is created lazily for commands that make CRDT changes, stored in the CLI config directory, and can be overridden with `--device-id UUID`. `--config-dir DIR` isolates CLI identity, currency, and recent-file settings for a harness. Platform defaults are `%APPDATA%/Budget Warden` on Windows, `~/Library/Application Support/Budget Warden` on macOS, and `$XDG_CONFIG_HOME/budget-warden` or `~/.config/budget-warden` on Linux.
 
 CLI writers use a five-second exclusive lock on a persistent sibling named `<budget-path>.budget-warden.lock`; lock files stay in place so concurrent invocations keep locking the same file. The CLI rejects symbolic links as write targets and canonicalizes the containing directory. It stages writes beside the destination, syncs the staged file, atomically replaces or creates the destination, then syncs the directory where supported. New files use no-clobber creation. Moves copy and durably commit the destination before deleting the source; a response identifies when the destination was written but source deletion failed.
 
-Locks coordinate CLI invocations only. GUI apps, external sync tools, network filesystems, and cloud providers do not join this lock protocol. The CLI rereads and merges through the core save API, but a final check/write race remains with uncooperative writers. Avoid editing the same budget simultaneously in a GUI and CLI when strict isolation matters. The CLI only uses locally accessible paths; document providers, cloud authentication, OS bookmarks, and GUI recent-file preferences remain native-client features.
+Locks coordinate CLI invocations only. GUI apps, external sync tools, network filesystems, and cloud providers do not join this lock protocol. The CLI rereads and merges through the core save API, but a final check/write race remains with uncooperative writers. Avoid editing the same budget simultaneously in a GUI and CLI when strict isolation matters. Apart from the `cloud` commands, the CLI only uses locally accessible paths; document providers, iCloud, OS bookmarks, and GUI recent-file preferences remain native-client features.
 
 `recent` commands and `config` operate on CLI-owned settings and do not change native app preferences. `config set --currency USD` stores a display preference only. `budget list --directory PATH` discovers `.budget` files in one directory.
 

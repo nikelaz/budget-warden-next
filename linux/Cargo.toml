@@ -16,10 +16,13 @@ path = "src/main.rs"
 [dependencies]
 adw = { package = "libadwaita", version = "0.9", features = ["v1_5"] }
 gtk = { package = "gtk4", version = "0.11", features = ["v4_10"] }
-bw_core = { path = "../core" }
+bw_core = { path = "../core", features = ["native-http"] }
 chrono = "0.4.45"
 iso_currency = { version = "0.7.1", features = ["iterator"] }
 uuid = { version = "1.23.5", features = ["v4", "serde"] }
+
+[dev-dependencies]
+bw_core = { path = "../core", features = ["native-http", "test-support"] }
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
