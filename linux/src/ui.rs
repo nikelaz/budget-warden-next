@@ -486,6 +486,7 @@ impl AppUi {
     fn welcome(self: &Rc<Self>) -> gtk::Widget {
         let toolbar = adw::ToolbarView::new();
         let header = adw::HeaderBar::new();
+        header.set_show_title(false);
         let menu = gtk::MenuButton::builder()
             .icon_name("open-menu-symbolic")
             .menu_model(&self.app_menu())
@@ -493,55 +494,102 @@ impl AppUi {
             .build();
         header.pack_end(&menu);
         toolbar.add_top_bar(&header);
-        let body = gtk::Box::new(Orientation::Vertical, 24);
-        body.set_margin_top(24);
-        body.set_margin_bottom(32);
-        let status = adw::StatusPage::builder()
-            .icon_name("document-open-symbolic")
-            .title("Budget Warden")
-            .description("Plan your money. Keep budgets in portable files on this computer or in Google Drive.")
-            .build();
-        let actions = gtk::Box::new(Orientation::Horizontal, 12);
-        actions.set_halign(Align::Center);
-        let create = gtk::Button::with_label("New Budget");
-        create.add_css_class("suggested-action");
-        create.add_css_class("pill");
-        create.set_action_name(Some("app.new-budget"));
-        let open = gtk::Button::with_label("Open Budget");
-        open.add_css_class("pill");
-        open.set_action_name(Some("app.open-budget"));
-        actions.append(&create);
-        actions.append(&open);
-        status.set_child(Some(&actions));
-        body.append(&status);
-        if let Some(cloud) = self.cloud_welcome_group() {
-            body.append(&cloud);
+
+        let actions = gtk::Box::new(Orientation::Vertical, 30);
+        actions.set_size_request(370, -1);
+        actions.set_valign(Align::Center);
+        actions.set_margin_start(20);
+        actions.set_margin_end(20);
+        let brand = gtk::Box::new(Orientation::Vertical, 20);
+        let icon = gtk::Image::from_icon_name("com.lazarovco.BudgetWarden");
+        icon.set_pixel_size(130);
+        icon.set_accessible_role(gtk::AccessibleRole::Presentation);
+        brand.append(&icon);
+        let title = gtk::Label::new(Some("Budget Warden"));
+        title.add_css_class("title-1");
+        brand.append(&title);
+        actions.append(&brand);
+        let buttons = gtk::Box::new(Orientation::Vertical, 12);
+        buttons.set_halign(Align::Center);
+        for (label, icon, action, suggested) in [
+            ("Create New Budget", "list-add-symbolic", "app.new-budget", true),
+            ("Open Budget", "folder-open-symbolic", "app.open-budget", false),
+        ] {
+            let button = gtk::Button::builder()
+                .child(
+                    &adw::ButtonContent::builder()
+                        .icon_name(icon)
+                        .label(label)
+                        .build(),
+                )
+                .action_name(action)
+                .build();
+            button.add_css_class("pill");
+            if suggested {
+                button.add_css_class("suggested-action");
+            }
+            buttons.append(&button);
         }
+        actions.append(&buttons);
+
+        let budgets = gtk::Box::new(Orientation::Vertical, 18);
+        budgets.set_margin_top(20);
+        budgets.set_margin_bottom(20);
+        let heading = gtk::Label::new(Some("Budgets"));
+        heading.add_css_class("heading");
+        budgets.append(&heading);
         let recent = self
             .cloud
             .borrow()
             .local_files(&self.state.borrow().recent_files);
         if !recent.is_empty() {
             let group = adw::PreferencesGroup::builder()
-                .title("Recent Budgets")
+                .title("Recently Opened")
                 .build();
             for path in recent {
                 let row = action_row(
                     path.file_stem()
                         .and_then(|s| s.to_str())
                         .unwrap_or("Budget"),
-                    &path.to_string_lossy(),
+                    &path
+                        .parent()
+                        .map(|parent| parent.to_string_lossy().into_owned())
+                        .unwrap_or_default(),
                 );
                 row.set_activatable(true);
+                row.set_subtitle_lines(1);
+                row.add_prefix(&gtk::Image::from_icon_name("x-office-document-symbolic"));
                 row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
                 let ui = self.clone();
                 row.connect_activated(move |_| ui.open_budget(path.clone()));
                 group.add(&row);
             }
-            body.append(&group);
+            budgets.append(&group);
         }
-        let scroll = clamped_scroll(&body, 560);
-        toolbar.set_content(Some(&scroll));
+        if let Some(cloud) = self.cloud_welcome_group() {
+            budgets.append(&cloud);
+        }
+        // The heading alone means there is nothing to list.
+        let list: gtk::Widget = if budgets.first_child() != budgets.last_child() {
+            clamped_scroll(&budgets, 560).upcast()
+        } else {
+            let empty = adw::StatusPage::builder()
+                .icon_name("folder-symbolic")
+                .title("No Recent Budgets")
+                .description("Budgets you open will appear here.")
+                .hexpand(true)
+                .vexpand(true)
+                .build();
+            empty.add_css_class("compact");
+            empty.upcast()
+        };
+        list.set_hexpand(true);
+
+        let body = gtk::Box::new(Orientation::Horizontal, 0);
+        body.append(&actions);
+        body.append(&gtk::Separator::new(Orientation::Vertical));
+        body.append(&list);
+        toolbar.set_content(Some(&body));
         toolbar.upcast()
     }
 
