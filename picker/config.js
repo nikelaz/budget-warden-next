@@ -4,9 +4,9 @@
 window.BUDGET_WARDEN_PICKER = {
   // OAuth client of type "Web application". Add this page's URL to its
   // authorized redirect URIs and its origin to the JavaScript origins.
-  clientId: "WEB_CLIENT_ID.apps.googleusercontent.com",
+  clientId: "448533380151-qrac4gg6cknjcepm3dq6vtcfpve8umlv.apps.googleusercontent.com",
   // API key restricted to the Google Picker API and to this page's origin.
   apiKey: "API_KEY",
   // The Cloud project number (Project settings → Project number).
-  appId: "PROJECT_NUMBER",
+  appId: "448533380151",
 };

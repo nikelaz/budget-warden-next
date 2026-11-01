@@ -339,6 +339,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = BudgetWarden;
+				BW_GOOGLE_CLIENT_ID = 448533380151-o4on0hg4krhpa6bba4oh2es6nr37t2m6.apps.googleusercontent.com;
+				BW_GOOGLE_PICKER_URL = "";
 				CODE_SIGN_ENTITLEMENTS = BudgetWardenIOS/BudgetWardenIOS.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
@@ -353,8 +355,6 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 3.0.0;
-				BW_GOOGLE_CLIENT_ID = "";
-				BW_GOOGLE_PICKER_URL = "";
 				PRODUCT_BUNDLE_IDENTIFIER = com.lazarovco.budgetwarden;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -375,6 +375,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = BudgetWarden;
+				BW_GOOGLE_CLIENT_ID = 448533380151-o4on0hg4krhpa6bba4oh2es6nr37t2m6.apps.googleusercontent.com;
+				BW_GOOGLE_PICKER_URL = "";
 				CODE_SIGN_ENTITLEMENTS = BudgetWardenIOS/BudgetWardenIOS.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
@@ -389,8 +391,6 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 3.0.0;
-				BW_GOOGLE_CLIENT_ID = "";
-				BW_GOOGLE_PICKER_URL = "";
 				PRODUCT_BUNDLE_IDENTIFIER = com.lazarovco.budgetwarden;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
