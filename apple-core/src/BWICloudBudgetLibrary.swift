@@ -240,7 +240,7 @@ public final class BWICloudBudgetLibrary {
             throw BWCloudError(message: "iCloud Drive is not available. Sign in to iCloud and turn on iCloud Drive.")
         }
         return try await Task.detached(priority: .userInitiated) {
-            let url = BWMcpFileHost.uniqueURL(in: documentsURL, fileName: fileName)
+            let url = BWBudgetLibrary.uniqueURL(in: documentsURL, fileName: fileName)
             try BWCoordinatedFile.write(Data(json.utf8), to: url, replacing: false)
             return url
         }.value

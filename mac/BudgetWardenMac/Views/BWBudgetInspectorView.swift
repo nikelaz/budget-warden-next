@@ -58,7 +58,7 @@ struct BWBudgetInspectorView: View {
     private func inspectorContent(category: BWCategory?) -> some View {
         if inspectorPanel == .reporting || category == nil {
             if let budget = store.currentBudget {
-                BWBudgetReportingInspectorContent(budget: budget, currency: store.selectedCurrency)
+                BWBudgetReportingInspectorContent(budget: budget, currency: store.currency)
             }
             else {
                 ContentUnavailableView(

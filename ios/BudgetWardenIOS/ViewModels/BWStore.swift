@@ -87,17 +87,30 @@ final class BWStore {
         }
     }
     var errorMessage: String?
-    var selectedCurrency: BWCurrency {
+    /// The currency for new budgets and for budgets saved before budgets
+    /// stored one.
+    var defaultCurrency: BWCurrency {
         didSet {
-            UserDefaults.standard.set(selectedCurrency.rawValue, forKey: Self.currencyKey)
+            UserDefaults.standard.set(defaultCurrency.rawValue, forKey: Self.currencyKey)
             shareBudgetsWithMcp()
         }
+    }
+
+    /// The currency the open budget's amounts are shown in.
+    var currency: BWCurrency {
+        currentBudget.map(currency(of:)) ?? defaultCurrency
+    }
+
+    func currency(of budget: BWBudget) -> BWCurrency {
+        budget.currency.flatMap(BWCurrency.init(rawValue:)) ?? defaultCurrency
     }
     private(set) var mcpSettings: BWMcpSettings?
     private(set) var mcpStatus: BWMcpServerStatus?
     private(set) var mcpErrorMessage: String?
 
     @ObservationIgnored private var mcpServer: BWMcpServerController?
+    /// The budgets the MCP server and Shortcuts can read and change.
+    @ObservationIgnored let library: BWBudgetLibrary
 
     /// Budgets in Google Drive, including ones shared with the user.
     let googleDrive: BWGoogleDriveController
@@ -110,11 +123,16 @@ final class BWStore {
     init() {
         let cloudChanges = BWBudgetChangeRelay()
         self.cloudChanges = cloudChanges
+        let libraryEvents = BWBudgetLibraryEventRelay()
+        library = BWBudgetLibrary(
+            newBudgetDirectory: { BWStore.mcpBudgetDirectory() },
+            events: { event in libraryEvents.handler?(event) }
+        )
         googleDrive = BWGoogleDriveController { url in cloudChanges.notify(url) }
         iCloud = BWICloudBudgetLibrary { url in cloudChanges.notify(url) }
 
         let defaults = UserDefaults.standard
-        selectedCurrency = defaults.string(forKey: Self.currencyKey)
+        defaultCurrency = defaults.string(forKey: Self.currencyKey)
             .flatMap(BWCurrency.init(rawValue:)) ?? .defaultCurrency
 
         let deviceID: UUID
@@ -137,13 +155,12 @@ final class BWStore {
 
         mcpServer = BWMcpServerController(
             keyPrefix: "BWI_MCP_",
-            newBudgetDirectory: { BWStore.mcpBudgetDirectory() },
-            budgetDidChange: { [weak self] url in self?.reloadBudget(changedAt: url) },
-            budgetWasCreated: { [weak self] url in self?.rememberRecent(url) },
+            library: library,
             showBudget: { [weak self] url in
                 Task { await self?.openBudget(at: url) }
             }
         )
+        libraryEvents.handler = { [weak self] event in self?.handle(event) }
         shareBudgetsWithMcp()
         refreshMcpState()
 
@@ -256,11 +273,24 @@ final class BWStore {
                     : nil
             } ?? URL(fileURLWithPath: path)
         }
-        mcpServer?.updateBudgets(
-            open: openURL,
-            recent: recentFiles,
-            currencyCode: selectedCurrency.rawValue
-        )
+        library.update(open: openURL, recent: recentFiles, defaultCurrencyCode: defaultCurrency.rawValue)
+    }
+
+    /// Follows changes the MCP server or Shortcuts made to budget files.
+    private func handle(_ event: BWBudgetLibraryEvent) {
+        switch event {
+        case .changed(let url):
+            reloadBudget(changedAt: url)
+            googleDrive.sync(budgetAt: url)
+        case .created(let url):
+            rememberRecent(url)
+        case .deleted(let url):
+            if openBudgetURL?.standardizedFileURL == url.standardizedFileURL {
+                closeBudget()
+            }
+            removeRecent(url)
+            BWAppShortcuts.updateAppShortcutParameters()
+        }
     }
 
     /// Re-reads the open budget after the MCP server or cloud sync changed
@@ -369,7 +399,7 @@ final class BWStore {
             throw BWError.validation("Budget title cannot be empty.")
         }
 
-        let budget: BWBudget
+        var budget: BWBudget
         switch template {
         case .builtIn(let id):
             budget = try BWCore.budgetFromTemplateId(templateId: id, title: trimmedTitle)
@@ -382,6 +412,9 @@ final class BWStore {
             }
             let previous = try readBudget(at: url)
             budget = try BWCore.budgetFromPreviousBudget(budget: previous, title: trimmedTitle)
+        }
+        if budget.currency == nil {
+            budget = try BWCore.updateBudgetCurrency(budget: budget, currency: defaultCurrency.rawValue)
         }
 
         do {
@@ -436,6 +469,14 @@ final class BWStore {
         guard currentBudget?.id == budgetID else { return false }
         return mutate { budget in
             try BWCore.updateBudgetTitle(budget: budget, title: title)
+        }
+    }
+
+    /// Changes the budget's currency. Amounts are not converted.
+    func updateBudgetCurrency(_ currency: BWCurrency, for budgetID: UUID) async -> Bool {
+        guard currentBudget?.id == budgetID else { return false }
+        return mutate { budget in
+            try BWCore.updateBudgetCurrency(budget: budget, currency: currency.rawValue)
         }
     }
 
@@ -833,291 +874,4 @@ final class BWStore {
     private func report(_ error: Error) {
         errorMessage = error.localizedDescription
     }
-}
-
-// MARK: - App Intents
-
-extension BWStore: BWIntentDataSource {
-    func intentBudgets() async throws -> [BWShortcutBudget] {
-        var budgets: [BWShortcutBudget] = []
-        var seen = Set<UUID>()
-        if let currentBudget, seen.insert(currentBudget.id).inserted {
-            budgets.append(BWShortcutBudget(id: currentBudget.id, title: currentBudget.title))
-        }
-        for url in recentFiles {
-            let isCurrent = currentSecurityScopedURL?.standardizedFileURL == url.standardizedFileURL
-            let acquired = isCurrent ? false : url.startAccessingSecurityScopedResource()
-            defer { if acquired { url.stopAccessingSecurityScopedResource() } }
-            guard let budget = try? readBudget(at: url), seen.insert(budget.id).inserted else { continue }
-            budgets.append(BWShortcutBudget(id: budget.id, title: budget.title))
-        }
-        return budgets
-    }
-
-    func intentCreateBudget(title: String, templateID: String) async throws -> BWShortcutBudget {
-        let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty else { throw BWIntentStoreError("Budget name cannot be empty.") }
-        var budget = try BWCore.budgetFromTemplateId(templateId: templateID, title: title)
-        let documents = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-        let directory = documents.appendingPathComponent("Budget Warden", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        var url = directory.appendingPathComponent(Self.fileName(for: title))
-        let base = url.deletingPathExtension().lastPathComponent
-        var suffix = 2
-        while FileManager.default.fileExists(atPath: url.path) {
-            url = directory.appendingPathComponent("\(base)-\(suffix).budget")
-            suffix += 1
-        }
-        budget.url = url.path
-        try writeBudget(budget, to: url)
-        currentSecurityScopedURL?.stopAccessingSecurityScopedResource()
-        currentSecurityScopedURL = nil
-        currentBudget = budget
-        rememberRecent(url)
-        errorMessage = nil
-        return BWShortcutBudget(id: budget.id, title: budget.title)
-    }
-
-    func intentRenameBudget(id: UUID, title: String) async throws -> BWShortcutBudget {
-        let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty else { throw BWIntentStoreError("Budget name cannot be empty.") }
-        _ = try await intentSelectBudget(id)
-        let updated = try intentMutate { try BWCore.updateBudgetTitle(budget: $0, title: title) }
-        return BWShortcutBudget(id: updated.id, title: updated.title)
-    }
-
-    func intentDeleteBudget(id: UUID) async throws {
-        _ = try await intentSelectBudget(id)
-        guard let budget = currentBudget, let path = budget.url else {
-            throw BWIntentStoreError("That budget is not a saved file.")
-        }
-        let url = URL(fileURLWithPath: path)
-        let hasCurrentScope = currentSecurityScopedURL?.standardizedFileURL == url.standardizedFileURL
-        let acquiredScope = hasCurrentScope ? false : url.startAccessingSecurityScopedResource()
-        defer { if acquiredScope { url.stopAccessingSecurityScopedResource() } }
-
-        try coordinatedDelete(at: url)
-        if hasCurrentScope { closeBudget() }
-        currentBudget = nil
-        removeRecent(url)
-        errorMessage = nil
-    }
-
-    func intentCategories(budgetID: UUID?, categoryType: BWShortcutCategoryType?) async throws -> [BWShortcutCategory] {
-        let budgets = try await intentBudgets().filter { budgetID == nil || $0.id == budgetID }
-        var categories: [BWShortcutCategory] = []
-        for entry in budgets {
-            let budget = try intentReadBudget(entry.id)
-            categories.append(contentsOf: budget.orderedCategories(categoryType: categoryType?.coreValue).map {
-                BWShortcutCategory(
-                    id: $0.id, budgetID: budget.id, budgetTitle: budget.title, currencyCode: selectedCurrency.rawValue,
-                    title: $0.title, categoryType: BWShortcutCategoryType($0.categoryType),
-                    plannedAmount: $0.amountPlanned.value, actualAmount: $0.amountActual.value
-                )
-            })
-        }
-        return categories
-    }
-
-    func intentCreateCategory(budgetID: UUID, title: String, plannedAmount: Int64, categoryType: BWShortcutCategoryType) async throws -> BWShortcutCategory {
-        let budget = try await intentSelectBudget(budgetID)
-        let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty else { throw BWIntentStoreError("Category name cannot be empty.") }
-        let ordinal = budget.categories.filter { $0.categoryType == categoryType.coreValue }.count
-        let category = BWCategory(
-            id: UUID(), ordinal: Int32(ordinal), title: title,
-            amountPlanned: BWMoneyAmount(value: plannedAmount), amountActual: BWMoneyAmount(value: 0),
-            amountAccumulated: BWMoneyAmount(value: 0), categoryType: categoryType.coreValue, transactions: []
-        )
-        let updated = try intentMutate { try BWCore.createCategory(budget: $0, category: category) }
-        return intentCategory(category, in: updated)
-    }
-
-    func intentUpdateCategory(id: UUID, budgetID: UUID, title: String?, plannedAmount: Int64?, categoryType: BWShortcutCategoryType?) async throws -> BWShortcutCategory {
-        let budget = try await intentSelectBudget(budgetID)
-        guard var category = budget.categories.first(where: { $0.id == id }) else {
-            throw BWIntentStoreError("That category is no longer in this budget.")
-        }
-        if let title {
-            let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !title.isEmpty else { throw BWIntentStoreError("Category name cannot be empty.") }
-            category.title = title
-        }
-        if let plannedAmount { category.amountPlanned = BWMoneyAmount(value: plannedAmount) }
-        if let categoryType {
-            let newType = categoryType.coreValue
-            if newType != category.categoryType {
-                category.ordinal = Int32(budget.categories.filter { $0.categoryType == newType }.count)
-            }
-            category.categoryType = newType
-        }
-        let updated = try intentMutate { try BWCore.updateCategory(budget: $0, category: category) }
-        guard let saved = updated.categories.first(where: { $0.id == id }) else {
-            throw BWIntentStoreError("The category could not be found after saving.")
-        }
-        return intentCategory(saved, in: updated)
-    }
-
-    func intentDeleteCategory(id: UUID, budgetID: UUID) async throws {
-        _ = try await intentSelectBudget(budgetID)
-        _ = try intentMutate { try BWCore.deleteCategory(budget: $0, categoryId: id) }
-    }
-
-    func intentTransactions(budgetID: UUID?, categoryID: UUID?, search: String?, limit: Int) async throws -> [BWShortcutTransaction] {
-        let budgets = try await intentBudgets().filter { budgetID == nil || $0.id == budgetID }
-        var transactions: [BWShortcutTransaction] = []
-        let query = search?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        for entry in budgets {
-            let budget = try intentReadBudget(entry.id)
-            for category in budget.orderedCategories(categoryType: nil) where categoryID == nil || category.id == categoryID {
-                for transaction in category.transactions {
-                    if let query, !query.isEmpty,
-                       !transaction.title.localizedStandardContains(query),
-                       !transaction.description.localizedStandardContains(query) { continue }
-                    transactions.append(BWShortcutTransaction(
-                        id: transaction.id, budgetID: budget.id, budgetTitle: budget.title, currencyCode: selectedCurrency.rawValue,
-                        categoryID: category.id, categoryTitle: category.title, title: transaction.title,
-                        details: transaction.description, date: transaction.date.foundationDate,
-                        amount: transaction.amount.value
-                    ))
-                }
-            }
-        }
-        return Array(transactions.sorted { $0.date > $1.date }.prefix(max(limit, 0)))
-    }
-
-    func intentCreateTransaction(budgetID: UUID, categoryID: UUID, title: String, description: String?, date: Date, amount: Int64) async throws -> BWShortcutTransaction {
-        let budget = try await intentSelectBudget(budgetID)
-        guard budget.categories.contains(where: { $0.id == categoryID }) else {
-            throw BWIntentStoreError("Choose a category from this budget.")
-        }
-        let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty else { throw BWIntentStoreError("Transaction name cannot be empty.") }
-        let transaction = try BWCore.newTransaction(
-            title: title, description: description, date: BWDate(date), amount: BWMoneyAmount(value: amount)
-        )
-        let updated = try intentMutate {
-            try BWCore.createTransaction(budget: $0, categoryId: categoryID, transaction: transaction)
-        }
-        guard let savedCategory = updated.categories.first(where: { $0.id == categoryID }),
-              let savedTransaction = savedCategory.transactions.first(where: { $0.id == transaction.id }) else {
-            throw BWIntentStoreError("The transaction could not be found after saving.")
-        }
-        return intentTransaction(savedTransaction, category: savedCategory, budget: updated)
-    }
-
-    func intentUpdateTransaction(id: UUID, budgetID: UUID, title: String?, description: String?, date: Date?, amount: Int64?, categoryID: UUID?) async throws -> BWShortcutTransaction {
-        let budget = try await intentSelectBudget(budgetID)
-        guard let sourceCategory = budget.categories.first(where: { $0.transactions.contains(where: { $0.id == id }) }),
-              let transaction = sourceCategory.transactions.first(where: { $0.id == id }) else {
-            throw BWIntentStoreError("That transaction is no longer in this budget.")
-        }
-        guard let destination = categoryID.flatMap({ id in budget.categories.first(where: { $0.id == id }) }) ?? (categoryID == nil ? sourceCategory : nil) else {
-            throw BWIntentStoreError("Choose a category from this budget.")
-        }
-        var changed = transaction
-        if let title {
-            let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !title.isEmpty else { throw BWIntentStoreError("Transaction name cannot be empty.") }
-            changed.title = title
-        }
-        if let description { changed.description = description }
-        if let date { changed.date = BWDate(date) }
-        if let amount { changed.amount = BWMoneyAmount(value: amount) }
-        let updated = try intentMutate { starting in
-            var saved = try BWCore.updateTransaction(budget: starting, categoryId: sourceCategory.id, transaction: changed)
-            if destination.id != sourceCategory.id {
-                saved = try BWCore.moveTransaction(budget: saved, originCategoryId: sourceCategory.id, targetCategoryId: destination.id, transactionId: id)
-            }
-            return saved
-        }
-        guard let savedCategory = updated.categories.first(where: { $0.id == destination.id }),
-              let saved = savedCategory.transactions.first(where: { $0.id == id }) else {
-            throw BWIntentStoreError("The transaction could not be found after saving.")
-        }
-        return intentTransaction(saved, category: savedCategory, budget: updated)
-    }
-
-    func intentDeleteTransaction(id: UUID, budgetID: UUID) async throws {
-        let budget = try await intentSelectBudget(budgetID)
-        guard let category = budget.categories.first(where: { $0.transactions.contains(where: { $0.id == id }) }) else {
-            throw BWIntentStoreError("That transaction is no longer in this budget.")
-        }
-        _ = try intentMutate { try BWCore.deleteTransaction(budget: $0, categoryId: category.id, transactionId: id) }
-    }
-
-    func intentReport(budgetID: UUID) async throws -> BWShortcutReport {
-        let budget = try intentReadBudget(budgetID)
-        let summary = try BWCore.buildReportingSummary(budget: budget)
-        return BWShortcutReport(
-            budgetTitle: budget.title, currencyCode: selectedCurrency.rawValue,
-            income: summary.totals.income.value, plannedSpending: summary.totals.plannedSpending.value,
-            actualSpending: summary.totals.actualSpending.value, plannedSavings: summary.totals.plannedSavings.value,
-            leftToBudget: summary.totals.leftToBudget
-        )
-    }
-
-    private func intentReadBudget(_ id: UUID) throws -> BWBudget {
-        if let currentBudget, currentBudget.id == id { return currentBudget }
-        for url in recentFiles {
-            let isCurrent = currentSecurityScopedURL?.standardizedFileURL == url.standardizedFileURL
-            let acquired = isCurrent ? false : url.startAccessingSecurityScopedResource()
-            defer { if acquired { url.stopAccessingSecurityScopedResource() } }
-            if let budget = try? readBudget(at: url), budget.id == id { return budget }
-        }
-        throw BWIntentStoreError("That budget file is no longer available. Open it in Budget Warden first.")
-    }
-
-    private func intentSelectBudget(_ id: UUID) async throws -> BWBudget {
-        if let currentBudget, currentBudget.id == id { return currentBudget }
-        for url in recentFiles {
-            let isCurrent = currentSecurityScopedURL?.standardizedFileURL == url.standardizedFileURL
-            let acquired = isCurrent ? false : url.startAccessingSecurityScopedResource()
-            defer { if acquired { url.stopAccessingSecurityScopedResource() } }
-            guard let candidate = try? readBudget(at: url), candidate.id == id else { continue }
-            guard await openBudget(at: url) else {
-                throw BWIntentStoreError(errorMessage ?? "Could not open that budget file.")
-            }
-            guard let opened = currentBudget else { throw BWIntentStoreError("Could not open that budget file.") }
-            return opened
-        }
-        throw BWIntentStoreError("Open this budget in Budget Warden before using it with Siri or Shortcuts.")
-    }
-
-    private func intentMutate(_ operation: (BWBudget) throws -> BWBudget) throws -> BWBudget {
-        guard let budget = currentBudget, let path = budget.url else {
-            throw BWIntentStoreError("Open a saved budget before changing it.")
-        }
-        var updated = try operation(budget).updateActuals()
-        updated.url = path
-        let url = URL(fileURLWithPath: path)
-        updated = try BWCore.mergeBudgetForSave(budgetInMemory: updated, budgetOnDisk: readBudget(at: url)).updateActuals()
-        try writeBudget(updated, to: url)
-        currentBudget = updated
-        errorMessage = nil
-        rememberRecent(url)
-        return updated
-    }
-
-    private func intentCategory(_ category: BWCategory, in budget: BWBudget) -> BWShortcutCategory {
-        BWShortcutCategory(
-            id: category.id, budgetID: budget.id, budgetTitle: budget.title, currencyCode: selectedCurrency.rawValue, title: category.title,
-            categoryType: BWShortcutCategoryType(category.categoryType),
-            plannedAmount: category.amountPlanned.value, actualAmount: category.amountActual.value
-        )
-    }
-
-    private func intentTransaction(_ transaction: BWTransaction, category: BWCategory, budget: BWBudget) -> BWShortcutTransaction {
-        BWShortcutTransaction(
-            id: transaction.id, budgetID: budget.id, budgetTitle: budget.title, currencyCode: selectedCurrency.rawValue,
-            categoryID: category.id, categoryTitle: category.title, title: transaction.title,
-            details: transaction.description, date: transaction.date.foundationDate, amount: transaction.amount.value
-        )
-    }
-}
-
-private struct BWIntentStoreError: LocalizedError {
-    let message: String
-    init(_ message: String) { self.message = message }
-    var errorDescription: String? { message }
 }

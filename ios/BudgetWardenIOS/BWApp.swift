@@ -19,7 +19,7 @@ struct BWApp: App {
     init() {
         let store = BWStore()
         _store = State(initialValue: store)
-        BWIntentRegistration.register(store)
+        BWIntentRegistration.register(library: store.library, googleDrive: store.googleDrive, iCloud: store.iCloud)
         BWAppShortcuts.updateAppShortcutParameters()
     }
 

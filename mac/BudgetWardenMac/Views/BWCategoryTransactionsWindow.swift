@@ -214,7 +214,7 @@ struct BWCategoryTransactionsWindow: View {
                     }
 
                     TableColumn("Amount", value: \.amount) { transaction in
-                        Text(transaction.amount.formattedMoneyAmount(currency: store.selectedCurrency))
+                        Text(transaction.amount.formattedMoneyAmount(currency: store.currency))
                             .monospacedDigit()
                     }
                     .width(120)
@@ -274,7 +274,7 @@ struct BWCategoryTransactionsWindow: View {
             transaction.title,
             transaction.description,
             transaction.date.foundationDate.formatted(date: .abbreviated, time: .omitted),
-            transaction.amount.formattedMoneyAmount(currency: store.selectedCurrency),
+            transaction.amount.formattedMoneyAmount(currency: store.currency),
             transaction.amount.moneyInputText
         ].joined(separator: " ")
 
@@ -370,7 +370,7 @@ private struct BWCreateCategoryTransactionView: View {
                             .textFieldStyle(.roundedBorder)
                             .foregroundStyle(parsedAmount == nil && !amount.isEmpty ? .red : .primary)
 
-                        Text(store.selectedCurrency.symbol)
+                        Text(store.currency.symbol)
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }

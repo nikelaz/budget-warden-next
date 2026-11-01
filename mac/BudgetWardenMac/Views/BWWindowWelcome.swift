@@ -71,9 +71,9 @@ struct BWWindowWelcome: Scene {
             .sheet(isPresented: $windowStore.isPreferencesDialogOpen) {
                 BWPreferencesView(
                     store: store,
-                    selectedCurrency: $store.selectedCurrency,
                     onClose: windowStore.closePreferencesDialog
                 )
+                .environmentObject(windowStore)
                 .frame(minWidth: 420)
             }
             .focusedSceneValue(\.windowStore, windowStore)

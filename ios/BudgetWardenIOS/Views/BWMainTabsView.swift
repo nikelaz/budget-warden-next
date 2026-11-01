@@ -38,7 +38,7 @@ struct BWMainTabsView: View {
                 BWBudgetDetailView(
                     store: store,
                     budget: budget,
-                    currency: store.selectedCurrency,
+                    currency: store.currency,
                     editor: $categoryEditor,
                     categoryPendingEdit: $categoryPendingEdit,
                     navigationTransitionNamespace: editorNavigationNamespace,
@@ -51,7 +51,7 @@ struct BWMainTabsView: View {
 
                 BWReportingView(
                     budget: budget,
-                    currency: store.selectedCurrency
+                    currency: store.currency
                 )
                     .tabItem {
                         Label("Reporting", systemImage: "chart.pie")
@@ -61,7 +61,7 @@ struct BWMainTabsView: View {
                 BWTransactionsView(
                     store: store,
                     budget: budget,
-                    currency: store.selectedCurrency,
+                    currency: store.currency,
                     searchText: $transactionSearchText,
                     transactionPendingEdit: $transactionPendingEdit,
                     navigationTransitionNamespace: editorNavigationNamespace,
@@ -89,7 +89,7 @@ struct BWMainTabsView: View {
                 BWTransactionDetailsView(
                     editor: editor,
                     categories: orderedCategories(in: budget),
-                    currency: store.selectedCurrency,
+                    currency: store.currency,
                     saveTransaction: saveTransaction
                 )
             }
@@ -245,7 +245,7 @@ struct BWMainTabsView: View {
     private func categoryEditor(for category: BWCategory) -> some View {
         BWCategoryDetailsView(
             editor: .edit(category),
-            currency: store.selectedCurrency,
+            currency: store.currency,
             saveCategory: saveCategory,
             deleteCategory: {
                 await store.deleteCategory(category, in: budgetID)
@@ -260,7 +260,7 @@ struct BWMainTabsView: View {
         BWTransactionDetailsView(
             editor: .edit(item),
             categories: orderedCategories(in: budget),
-            currency: store.selectedCurrency,
+            currency: store.currency,
             saveTransaction: saveTransaction,
             deleteTransaction: {
                 await store.deleteTransaction(
