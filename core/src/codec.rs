@@ -67,6 +67,7 @@ mod tests {
             revision_id: Uuid::new_v4(),
             schema_version: 2,
             title: "Test Budget".to_string(),
+            currency: None,
             categories: vec![
                 BWCategory {
                     id: Uuid::new_v4(),
@@ -114,6 +115,62 @@ mod tests {
     }
 
     #[test]
+    fn budgets_without_a_currency_keep_their_json_shape() {
+        let budget = BWBudget::new("Old".to_string());
+        let json = encode_budget(&budget).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!(value.get("currency").is_none());
+        assert_eq!(value["schema_version"], serde_json::json!(CURRENT_SCHEMA_VERSION));
+
+        let decoded = decode_budget(&json, String::new()).unwrap();
+        assert!(decoded.currency.is_none());
+    }
+
+    #[test]
+    fn budget_currency_round_trips() {
+        let _ = crate::app_state::initialize_core(Uuid::from_u128(0xC0DE));
+        let budget = crate::domain::update_budget_currency(
+            BWBudget::new("Trip".to_string()),
+            "EUR".to_string(),
+        )
+        .unwrap();
+        let json = encode_budget(&budget).unwrap();
+        let decoded = decode_budget(&json, String::new()).unwrap();
+        assert_eq!(decoded.currency.as_deref(), Some("EUR"));
+        assert_eq!(
+            decoded.changes.budget[0].payload.as_ref().and_then(|p| p.currency.as_deref()),
+            Some("EUR"),
+        );
+    }
+
+    #[test]
+    fn budget_changes_without_a_currency_still_decode() {
+        // A budget change as written before budgets stored a currency.
+        let json = serde_json::json!({
+            "id": Uuid::new_v4(),
+            "revision": 3,
+            "revision_id": Uuid::new_v4(),
+            "schema_version": 2,
+            "title": "Old",
+            "categories": [],
+            "changes": {
+                "budget": [{
+                    "change_id": Uuid::new_v4(),
+                    "timestamp": { "physical_ms": 1, "logical": 0, "device_id": Uuid::new_v4() },
+                    "payload": { "title": "Old" }
+                }],
+                "categories": {},
+                "transactions": {},
+                "category_tombstones": {},
+                "transaction_tombstones": {}
+            }
+        });
+        let decoded = decode_budget(&json.to_string(), String::new()).unwrap();
+        assert!(decoded.currency.is_none());
+        assert!(decoded.changes.budget[0].payload.as_ref().unwrap().currency.is_none());
+    }
+
+    #[test]
     fn test_decode_budget_rejects_newer_schema_before_decoding_budget() {
         let json = serde_json::json!({
             "schema_version": CURRENT_SCHEMA_VERSION + 1,
@@ -153,6 +210,7 @@ mod tests {
             timestamp: future_timestamp.clone(),
             payload: Some(BudgetChangePayload {
                 title: Some("Original".to_string()),
+                currency: None,
             }),
         }];
         let json = encode_budget(&budget).unwrap();

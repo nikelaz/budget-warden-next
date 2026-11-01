@@ -171,7 +171,8 @@ fn tools_manage_a_budget_end_to_end() {
     assert_eq!(host.shown.lock().unwrap().as_slice(), std::slice::from_ref(&budget));
 
     let listed = call(&service, "list_budgets", json!({}));
-    assert_eq!(listed["currency"], json!("EUR"));
+    assert_eq!(listed["default_currency"], json!("EUR"));
+    assert_eq!(listed["budgets"][0]["currency"], json!("EUR"));
     assert_eq!(listed["budgets"][0]["title"], json!("March 2026"));
 
     let salary = call(&service, "create_category", json!({ "budget": budget, "title": "Salary", "type": "income", "planned_amount": "3000" }));
@@ -215,6 +216,12 @@ fn tools_manage_a_budget_end_to_end() {
 
     let renamed = call(&service, "rename_budget", json!({ "budget": created["id"], "title": "March" }));
     assert_eq!(renamed["title"], json!("March"));
+    assert_eq!(renamed["currency"], json!("EUR"));
+
+    let priced = call(&service, "set_budget_currency", json!({ "budget": budget, "currency": "jpy" }));
+    assert_eq!(priced["currency"], json!("JPY"));
+    assert_eq!(call(&service, "get_report", json!({ "budget": budget }))["currency"], json!("JPY"));
+    assert!(call_error(&service, "set_budget_currency", json!({ "budget": budget, "currency": "euro" })).contains("ISO 4217"));
 
     call(&service, "delete_transaction", json!({ "budget": budget, "transaction_id": moved["id"] }));
     let deleted = call(&service, "delete_category", json!({ "budget": budget, "category_id": salary["id"] }));

@@ -65,7 +65,8 @@ pub trait BWMcpHost: Send + Sync {
     /// Asks the app to open the budget at `location` in its UI.
     fn show_budget(&self, location: String) -> Result<(), String>;
 
-    /// ISO 4217 code of the currency the app displays amounts in.
+    /// ISO 4217 code of the app's default currency: new budgets get it, and
+    /// budgets saved before budgets stored a currency are shown in it.
     fn currency_code(&self) -> String;
 }
 

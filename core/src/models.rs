@@ -30,6 +30,12 @@ pub struct BWBudget {
     pub revision_id: Uuid,
     pub schema_version: i32,
     pub title: String,
+    /// ISO 4217 code of the currency the budget's amounts are in, such as
+    /// `EUR`. Budgets saved before budgets stored a currency have none; apps
+    /// show those in their default currency. Omitted from the file when
+    /// unset, so such budgets keep their original JSON.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub currency: Option<String>,
     pub categories: Vec<BWCategory>,
     pub changes: CRDTChanges, 
 
@@ -49,6 +55,7 @@ impl BWBudget {
             revision_id: Uuid::new_v4(),
             schema_version: CURRENT_SCHEMA_VERSION,
             title,
+            currency: None,
             categories: vec![],
             changes: CRDTChanges {
                 budget: vec![],

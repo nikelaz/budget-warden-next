@@ -61,6 +61,7 @@ impl BudgetService {
             "create_budget" => self.create_budget(arguments),
             "get_budget" => self.get_budget(arguments),
             "rename_budget" => self.rename_budget(arguments),
+            "set_budget_currency" => self.set_budget_currency(arguments),
             "open_budget_in_app" => self.open_budget_in_app(arguments),
             "get_report" => self.get_report(arguments),
             "list_categories" => self.list_categories(arguments),
@@ -158,6 +159,18 @@ impl BudgetService {
         })
     }
 
+    /// The budget's currency, or the app's default for budgets saved before
+    /// budgets stored one.
+    fn currency(&self, budget: &BWBudget) -> String {
+        budget.currency.clone().unwrap_or_else(|| self.host.currency_code())
+    }
+
+    fn budget_json(&self, location: &str, budget: &BWBudget, include_transactions: bool) -> Value {
+        let mut value = budget_json(location, budget, self.is_open(location), include_transactions);
+        value["currency"] = json!(self.currency(budget));
+        value
+    }
+
     fn is_open(&self, location: &str) -> bool {
         self.host
             .list_budgets()
@@ -177,6 +190,7 @@ impl BudgetService {
                     "budget": entry.location,
                     "id": budget.id.to_string(),
                     "title": budget.title,
+                    "currency": self.currency(&budget),
                     "is_open": entry.is_open,
                     "category_count": budget.categories.len(),
                     "transaction_count": transaction_count(&budget),
@@ -188,7 +202,7 @@ impl BudgetService {
                 }),
             })
             .collect();
-        Ok(json!({ "currency": self.host.currency_code(), "budgets": budgets }))
+        Ok(json!({ "default_currency": self.host.currency_code(), "budgets": budgets }))
     }
 
     fn create_budget(&self, arguments: Arguments) -> ToolResult {
@@ -209,6 +223,15 @@ impl BudgetService {
                 title.clone(),
             )?
         };
+        let currency = match arguments.optional_str("currency")? {
+            Some(currency) => Some(currency.to_string()),
+            None if budget.currency.is_none() => Some(self.host.currency_code()),
+            None => None,
+        };
+        let budget = match currency {
+            Some(currency) => domain::update_budget_currency(budget, currency)?,
+            None => budget,
+        };
 
         let location = self
             .host
@@ -217,19 +240,13 @@ impl BudgetService {
             self.host.show_budget(location.clone())?;
         }
         let budget = self.read(&location)?;
-        Ok(budget_json(&location, &budget, self.is_open(&location), false))
+        Ok(self.budget_json(&location, &budget, false))
     }
 
     fn get_budget(&self, arguments: Arguments) -> ToolResult {
         let loaded = self.resolve(arguments)?;
         let include_transactions = arguments.optional_bool("include_transactions")?.unwrap_or(false);
-        let mut value = budget_json(
-            &loaded.location,
-            &loaded.budget,
-            self.is_open(&loaded.location),
-            include_transactions,
-        );
-        value["currency"] = json!(self.host.currency_code());
+        let mut value = self.budget_json(&loaded.location, &loaded.budget, include_transactions);
         value["totals"] = report_json(&loaded.budget)?["totals"].take();
         Ok(value)
     }
@@ -237,20 +254,28 @@ impl BudgetService {
     fn rename_budget(&self, arguments: Arguments) -> ToolResult {
         let title = arguments.required_str("title")?.trim().to_string();
         let loaded = self.mutate(arguments, |budget| domain::update_budget_title(budget, title))?;
-        Ok(budget_json(&loaded.location, &loaded.budget, self.is_open(&loaded.location), false))
+        Ok(self.budget_json(&loaded.location, &loaded.budget, false))
+    }
+
+    fn set_budget_currency(&self, arguments: Arguments) -> ToolResult {
+        let currency = arguments.required_str("currency")?.to_string();
+        let loaded = self.mutate(arguments, |budget| domain::update_budget_currency(budget, currency))?;
+        Ok(self.budget_json(&loaded.location, &loaded.budget, false))
     }
 
     fn open_budget_in_app(&self, arguments: Arguments) -> ToolResult {
         let loaded = self.resolve(arguments)?;
         self.host.show_budget(loaded.location.clone())?;
-        Ok(budget_json(&loaded.location, &loaded.budget, true, false))
+        let mut value = budget_json(&loaded.location, &loaded.budget, true, false);
+        value["currency"] = json!(self.currency(&loaded.budget));
+        Ok(value)
     }
 
     fn get_report(&self, arguments: Arguments) -> ToolResult {
         let loaded = self.resolve(arguments)?;
         let mut report = report_json(&loaded.budget)?;
         report["budget"] = json!(loaded.location);
-        report["currency"] = json!(self.host.currency_code());
+        report["currency"] = json!(self.currency(&loaded.budget));
         Ok(report)
     }
 
@@ -880,7 +905,7 @@ pub(crate) fn definitions() -> Vec<Value> {
         tool(
             "list_budgets",
             "List budgets",
-            "Lists the budgets Budget Warden can reach (the open budget and recent budgets), with the display currency.",
+            "Lists the budgets Budget Warden can reach (the open budget and recent budgets), each with its currency, and the app's default currency for new budgets.",
             json!({}),
             &[],
             true,
@@ -903,6 +928,7 @@ pub(crate) fn definitions() -> Vec<Value> {
                 "title": { "type": "string", "description": "Budget title, also used for the file name." },
                 "template_id": { "type": "string", "description": "Template id from list_templates." },
                 "copy_from": budget_property(),
+                "currency": { "type": "string", "description": "ISO 4217 code such as EUR. Defaults to the copied budget's currency or the app's default currency." },
                 "open_in_app": { "type": "boolean", "description": "Open the new budget in the app. Defaults to false." },
             }),
             &["title"],
@@ -927,6 +953,18 @@ pub(crate) fn definitions() -> Vec<Value> {
             "Changes a budget's title.",
             json!({ "budget": budget_property(), "title": { "type": "string" } }),
             &["budget", "title"],
+            false,
+            false,
+        ),
+        tool(
+            "set_budget_currency",
+            "Set budget currency",
+            "Changes the currency a budget's amounts are shown in. Amounts are not converted.",
+            json!({
+                "budget": budget_property(),
+                "currency": { "type": "string", "description": "ISO 4217 code such as EUR or USD." },
+            }),
+            &["budget", "currency"],
             false,
             false,
         ),

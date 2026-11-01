@@ -439,6 +439,7 @@ pub fn budget_from_previous_budget(budget: BWBudget, title: String) -> Result<BW
     validate_budget(&budget)?;
 
     let categories = budget.categories;
+    let currency = budget.currency;
     let mut new_budget = BWBudget::new(title);
     for category in categories {
         let template_category = BWCategory {
@@ -452,6 +453,9 @@ pub fn budget_from_previous_budget(budget: BWBudget, title: String) -> Result<BW
             transactions: vec![],
         };
         new_budget = add_category(new_budget, template_category)?;
+    }
+    if let Some(currency) = currency {
+        new_budget = crate::domain::update_budget_currency(new_budget, currency)?;
     }
 
     validate_budget(&new_budget)?;
@@ -598,5 +602,21 @@ mod tests {
         assert!(budget.categories[0].transactions.is_empty());
         assert!(budget.changes.transactions.is_empty());
         assert_first_category_can_be_updated(budget);
+    }
+
+    #[test]
+    fn previous_budget_currency_is_copied() {
+        initialize_test_core();
+        let previous = crate::domain::update_budget_currency(
+            BWBudget::new("October".to_string()),
+            "EUR".to_string(),
+        )
+        .unwrap();
+
+        let budget = budget_from_previous_budget(previous, "November".to_string()).unwrap();
+        assert_eq!(budget.currency.as_deref(), Some("EUR"));
+
+        let without = budget_from_previous_budget(BWBudget::new("Old".to_string()), "New".to_string()).unwrap();
+        assert!(without.currency.is_none());
     }
 }
