@@ -257,10 +257,18 @@ impl CloudController {
         });
     }
 
-    pub fn open(&self, id: String) {
+    /// Opens a cloud budget. A working copy already on this device is
+    /// returned at once and synced in the background; otherwise the budget
+    /// is downloaded and arrives as [`CloudEvent::Opened`].
+    pub fn open(&self, id: String) -> Option<PathBuf> {
+        if let Some(path) = self.drive.cached_working_copy(id.clone()) {
+            self.sync(id);
+            return Some(PathBuf::from(path));
+        }
         self.spawn(move |drive| {
             CloudEvent::Opened(drive.open_budget(id).map_err(cloud_error_message))
         });
+        None
     }
 
     /// Syncs a budget. Requests that arrive while it is already syncing run

@@ -263,9 +263,18 @@ fn concurrent_edits_on_two_devices_converge() {
         .create_budget("Shared".into(), new_budget_json("Shared"))
         .unwrap();
     let laptop_path = created.local_path.unwrap();
+    assert_eq!(
+        laptop.drive.cached_working_copy(created.id.clone()),
+        Some(laptop_path.clone())
+    );
+    assert_eq!(phone.drive.cached_working_copy(created.id.clone()), None);
     let opened = phone.drive.open_budget(created.id.clone()).unwrap();
     assert!(opened.local_changed && !opened.remote_changed);
     let phone_path = opened.local_path;
+    assert_eq!(
+        phone.drive.cached_working_copy(created.id.clone()),
+        Some(phone_path.clone())
+    );
 
     app_edit(&laptop_path, |budget| {
         add_transaction(budget, "Coffee", 450)
