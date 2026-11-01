@@ -8,6 +8,7 @@ import com.lazarovco.budgetwarden.core.BWMoneyAmount
 import com.lazarovco.budgetwarden.core.BWTransaction
 import com.lazarovco.budgetwarden.core.formatMoneyInput
 import com.lazarovco.budgetwarden.core.parseMoneyAmount
+import com.lazarovco.budgetwarden.core.updateBudgetCurrency
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -27,6 +28,20 @@ val CategoryType.rawValue: Int
 
 val CategoryType.title: String
     get() = this.title()
+
+/** The budget's currency, or [defaultCurrency] for budgets saved before budgets stored one. */
+fun Budget.currencyCode(defaultCurrency: String): String =
+    currency?.takeIf { code -> runCatching { Currency.getInstance(code) }.isSuccess } ?: defaultCurrency
+
+/** Gives a new budget [defaultCurrency] unless it kept the currency of the budget it was copied from. */
+fun Budget.withDefaultCurrency(defaultCurrency: String): Budget =
+    if (currency == null) updateBudgetCurrency(this, defaultCurrency) else this
+
+/** The device's currency, used until the user chooses a default currency. */
+fun systemCurrencyCode(): String =
+    runCatching { Currency.getInstance(Locale.getDefault()).currencyCode }.getOrDefault("USD")
+
+const val DEFAULT_CURRENCY_PREFERENCE = "currency_code"
 
 data class TemplateSelection(val templateId: String?) {
     companion object {

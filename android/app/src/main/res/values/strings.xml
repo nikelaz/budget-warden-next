@@ -23,6 +23,9 @@
     <string name="budget_title">Budget Title</string>
     <string name="name">Name</string>
     <string name="currency">Currency</string>
+    <string name="budget_currency">Budget currency</string>
+    <string name="default_currency">Default currency</string>
+    <string name="currency_explanation">Each budget keeps its own currency. New budgets, and budgets from earlier versions of Budget Warden, use the default currency.</string>
     <string name="budget_name">Name</string>
     <string name="template">Template</string>
     <string name="basic_budget">Monthly Budget</string>
