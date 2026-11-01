@@ -54,7 +54,7 @@ Relative paths resolve against the CLI process's working directory. This include
 
 ## Configuration directory defaults
 
-The CLI stores its own device UUID, currency display preference, and recent-file list in `config.json`. These settings are separate from the native app settings. The default directory depends on the host OS:
+The CLI stores its own device UUID, default currency, and recent-file list in `config.json`. These settings are separate from the native app settings. The default directory depends on the host OS:
 
 | OS | Default config directory |
 | --- | --- |
@@ -93,7 +93,7 @@ Do not assume the interactive user's home directory is the agent process's home.
 - On `revision_conflict`, reread the budget and reassess the requested changes against its current state. Do not blindly replace the expected revision token and retry.
 - On `lock_timeout`, retry with a bounded delay if the request is still appropriate, preserving its expected revision token.
 - On `error.commit_outcome: "written"` or `"unknown"`, or missing/unparseable output after a mutation, inspect the budget and revision before retrying. Creation requests can otherwise create duplicates. For `"not_written"`, address the reported error before retrying; absence of a commit outcome does not prove that no write occurred.
-- Money is exact: use decimal strings with at most two fractional digits or integer minor-unit strings. Never send JSON floating-point numbers. Currency configuration changes display only; it does not convert stored amounts.
+- Money is exact: use decimal strings with at most two fractional digits or integer minor-unit strings. Never send JSON floating-point numbers. Each budget stores its currency (`budget currency --file PATH --currency EUR`, or `set_budget_currency` in apply); changing it never converts stored amounts.
 - Pass IDs for mutation targets. Names are filters and do not select a unique item automatically.
 
 The version 1 batch request and response schemas are returned by `capabilities` and are present in `cli/protocol/` in the source distribution.
@@ -112,7 +112,7 @@ When the user asks for a new budget, ask for their monthly take-home income and 
 
 When the user's income is below the template's sample income, ask for the two high-impact amounts that change the plan most: monthly rent or mortgage, and required monthly debt payments. Allow the user to leave either blank or say it does not apply. First scale template category plans proportionally to the stated income, then replace the matching housing and debt plans with amounts the user provided. If the plan is over income, reduce savings to absorb the difference first; if savings reach zero and it is still over, scale the other flexible expense plans proportionally. Aim to balance the plan, but if the stated housing and debt obligations alone exceed income, explain the shortfall and ask how they want to proceed instead of silently inventing lower obligations. When income is above the template sample, keep the template's expense plans as the baseline and direct more of the increase to savings; tell the user how the extra income was allocated.
 
-Apply the user's currency as the CLI display preference only when they ask for it or agree to it; it is separate from the budget file and is shared by the CLI configuration. After creating the file, validate it and report the categories grouped by income, expenses, savings, and debt, with their planned amounts in a readable table. State the resulting totals and whether planned outflow balances with income. Mention once, after a successful initial creation, that they can view the `.budget` file in Budget Warden's graphical app at [budgetwarden.com](https://budgetwarden.com). Do not repeat this note after later edits unless they ask about the app.
+Create the budget with `budget create --currency CODE` in the user's currency. `config set --currency` only sets the CLI default for new budgets and for budgets from earlier versions that have no currency; change it only when the user asks. After creating the file, validate it and report the categories grouped by income, expenses, savings, and debt, with their planned amounts in a readable table. State the resulting totals and whether planned outflow balances with income. Mention once, after a successful initial creation, that they can view the `.budget` file in Budget Warden's graphical app at [budgetwarden.com](https://budgetwarden.com). Do not repeat this note after later edits unless they ask about the app.
 
 When opening or inspecting an existing budget, include its categories and planned amounts in the response when relevant to the user's request. If the user asks broadly to open or review the budget, provide the grouped category summary rather than only confirming that the file loaded.
 
