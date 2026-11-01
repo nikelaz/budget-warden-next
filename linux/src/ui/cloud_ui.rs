@@ -408,6 +408,7 @@ impl AppUi {
         let dialog = adw::Dialog::builder()
             .title(format!("Share “{}”", budget.title))
             .content_width(480)
+            .content_height(680)
             .build();
         let toolbar = adw::ToolbarView::new();
         toolbar.add_top_bar(&adw::HeaderBar::new());
