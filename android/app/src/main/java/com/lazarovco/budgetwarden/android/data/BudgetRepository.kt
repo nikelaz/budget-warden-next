@@ -14,6 +14,9 @@ import com.lazarovco.budgetwarden.core.decodeBudget
 import com.lazarovco.budgetwarden.core.encodeBudget
 import com.lazarovco.budgetwarden.core.mergeBudgetForSave
 import com.lazarovco.budgetwarden.android.domain.Budget
+import com.lazarovco.budgetwarden.android.domain.DEFAULT_CURRENCY_PREFERENCE
+import com.lazarovco.budgetwarden.android.domain.systemCurrencyCode
+import com.lazarovco.budgetwarden.android.domain.withDefaultCurrency
 import com.lazarovco.budgetwarden.android.domain.TemplateSelection
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -92,6 +95,8 @@ internal class BudgetRepository(
                 budgetFromTemplateId(templateId, trimmedTitle)
             } ?: previousBudget?.let { budgetFromPreviousBudget(it, trimmedTitle) }
                 ?: budgetFromTemplateId("basic-monthly", trimmedTitle)
+            ).withDefaultCurrency(
+                preferences.getString(DEFAULT_CURRENCY_PREFERENCE, null) ?: systemCurrencyCode(),
             ).copy(url = uri.toString())
 
         writeBudget(created)

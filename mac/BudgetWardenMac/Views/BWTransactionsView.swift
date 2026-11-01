@@ -279,7 +279,7 @@ struct BWTransactionsView: View {
                     }
 
                     TableColumn("Amount", value: \.amount) { item in
-                        Text(item.amount.formattedMoneyAmount(currency: store.selectedCurrency))
+                        Text(item.amount.formattedMoneyAmount(currency: store.currency))
                             .monospacedDigit()
                     }
                     .width(120)
@@ -341,7 +341,7 @@ struct BWTransactionsView: View {
             item.title,
             item.description,
             item.date.formatted(date: .abbreviated, time: .omitted),
-            item.amount.formattedMoneyAmount(currency: store.selectedCurrency),
+            item.amount.formattedMoneyAmount(currency: store.currency),
             item.amount.moneyInputText
         ].joined(separator: " ")
 

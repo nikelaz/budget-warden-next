@@ -22,7 +22,7 @@ public sealed partial class AppViewModel
     public partial BwBudget? CurrentBudget { get; private set; }
 
     [ObservableProperty]
-    public partial string SelectedCurrencyCode { get; set; }
+    public partial string DefaultCurrencyCode { get; set; }
 
     public bool HasBudget => CurrentBudget is not null;
 
@@ -30,12 +30,12 @@ public sealed partial class AppViewModel
 
     private void InitializePersistence()
     {
-        SelectedCurrencyCode = ReadSetting(CurrencyKey) ?? "USD";
+        DefaultCurrencyCode = ReadSetting(CurrencyKey) ?? "USD";
         InitializeCore();
         LoadRecentFiles();
     }
 
-    partial void OnSelectedCurrencyCodeChanged(string value)
+    partial void OnDefaultCurrencyCodeChanged(string value)
     {
         _settings.Values[CurrencyKey] = value;
         ShareBudgetsWithMcp();
@@ -84,6 +84,7 @@ public sealed partial class AppViewModel
             : CoreApi.BudgetFromTemplateId(
                 template.TemplateId ?? throw new InvalidOperationException("Choose a budget template."),
                 trimmedTitle);
+        budget = WithDefaultCurrency(budget);
 
         string normalizedPath = ValidateBudgetPath(path);
         budget = budget with { Url = normalizedPath };
@@ -246,6 +247,19 @@ public sealed partial class AppViewModel
     /// by the MCP server, so neither can overwrite a save it never read.
     /// </summary>
     internal static SemaphoreSlim BudgetSaveGate { get; } = new(1, 1);
+
+    /// <summary>Changes the open budget's currency. Amounts are not converted.</summary>
+    public Task SetBudgetCurrencyAsync(CurrencyOption currency) =>
+        CurrentBudget?.Currency == currency.Code
+            ? Task.CompletedTask
+            : MutateAsync(budget => CoreApi.UpdateBudgetCurrency(budget, currency.Code));
+
+    /// <summary>
+    /// Gives a new budget the default currency unless it kept the currency of
+    /// the budget it was copied from.
+    /// </summary>
+    private BwBudget WithDefaultCurrency(BwBudget budget) =>
+        budget.Currency is null ? CoreApi.UpdateBudgetCurrency(budget, DefaultCurrencyCode) : budget;
 
     private async Task MutateAsync(Func<BwBudget, BwBudget> mutation)
     {

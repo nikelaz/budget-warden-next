@@ -46,7 +46,7 @@ fn monthly_budget_transaction_reporting_and_reopen_flow() {
     let home = TestHome::new();
     let path = home.budget_path();
     let mut app = AppState::new().unwrap();
-    app.set_currency("EUR".to_string()).unwrap();
+    app.set_default_currency("EUR".to_string()).unwrap();
     app.create_budget("  Household  ", &BudgetTemplate::BasicMonthly, &path)
         .unwrap();
 
@@ -164,7 +164,10 @@ fn monthly_budget_transaction_reporting_and_reopen_flow() {
 
     let mut reopened = AppState::new().unwrap();
     reopened.open_budget(&path).unwrap();
-    assert_eq!(reopened.currency, "EUR");
+    assert_eq!(reopened.default_currency, "EUR");
+    // The budget stores the currency it was created with.
+    assert_eq!(reopened.currency(), "EUR");
+    assert_eq!(reopened.budget.as_ref().unwrap().currency.as_deref(), Some("EUR"));
     assert_eq!(reopened.budget.as_ref().unwrap().title, "Household");
     let (category_id, persisted_rent) = reopened
         .transaction(

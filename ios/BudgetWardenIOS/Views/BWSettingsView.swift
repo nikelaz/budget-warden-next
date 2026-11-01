@@ -16,7 +16,7 @@ struct BWSettingsView: View {
     let budget: BWBudget
 
     @State private var title: String
-    @State private var isCurrencyPickerPresented = false
+    @State private var currencyPicker: CurrencyPicker?
     @FocusState private var focusedField: Field?
 
     init(store: BWStore, budget: BWBudget) {
@@ -42,13 +42,23 @@ struct BWSettingsView: View {
                     }
             }
 
-            Section("Currency") {
+            Section {
                 Button {
-                    isCurrencyPickerPresented = true
+                    currencyPicker = .budget
                 } label: {
-                    LabeledContent("Currency", value: title(for: store.selectedCurrency))
+                    LabeledContent("Budget Currency", value: title(for: store.currency(of: budget)))
                 }
                 .buttonStyle(.plain)
+                Button {
+                    currencyPicker = .default
+                } label: {
+                    LabeledContent("Default Currency", value: title(for: store.defaultCurrency))
+                }
+                .buttonStyle(.plain)
+            } header: {
+                Text("Currency")
+            } footer: {
+                Text("Each budget keeps its own currency. New budgets, and budgets from earlier versions of Budget Warden, use the default currency.")
             }
 
             if store.googleDrive.isConfigured {
@@ -117,8 +127,18 @@ struct BWSettingsView: View {
                 }
             }
         }
-        .sheet(isPresented: $isCurrencyPickerPresented) {
-            CurrencySelectionView(selectedCurrency: $store.selectedCurrency)
+        .sheet(item: $currencyPicker) { picker in
+            switch picker {
+            case .budget:
+                CurrencySelectionView(selectedCurrency: Binding(
+                    get: { store.currency(of: budget) },
+                    set: { currency in
+                        Task { await store.updateBudgetCurrency(currency, for: budget.id) }
+                    }
+                ))
+            case .default:
+                CurrencySelectionView(selectedCurrency: $store.defaultCurrency)
+            }
         }
         .onChange(of: budget.id) {
             title = budget.title
@@ -154,6 +174,13 @@ struct BWSettingsView: View {
 
     private enum Field {
         case name
+    }
+
+    private enum CurrencyPicker: Identifiable {
+        case budget
+        case `default`
+
+        var id: Self { self }
     }
 }
 

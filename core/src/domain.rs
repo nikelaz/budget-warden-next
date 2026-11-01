@@ -49,13 +49,65 @@ pub fn update_budget_title(
     }
 
     budget.title = title.clone();
-    budget.changes.budget = vec![BudgetChange {
-        change_id: Uuid::new_v4(),
-        timestamp: HlcTimestamp::now(),
-        payload: Some(BudgetChangePayload { title: Some(title) }),
-    }];
+    record_budget_change(&mut budget, BudgetChangePayload {
+        title: Some(title),
+        currency: None,
+    });
 
     validated_budget(budget)
+}
+
+/// Sets the currency the budget's amounts are in. `currency` is an ISO 4217
+/// code such as `eur` or `EUR`; it is stored in upper case.
+#[export]
+pub fn update_budget_currency(
+    mut budget: BWBudget,
+    currency: String,
+) -> Result<BWBudget, String> {
+    validate_budget(&budget)?;
+    let currency = normalize_currency_code(currency)?;
+
+    if budget.currency.as_deref() == Some(currency.as_str()) {
+        return Ok(budget);
+    }
+
+    budget.currency = Some(currency.clone());
+    record_budget_change(&mut budget, BudgetChangePayload {
+        title: None,
+        currency: Some(currency),
+    });
+
+    validated_budget(budget)
+}
+
+/// Returns `currency` as an upper-case ISO 4217 code, or an error when it is
+/// not three letters.
+#[export]
+pub fn normalize_currency_code(currency: String) -> Result<String, String> {
+    let code = currency.trim().to_ascii_uppercase();
+    if code.len() != 3 || !code.bytes().all(|byte| byte.is_ascii_uppercase()) {
+        return Err(format!("{} is not a three-letter ISO 4217 currency code", currency.trim()));
+    }
+    Ok(code)
+}
+
+/// The budget's currency, or `default_currency` for budgets saved before
+/// budgets stored one.
+#[export]
+pub fn budget_currency_code(budget: &BWBudget, default_currency: String) -> String {
+    budget.currency.clone().unwrap_or(default_currency)
+}
+
+/// Records a budget-level change while keeping the newest change of every
+/// other budget field.
+fn record_budget_change(budget: &mut BWBudget, payload: BudgetChangePayload) {
+    let change = BudgetChange {
+        change_id: Uuid::new_v4(),
+        timestamp: HlcTimestamp::now(),
+        payload: Some(payload),
+    };
+    let existing = std::mem::take(&mut budget.changes.budget);
+    budget.changes.budget = merge_budget_changes(existing, vec![change]);
 }
 
 #[export]
@@ -586,6 +638,80 @@ mod tests {
         assert_eq!(merged.categories.len(), 1);
         assert_eq!(merged.revision, 1);
         assert_ne!(merged.revision_id, base_revision_id);
+    }
+
+    #[test]
+    fn update_budget_currency_normalizes_and_records_the_change() {
+        let _ = initialize_core(Uuid::from_u128(0xD0A3));
+        let budget = BWBudget::new("Trip".to_string());
+
+        let updated = update_budget_currency(budget, " eur ".to_string()).unwrap();
+
+        assert_eq!(updated.currency.as_deref(), Some("EUR"));
+        assert_eq!(updated.changes.budget.len(), 1);
+        assert_eq!(
+            updated.changes.budget[0].payload.as_ref().and_then(|p| p.currency.as_deref()),
+            Some("EUR"),
+        );
+    }
+
+    #[test]
+    fn update_budget_currency_rejects_invalid_codes() {
+        for code in ["", "EU", "EURO", "E1R", "€"] {
+            let budget = BWBudget::new("Trip".to_string());
+            assert!(update_budget_currency(budget, code.to_string()).is_err(), "{code:?}");
+        }
+    }
+
+    #[test]
+    fn title_and_currency_changes_are_both_kept() {
+        let _ = initialize_core(Uuid::from_u128(0xD0A4));
+        let budget = BWBudget::new("Trip".to_string());
+        let budget = update_budget_currency(budget, "EUR".to_string()).unwrap();
+        let budget = update_budget_title(budget, "Holiday".to_string()).unwrap();
+
+        assert_eq!(budget.changes.budget.len(), 2);
+        // Earlier versions read only the last change, which must be the newest.
+        assert_eq!(
+            budget.changes.budget.last().and_then(|c| c.payload.as_ref()).and_then(|p| p.title.as_deref()),
+            Some("Holiday"),
+        );
+    }
+
+    #[test]
+    fn concurrent_title_and_currency_changes_merge() {
+        let _ = initialize_core(Uuid::from_u128(0xD0A5));
+        let base = BWBudget::new("Trip".to_string());
+        let memory = update_budget_title(base.clone(), "Holiday".to_string()).unwrap();
+        let disk = update_budget_currency(base, "JPY".to_string()).unwrap();
+
+        let merged = merge_budget_for_save(memory.clone(), disk.clone()).unwrap();
+        assert_eq!(merged.title, "Holiday");
+        assert_eq!(merged.currency.as_deref(), Some("JPY"));
+
+        let reversed = merge_budget_for_save(disk, memory).unwrap();
+        assert_eq!(reversed.title, "Holiday");
+        assert_eq!(reversed.currency.as_deref(), Some("JPY"));
+    }
+
+    #[test]
+    fn newer_currency_change_wins() {
+        let _ = initialize_core(Uuid::from_u128(0xD0A6));
+        let base = update_budget_currency(BWBudget::new("Trip".to_string()), "USD".to_string()).unwrap();
+        let older = update_budget_currency(base.clone(), "EUR".to_string()).unwrap();
+        let newer = update_budget_currency(base, "GBP".to_string()).unwrap();
+
+        assert_eq!(merge_budget_for_save(older.clone(), newer.clone()).unwrap().currency.as_deref(), Some("GBP"));
+        assert_eq!(merge_budget_for_save(newer, older).unwrap().currency.as_deref(), Some("GBP"));
+    }
+
+    #[test]
+    fn budget_currency_code_falls_back_to_the_default() {
+        let budget = BWBudget::new("Old".to_string());
+        assert_eq!(budget_currency_code(&budget, "BGN".to_string()), "BGN");
+        let _ = initialize_core(Uuid::from_u128(0xD0A7));
+        let budget = update_budget_currency(budget, "CHF".to_string()).unwrap();
+        assert_eq!(budget_currency_code(&budget, "BGN".to_string()), "CHF");
     }
 
     #[test]

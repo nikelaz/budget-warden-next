@@ -12,7 +12,7 @@ import BWAppleCore
 
 struct BWPreferencesView: View {
     @ObservedObject var store: BWStore
-    @Binding var selectedCurrency: BWCurrency
+    @EnvironmentObject private var windowStore: BWWindowStore
     let onClose: () -> Void
 
     var body: some View {
@@ -21,14 +21,17 @@ struct BWPreferencesView: View {
                 .font(.headline)
 
             Form {
-                Picker("Currency", selection: $selectedCurrency) {
-                    ForEach(BWCurrency.allCases, id: \.self) { currency in
-                        Text(title(for: currency))
-                            .tag(currency)
-                    }
+                if let budget = store.currentBudget {
+                    currencyPicker("Budget currency", selection: Binding(
+                        get: { store.currency(of: budget) },
+                        set: { store.setBudgetCurrency($0, windowStore: windowStore) }
+                    ))
                 }
-                .pickerStyle(.menu)
-                .frame(width: 280)
+                currencyPicker("Default currency", selection: $store.defaultCurrency)
+                Text("Each budget keeps its own currency. New budgets, and budgets from earlier versions of Budget Warden, use the default currency.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 if store.googleDrive.isConfigured {
                     Section {
@@ -75,6 +78,17 @@ struct BWPreferencesView: View {
             }
         }
         .padding()
+    }
+
+    private func currencyPicker(_ label: String, selection: Binding<BWCurrency>) -> some View {
+        Picker(label, selection: selection) {
+            ForEach(BWCurrency.allCases, id: \.self) { currency in
+                Text(title(for: currency))
+                    .tag(currency)
+            }
+        }
+        .pickerStyle(.menu)
+        .frame(width: 280)
     }
 
     @ViewBuilder

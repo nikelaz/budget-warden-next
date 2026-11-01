@@ -100,7 +100,7 @@ public sealed partial class AppViewModel
         _mcpHost?.Update(
             CurrentBudget?.Url,
             RecentFiles.Select(item => item.Path).ToArray(),
-            SelectedCurrencyCode);
+            DefaultCurrencyCode);
 
     private void OnMcpEvent(McpBudgetEvent budgetEvent, string path)
     {

@@ -57,7 +57,9 @@ building (they can also be overridden at run time); without them the app hides
 Google Drive. `BUDGET_WARDEN_GOOGLE_PICKER_URL` points at the hosted picker page
 (`picker/`) used by **Add Shared Budget…**.
 
-The app stores its device ID, currency choice, and recent file list under
+Each budget stores its own currency, chosen under **Preferences**. The app
+stores its device ID, default currency (for new budgets and budgets from
+earlier versions), and recent file list under
 `$XDG_CONFIG_HOME/budget-warden` (or `~/.config/budget-warden`). Budget data
 remains in the selected `.budget` files. The Google sign-in is kept in
 `google-credentials.json` there with owner-only permissions, and working copies

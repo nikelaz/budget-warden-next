@@ -89,6 +89,7 @@ fn budget_name(command: &BudgetCommand) -> &'static str {
         BudgetCommand::Create(_) => "create",
         BudgetCommand::Show(_) => "show",
         BudgetCommand::Rename(_) => "rename",
+        BudgetCommand::Currency(_) => "currency",
         BudgetCommand::Copy(_) => "copy",
         BudgetCommand::Move(_) => "move",
         BudgetCommand::Delete(_) => "delete",
@@ -144,6 +145,7 @@ fn capabilities() -> Result<Outcome, ApiError> {
         "budget create",
         "budget show",
         "budget rename",
+        "budget currency",
         "budget copy",
         "budget move",
         "budget delete",
@@ -257,6 +259,29 @@ fn run_budget(mut context: Context, command: BudgetCommand) -> Result<Outcome, A
                 )),
             ))
         }
+        BudgetCommand::Currency(args) => {
+            let (budget, original, wrote, ()) = mutate(
+                &mut context,
+                &args.file.file,
+                args.if_revision,
+                args.dry_run,
+                |budget| {
+                    let updated = bw_core::domain::update_budget_currency(budget, args.currency.clone())
+                        .map_err(|message| core_error("mutation_failed", message))?;
+                    Ok((updated, ()))
+                },
+            )?;
+            Ok(success(
+                "budget currency",
+                json!({"budget_id": budget.id, "currency": budget.currency, "dry_run":args.dry_run}),
+                Some(meta_for_mutation(
+                    "budget currency",
+                    &budget,
+                    original.requires_migration_writeback,
+                    wrote,
+                )),
+            ))
+        }
         BudgetCommand::Copy(args) => budget_copy(args),
         BudgetCommand::Move(args) => budget_move(args),
         BudgetCommand::Delete(args) => {
@@ -335,6 +360,18 @@ fn budget_create(context: &mut Context, args: BudgetCreateArgs) -> Result<Outcom
         bw_core::templates::budget_from_previous_budget(source.budget, args.title.clone())
             .map_err(|message| core_error("mutation_failed", message))?
     };
+    // An explicit --currency wins; otherwise keep the copied budget's
+    // currency, then fall back to the CLI's default currency.
+    let currency = args.currency.clone().or_else(|| {
+        budget.currency.is_none().then(|| {
+            config::load(context.config_dir()).ok().and_then(|config| config.currency)
+        }).flatten()
+    });
+    let budget = match currency {
+        Some(currency) => bw_core::domain::update_budget_currency(budget, currency)
+            .map_err(|message| usage_error(message))?,
+        None => budget,
+    };
     if args.dry_run {
         let destination = available_destination(&args.file, args.overwrite_budget_id)?;
         return Ok(success(
@@ -343,6 +380,7 @@ fn budget_create(context: &mut Context, args: BudgetCreateArgs) -> Result<Outcom
             Some(
                 Meta::command("budget create")
                     .budget(budget.id, budget.revision, budget.revision_id, false)
+                    .currency(budget.currency.clone())
                     .migration(false),
             ),
         ));
@@ -802,7 +840,7 @@ fn budget_value(budget: &BWBudget) -> Value {
     let mut categories = budget.ordered_categories(None);
     categories
         .sort_by_key(|category| (category.category_type as i32, category.ordinal, category.id));
-    json!({"id": budget.id, "title": budget.title, "revision": budget.revision, "revision_id": budget.revision_id, "schema_version": budget.schema_version, "categories": categories.iter().map(category_value).collect::<Vec<_>>()})
+    json!({"id": budget.id, "title": budget.title, "revision": budget.revision, "revision_id": budget.revision_id, "schema_version": budget.schema_version, "currency": budget.currency, "categories": categories.iter().map(category_value).collect::<Vec<_>>()})
 }
 
 fn meta_for_loaded(command: &str, loaded: &LoadedBudget, wrote: bool) -> Meta {
@@ -813,6 +851,7 @@ fn meta_for_loaded(command: &str, loaded: &LoadedBudget, wrote: bool) -> Meta {
             loaded.budget.revision_id,
             wrote,
         )
+        .currency(loaded.budget.currency.clone())
         .migration(loaded.requires_migration_writeback)
 }
 
@@ -865,6 +904,7 @@ pub(crate) fn meta_for_mutation(
 ) -> Meta {
     Meta::command(command)
         .budget(budget.id, budget.revision, budget.revision_id, wrote)
+        .currency(budget.currency.clone())
         .migration(migration_required && !wrote)
 }
 

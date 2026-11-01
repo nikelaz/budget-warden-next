@@ -61,6 +61,12 @@ See [AGENTS.md](AGENTS.md) for a compact contributor map and change-routing note
 - Rust and the project’s FFI generator when regenerating `core/dist` bindings
 - Rust and Cargo for the standalone CLI
 
+For tag-triggered macOS and iOS App Store Connect uploads, see
+[Apple release setup](docs/apple-releases.md).
+
+For Siri and Shortcuts actions on Apple platforms, see
+[Apple Shortcuts and Siri](docs/apple-shortcuts.md).
+
 ## License
 
 This repository is source-available for educational, research, and reference purposes only. Building, running, using, redistributing, or commercially using the software requires a valid commercial license from Lazarov & Co EOOD.

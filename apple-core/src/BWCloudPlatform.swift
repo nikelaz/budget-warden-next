@@ -167,6 +167,24 @@ enum BWCoordinatedFile {
         }
     }
 
+    static func delete(_ url: URL) throws {
+        var coordinationError: NSError?
+        var deleteError: Error?
+        NSFileCoordinator().coordinate(writingItemAt: url, options: .forDeleting, error: &coordinationError) { coordinatedURL in
+            do {
+                try FileManager.default.removeItem(at: coordinatedURL)
+            } catch {
+                deleteError = error
+            }
+        }
+        if let coordinationError {
+            throw coordinationError
+        }
+        if let deleteError {
+            throw deleteError
+        }
+    }
+
     static func readBudget(_ url: URL, location: URL? = nil) throws -> BWBudget {
         try decodeBudget(
             json: String(decoding: read(url), as: UTF8.self),

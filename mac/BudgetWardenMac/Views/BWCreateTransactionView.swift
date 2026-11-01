@@ -69,7 +69,7 @@ struct CreateTransactionView: View {
                             .foregroundStyle(parsedAmount == nil && !amount.isEmpty ? .red : .primary)
 
                         /*
-                        Text(store.selectedCurrency.symbol)
+                        Text(store.currency.symbol)
                             .font(.callout)
                             .foregroundStyle(.secondary)
                          */

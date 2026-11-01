@@ -157,7 +157,7 @@ struct BudgetView: View {
             return "Too large"
         }
 
-        return total.formattedMoneyAmount(currency: store.selectedCurrency)
+        return total.formattedMoneyAmount(currency: store.currency)
     }
 
     private func orderedCategories(for categoryType: BWCategoryType) -> [BWCategory] {
@@ -207,7 +207,7 @@ struct BudgetView: View {
                     case .regular:                
                         if showsAccumulatedAmount(for: tableRow.categoryType) {
                             Text(tableRow.category!.amountAccumulated.formattedMoneyAmount(
-                                currency: store.selectedCurrency
+                                currency: store.currency
                             ))
                             .accessibilityIdentifier("budgetCategoryAccumulated_\(tableRow.category!.title)")
                             .accessibilityValue(tableRow.category!.amountAccumulated.moneyInputText)
@@ -232,7 +232,7 @@ struct BudgetView: View {
             TableColumn("Planned") { tableRow in
                 switch tableRow.type {
                     case .regular:
-                        Text(tableRow.category!.amountPlanned.formattedMoneyAmount(currency: store.selectedCurrency))
+                        Text(tableRow.category!.amountPlanned.formattedMoneyAmount(currency: store.currency))
                             .accessibilityIdentifier("budgetCategoryPlanned_\(tableRow.category!.title)")
                             .accessibilityValue(tableRow.category!.amountPlanned.moneyInputText)
                     case .footer:
@@ -247,7 +247,7 @@ struct BudgetView: View {
             TableColumn("Actual") { tableRow in
                 switch tableRow.type {
                     case .regular:
-                        Text(tableRow.category!.amountActual.formattedMoneyAmount(currency: store.selectedCurrency))
+                        Text(tableRow.category!.amountActual.formattedMoneyAmount(currency: store.currency))
                             .accessibilityIdentifier("budgetCategoryActual_\(tableRow.category!.title)")
                             .accessibilityValue(tableRow.category!.amountActual.moneyInputText)
                     case .footer:

@@ -47,13 +47,15 @@ import com.lazarovco.budgetwarden.android.domain.Budget
 @Composable
 internal fun SettingsScreen(
     budget: Budget,
-    currencyCode: String,
+    budgetCurrencyCode: String,
+    defaultCurrencyCode: String,
     mcpState: McpServerUiState,
     modifier: Modifier = Modifier,
     onMcpEnabledChange: (Boolean) -> Unit,
     onMcpAllowNetworkChange: (Boolean) -> Unit,
     onRegenerateMcpUrl: () -> Unit,
-    onCurrencyChange: (String) -> Unit,
+    onBudgetCurrencyChange: (String) -> Unit,
+    onDefaultCurrencyChange: (String) -> Unit,
     onRenameBudget: (String) -> Unit,
     onDeleteBudget: () -> Unit,
     driveState: GoogleDriveUiState = GoogleDriveUiState(),
@@ -64,10 +66,7 @@ internal fun SettingsScreen(
 ) {
     var title by remember(budget.id, budget.title) { mutableStateOf(budget.title) }
     var titleHadFocus by remember(budget.id) { mutableStateOf(false) }
-    var expanded by rememberSaveable { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
-    val currencies = remember { currencyOptions() }
-    val selectedCurrency = currencies.firstOrNull { it.code == currencyCode }
 
     Column(
         modifier = modifier
@@ -98,29 +97,21 @@ internal fun SettingsScreen(
         )
 
         Text(stringResource(R.string.currency), style = MaterialTheme.typography.titleMedium)
-        ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
-            OutlinedTextField(
-                value = selectedCurrency?.displayName ?: currencyCode,
-                onValueChange = {},
-                readOnly = true,
-                label = { Text(stringResource(R.string.currency)) },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-                modifier = Modifier
-                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                    .fillMaxWidth(),
-            )
-            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                currencies.forEach { currency ->
-                    DropdownMenuItem(
-                        text = { Text(currency.displayName) },
-                        onClick = {
-                            expanded = false
-                            onCurrencyChange(currency.code)
-                        },
-                    )
-                }
-            }
-        }
+        CurrencyDropdown(
+            label = stringResource(R.string.budget_currency),
+            currencyCode = budgetCurrencyCode,
+            onCurrencyChange = { code -> if (code != budgetCurrencyCode) onBudgetCurrencyChange(code) },
+        )
+        CurrencyDropdown(
+            label = stringResource(R.string.default_currency),
+            currencyCode = defaultCurrencyCode,
+            onCurrencyChange = onDefaultCurrencyChange,
+        )
+        Text(
+            stringResource(R.string.currency_explanation),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
 
         GoogleDriveSettings(
             drive = driveState,
@@ -193,5 +184,40 @@ private fun SettingsSwitch(label: String, checked: Boolean, onCheckedChange: (Bo
     ) {
         Text(label, modifier = Modifier.weight(1f))
         Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CurrencyDropdown(
+    label: String,
+    currencyCode: String,
+    onCurrencyChange: (String) -> Unit,
+) {
+    var expanded by rememberSaveable(label) { mutableStateOf(false) }
+    val currencies = remember { currencyOptions() }
+    val selectedCurrency = currencies.firstOrNull { it.code == currencyCode }
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+        OutlinedTextField(
+            value = selectedCurrency?.displayName ?: currencyCode,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            modifier = Modifier
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                .fillMaxWidth(),
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            currencies.forEach { currency ->
+                DropdownMenuItem(
+                    text = { Text(currency.displayName) },
+                    onClick = {
+                        expanded = false
+                        onCurrencyChange(currency.code)
+                    },
+                )
+            }
+        }
     }
 }

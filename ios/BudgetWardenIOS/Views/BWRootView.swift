@@ -7,12 +7,13 @@
  * See the LICENSE file in the project root for full terms.
  */
 
+import AppIntents
 import BWAppleCore
 import SwiftUI
 
 struct BWRootView: View {
     @Environment(\.scenePhase) private var scenePhase
-    @State private var store = BWStore()
+    let store: BWStore
     @State private var navigationPath: [UUID] = []
     @State private var isCreateBudgetPresented = false
     @State private var isOpenBudgetPresented = false
@@ -27,7 +28,7 @@ struct BWRootView: View {
             )
             .navigationDestination(for: UUID.self, destination: destination)
         }
-        .onChange(of: store.selectedBudgetID) { _, budgetID in
+        .onChange(of: store.selectedBudgetID, initial: true) { _, budgetID in
             if let budgetID {
                 navigationPath = [budgetID]
             } else {

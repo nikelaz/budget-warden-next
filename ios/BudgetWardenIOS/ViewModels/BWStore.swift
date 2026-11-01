@@ -9,6 +9,7 @@
 
 import BWAppleCore
 import Foundation
+import AppIntents
 import Observation
 import SwiftUI
 import UniformTypeIdentifiers
@@ -86,17 +87,30 @@ final class BWStore {
         }
     }
     var errorMessage: String?
-    var selectedCurrency: BWCurrency {
+    /// The currency for new budgets and for budgets saved before budgets
+    /// stored one.
+    var defaultCurrency: BWCurrency {
         didSet {
-            UserDefaults.standard.set(selectedCurrency.rawValue, forKey: Self.currencyKey)
+            UserDefaults.standard.set(defaultCurrency.rawValue, forKey: Self.currencyKey)
             shareBudgetsWithMcp()
         }
+    }
+
+    /// The currency the open budget's amounts are shown in.
+    var currency: BWCurrency {
+        currentBudget.map(currency(of:)) ?? defaultCurrency
+    }
+
+    func currency(of budget: BWBudget) -> BWCurrency {
+        budget.currency.flatMap(BWCurrency.init(rawValue:)) ?? defaultCurrency
     }
     private(set) var mcpSettings: BWMcpSettings?
     private(set) var mcpStatus: BWMcpServerStatus?
     private(set) var mcpErrorMessage: String?
 
     @ObservationIgnored private var mcpServer: BWMcpServerController?
+    /// The budgets the MCP server and Shortcuts can read and change.
+    @ObservationIgnored let library: BWBudgetLibrary
 
     /// Budgets in Google Drive, including ones shared with the user.
     let googleDrive: BWGoogleDriveController
@@ -109,11 +123,16 @@ final class BWStore {
     init() {
         let cloudChanges = BWBudgetChangeRelay()
         self.cloudChanges = cloudChanges
+        let libraryEvents = BWBudgetLibraryEventRelay()
+        library = BWBudgetLibrary(
+            newBudgetDirectory: { BWStore.mcpBudgetDirectory() },
+            events: { event in libraryEvents.handler?(event) }
+        )
         googleDrive = BWGoogleDriveController { url in cloudChanges.notify(url) }
         iCloud = BWICloudBudgetLibrary { url in cloudChanges.notify(url) }
 
         let defaults = UserDefaults.standard
-        selectedCurrency = defaults.string(forKey: Self.currencyKey)
+        defaultCurrency = defaults.string(forKey: Self.currencyKey)
             .flatMap(BWCurrency.init(rawValue:)) ?? .defaultCurrency
 
         let deviceID: UUID
@@ -136,13 +155,12 @@ final class BWStore {
 
         mcpServer = BWMcpServerController(
             keyPrefix: "BWI_MCP_",
-            newBudgetDirectory: { BWStore.mcpBudgetDirectory() },
-            budgetDidChange: { [weak self] url in self?.reloadBudget(changedAt: url) },
-            budgetWasCreated: { [weak self] url in self?.rememberRecent(url) },
+            library: library,
             showBudget: { [weak self] url in
                 Task { await self?.openBudget(at: url) }
             }
         )
+        libraryEvents.handler = { [weak self] event in self?.handle(event) }
         shareBudgetsWithMcp()
         refreshMcpState()
 
@@ -255,11 +273,24 @@ final class BWStore {
                     : nil
             } ?? URL(fileURLWithPath: path)
         }
-        mcpServer?.updateBudgets(
-            open: openURL,
-            recent: recentFiles,
-            currencyCode: selectedCurrency.rawValue
-        )
+        library.update(open: openURL, recent: recentFiles, defaultCurrencyCode: defaultCurrency.rawValue)
+    }
+
+    /// Follows changes the MCP server or Shortcuts made to budget files.
+    private func handle(_ event: BWBudgetLibraryEvent) {
+        switch event {
+        case .changed(let url):
+            reloadBudget(changedAt: url)
+            googleDrive.sync(budgetAt: url)
+        case .created(let url):
+            rememberRecent(url)
+        case .deleted(let url):
+            if openBudgetURL?.standardizedFileURL == url.standardizedFileURL {
+                closeBudget()
+            }
+            removeRecent(url)
+            BWAppShortcuts.updateAppShortcutParameters()
+        }
     }
 
     /// Re-reads the open budget after the MCP server or cloud sync changed
@@ -368,7 +399,7 @@ final class BWStore {
             throw BWError.validation("Budget title cannot be empty.")
         }
 
-        let budget: BWBudget
+        var budget: BWBudget
         switch template {
         case .builtIn(let id):
             budget = try BWCore.budgetFromTemplateId(templateId: id, title: trimmedTitle)
@@ -381,6 +412,9 @@ final class BWStore {
             }
             let previous = try readBudget(at: url)
             budget = try BWCore.budgetFromPreviousBudget(budget: previous, title: trimmedTitle)
+        }
+        if budget.currency == nil {
+            budget = try BWCore.updateBudgetCurrency(budget: budget, currency: defaultCurrency.rawValue)
         }
 
         do {
@@ -435,6 +469,14 @@ final class BWStore {
         guard currentBudget?.id == budgetID else { return false }
         return mutate { budget in
             try BWCore.updateBudgetTitle(budget: budget, title: title)
+        }
+    }
+
+    /// Changes the budget's currency. Amounts are not converted.
+    func updateBudgetCurrency(_ currency: BWCurrency, for budgetID: UUID) async -> Bool {
+        guard currentBudget?.id == budgetID else { return false }
+        return mutate { budget in
+            try BWCore.updateBudgetCurrency(budget: budget, currency: currency.rawValue)
         }
     }
 
@@ -754,6 +796,7 @@ final class BWStore {
         } catch {
             // The open file remains usable even if the provider cannot issue a bookmark.
         }
+        BWAppShortcuts.updateAppShortcutParameters()
     }
 
     func remapRecentFiles(using entries: [BWLegacyBudgetMigrationEntry]) {
@@ -784,6 +827,7 @@ final class BWStore {
         }
         saveRecentBookmarks(bookmarks)
         recentFiles = updatedRecents
+        BWAppShortcuts.updateAppShortcutParameters()
     }
 
     private func storedRecentBookmarks() -> [Data] {

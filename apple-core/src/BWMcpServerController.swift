@@ -65,37 +65,21 @@ public final class BWMcpServerController {
 
     /// - Parameters:
     ///   - keyPrefix: Prefix for the app's `UserDefaults` keys.
-    ///   - newBudgetDirectory: Folder for budgets that MCP clients create.
-    ///     Called off the main thread.
-    ///   - budgetDidChange: The server saved the budget at a URL.
-    ///   - budgetWasCreated: The server created a budget at a URL.
+    ///   - library: The budgets the server may read and change. The app
+    ///     keeps it up to date with its open and recent budgets.
     ///   - showBudget: An MCP client asked the app to open a budget.
     public init(
         keyPrefix: String,
-        newBudgetDirectory: @escaping @Sendable () -> URL?,
-        budgetDidChange: @escaping @MainActor @Sendable (URL) -> Void,
-        budgetWasCreated: @escaping @MainActor @Sendable (URL) -> Void,
+        library: BWBudgetLibrary,
         showBudget: @escaping @MainActor @Sendable (URL) -> Void
     ) {
         self.keyPrefix = keyPrefix
         settings = BWMcpSettings.load(from: .standard, keyPrefix: keyPrefix)
         status = BWMcpServerStatus(running: false, port: 0, url: nil, localUrl: nil)
-        host = BWMcpFileHost(newBudgetDirectory: newBudgetDirectory) { event in
-            Task { @MainActor in
-                switch event {
-                case .changed(let url): budgetDidChange(url)
-                case .created(let url): budgetWasCreated(url)
-                case .show(let url): showBudget(url)
-                }
-            }
+        host = BWMcpFileHost(library: library) { url in
+            Task { @MainActor in showBudget(url) }
         }
         apply()
-    }
-
-    /// Shares the budgets the app can currently reach. Keep the URLs the app
-    /// resolved itself so their security scope remains usable.
-    public func updateBudgets(open: URL?, recent: [URL], currencyCode: String) {
-        host.update(open: open, recent: recent, currencyCode: currencyCode)
     }
 
     public func setEnabled(_ isEnabled: Bool) {
@@ -149,204 +133,57 @@ public final class BWMcpServerController {
     }
 }
 
-enum BWMcpHostEvent: Sendable {
-    case changed(URL)
-    case created(URL)
-    case show(URL)
-}
-
-/// Thread-safe file access for the MCP server. Locations are standardized file
+/// Gives the MCP server the app's budgets. Locations are standardized file
 /// paths of URLs the app shared, so the server can only reach those budgets.
 final class BWMcpFileHost: BWMcpHost, @unchecked Sendable {
-    private let lock = NSLock()
-    private var openURL: URL?
-    private var recentURLs: [URL] = []
-    private var createdURLs: [URL] = []
-    private var currency = "USD"
-    private let newBudgetDirectory: @Sendable () -> URL?
-    private let notify: @Sendable (BWMcpHostEvent) -> Void
+    private let library: BWBudgetLibrary
+    private let showBudget: @Sendable (URL) -> Void
 
-    init(
-        newBudgetDirectory: @escaping @Sendable () -> URL?,
-        notify: @escaping @Sendable (BWMcpHostEvent) -> Void
-    ) {
-        self.newBudgetDirectory = newBudgetDirectory
-        self.notify = notify
-    }
-
-    func update(open: URL?, recent: [URL], currencyCode: String) {
-        lock.withLock {
-            openURL = open
-            recentURLs = recent
-            currency = currencyCode
-            // Created budgets stay reachable until the app lists them itself.
-            let shared = Set(([open].compactMap { $0 } + recent).map(Self.location))
-            createdURLs.removeAll { shared.contains(Self.location($0)) }
-        }
+    init(library: BWBudgetLibrary, showBudget: @escaping @Sendable (URL) -> Void) {
+        self.library = library
+        self.showBudget = showBudget
     }
 
     func listBudgets() -> [BWMcpBudgetLocation] {
-        lock.withLock {
-            let openLocation = openURL.map(Self.location)
-            return knownURLs().map { url in
-                BWMcpBudgetLocation(
-                    location: Self.location(url),
-                    isOpen: Self.location(url) == openLocation
-                )
-            }
+        library.knownURLs.map { url in
+            BWMcpBudgetLocation(location: BWBudgetLibrary.location(url), isOpen: library.isOpen(url))
         }
     }
 
     func readBudgetFile(location: String) throws -> String {
-        let url = try knownURL(location)
-        return try withAccess(to: url) {
-            let data = try coordinatedRead(at: url)
-            guard let json = String(data: data, encoding: .utf8) else {
-                throw FfiError(message: "\(url.lastPathComponent) is not UTF-8 text.")
-            }
-            return json
-        }
+        try library.json(at: knownURL(location))
     }
 
     func writeBudgetFile(location: String, json: String, expectedRevisionId: String?) throws -> Bool {
-        let url = try knownURL(location)
-        return try withAccess(to: url) {
-            try BWBudgetSaveLock.withLock {
-                if let expectedRevisionId {
-                    let stored = try decodeBudget(
-                        json: String(decoding: coordinatedRead(at: url), as: UTF8.self),
-                        url: location
-                    )
-                    // Another writer saved since the server read the budget.
-                    guard stored.revisionId == UUID(uuidString: expectedRevisionId) else {
-                        return false
-                    }
-                }
-                try coordinatedWrite(Data(json.utf8), to: url)
-                return true
-            }
-        }
+        try library.write(
+            json: json,
+            to: knownURL(location),
+            expectedRevisionID: expectedRevisionId.flatMap(UUID.init(uuidString:))
+        )
     }
 
     func createBudgetFile(fileName: String, json: String) throws -> String {
-        guard let directory = newBudgetDirectory() else {
-            throw FfiError(message: "Budget Warden has no folder for new budgets.")
-        }
-        let url = Self.uniqueURL(in: directory, fileName: fileName)
-        try reportingErrors {
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            try coordinatedWrite(Data(json.utf8), to: url, replacing: false)
-        }
-        lock.withLock { createdURLs.append(url) }
-        notify(.created(url))
-        return Self.location(url)
+        BWBudgetLibrary.location(try library.create(json: json, fileName: fileName))
     }
 
     func budgetDidChange(location: String) {
-        if let url = try? knownURL(location) {
-            notify(.changed(url))
+        if let url = library.knownURL(location: location) {
+            library.didChange(url)
         }
     }
 
     func showBudget(location: String) throws {
-        notify(.show(try knownURL(location)))
+        showBudget(try knownURL(location))
     }
 
     func currencyCode() -> String {
-        lock.withLock { currency }
-    }
-
-    // Must be called while holding the lock.
-    private func knownURLs() -> [URL] {
-        var seen = Set<String>()
-        return ([openURL].compactMap { $0 } + recentURLs + createdURLs).filter {
-            seen.insert(Self.location($0)).inserted
-        }
+        library.defaultCurrencyCode
     }
 
     private func knownURL(_ location: String) throws -> URL {
-        let url = lock.withLock { knownURLs().first { Self.location($0) == location } }
-        guard let url else {
+        guard let url = library.knownURL(location: location) else {
             throw FfiError(message: "\(location) is not one of Budget Warden's budgets.")
         }
         return url
-    }
-
-    private func withAccess<T>(to url: URL, _ operation: () throws -> T) throws -> T {
-        let scoped = url.startAccessingSecurityScopedResource()
-        defer {
-            if scoped {
-                url.stopAccessingSecurityScopedResource()
-            }
-        }
-        return try reportingErrors(operation)
-    }
-
-    /// Converts Foundation errors into readable messages for MCP clients.
-    private func reportingErrors<T>(_ operation: () throws -> T) throws -> T {
-        do {
-            return try operation()
-        } catch let error as FfiError {
-            throw error
-        } catch {
-            throw FfiError(message: error.localizedDescription)
-        }
-    }
-
-    private func coordinatedRead(at url: URL) throws -> Data {
-        var coordinationError: NSError?
-        var result: Result<Data, Error>?
-        NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &coordinationError) { coordinatedURL in
-            result = Result { try Data(contentsOf: coordinatedURL) }
-        }
-        if let coordinationError {
-            throw coordinationError
-        }
-        guard let result else {
-            throw FfiError(message: "Could not read \(url.lastPathComponent).")
-        }
-        return try result.get()
-    }
-
-    private func coordinatedWrite(_ data: Data, to url: URL, replacing: Bool = true) throws {
-        var coordinationError: NSError?
-        var writeError: Error?
-        NSFileCoordinator().coordinate(
-            writingItemAt: url,
-            options: replacing ? .forReplacing : [],
-            error: &coordinationError
-        ) { coordinatedURL in
-            do {
-                try data.write(to: coordinatedURL, options: replacing ? .atomic : .withoutOverwriting)
-            } catch {
-                writeError = error
-            }
-        }
-        if let coordinationError {
-            throw coordinationError
-        }
-        if let writeError {
-            throw writeError
-        }
-    }
-
-    static func location(_ url: URL) -> String {
-        url.standardizedFileURL.path
-    }
-
-    static func uniqueURL(in directory: URL, fileName: String) -> URL {
-        let candidate = directory.appendingPathComponent(fileName, isDirectory: false)
-        guard FileManager.default.fileExists(atPath: candidate.path) else {
-            return candidate
-        }
-        let stem = (fileName as NSString).deletingPathExtension
-        var index = 2
-        while true {
-            let url = directory.appendingPathComponent("\(stem) \(index).budget", isDirectory: false)
-            if !FileManager.default.fileExists(atPath: url.path) {
-                return url
-            }
-            index += 1
-        }
     }
 }

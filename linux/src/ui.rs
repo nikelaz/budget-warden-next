@@ -252,7 +252,7 @@ impl AppUi {
                 .and_then(|budget| budget.url.as_ref())
                 .map(PathBuf::from),
             recent_files: state.recent_files.clone(),
-            currency: state.currency.clone(),
+            currency: state.default_currency.clone(),
         });
     }
 
@@ -821,7 +821,7 @@ impl AppUi {
             let state = self.state.borrow();
             (
                 state.budget.clone().expect("open budget"),
-                state.currency.clone(),
+                state.currency(),
             )
         };
         let body = gtk::Box::new(Orientation::Vertical, 28);
@@ -869,7 +869,7 @@ impl AppUi {
             let state = self.state.borrow();
             state
                 .reporting_summary()
-                .map(|summary| (summary, state.report_mode, state.currency.clone()))
+                .map(|summary| (summary, state.report_mode, state.currency()))
         };
         match result {
             Ok((summary, mode, currency)) => {
@@ -948,7 +948,7 @@ impl AppUi {
         let body = gtk::Box::new(Orientation::Vertical, 24);
         body.set_margin_top(24);
         body.set_margin_bottom(32);
-        let currency = self.state.borrow().currency.clone();
+        let currency = self.state.borrow().currency();
         let mode = self.state.borrow().report_mode;
         let switch = gtk::Box::new(Orientation::Horizontal, 0);
         switch.add_css_class("linked");
@@ -1212,7 +1212,7 @@ impl AppUi {
         }
         let (budget, currency) = {
             let state = self.state.borrow();
-            (state.budget.clone(), state.currency.clone())
+            (state.budget.clone(), state.currency())
         };
         let Some(budget) = budget else {
             return;
@@ -1358,7 +1358,7 @@ impl AppUi {
             let actual = action_row("Actual Amount", "Calculated from transactions");
             actual.add_suffix(&amount_label(&money_text(
                 category.amount_actual.value,
-                &self.state.borrow().currency,
+                &self.state.borrow().currency(),
             )));
             details.add(&actual);
             let view = action_row(
@@ -1878,36 +1878,52 @@ impl AppUi {
     fn show_preferences(self: &Rc<Self>) {
         let dialog = adw::PreferencesDialog::new();
         let page = adw::PreferencesPage::new();
-        let group = adw::PreferencesGroup::new();
-        let currencies = supported_currencies();
-        let names = currencies
-            .iter()
-            .map(|currency| format!("{} ({}, {})", currency.name, currency.code, currency.symbol))
-            .collect::<Vec<_>>();
-        let refs = names.iter().map(String::as_str).collect::<Vec<_>>();
-        let currency = combo_row("Currency", &refs);
-        currency.set_enable_search(true);
-        currency.set_selected(
-            currencies
-                .iter()
-                .position(|currency| currency.code == self.state.borrow().currency)
-                .unwrap_or(0) as u32,
-        );
-        group.add(&currency);
-        page.add(&group);
-        page.add(&self.cloud_preferences_group());
-        page.add(&self.mcp_preferences_group());
-        dialog.add(&page);
+        let group = adw::PreferencesGroup::builder()
+            .title("Currency")
+            .description(
+                "Each budget keeps its own currency. New budgets, and budgets from earlier versions of Budget Warden, use the default currency.",
+            )
+            .build();
+        let (budget_currency, default_currency) = {
+            let state = self.state.borrow();
+            (
+                state.budget.as_ref().map(|budget| state.currency_of(budget)),
+                state.default_currency.clone(),
+            )
+        };
+        if let Some(code) = budget_currency {
+            let row = currency_row("Budget currency", &code);
+            group.add(&row);
+            let ui = self.clone();
+            row.connect_selected_notify(move |row| {
+                if let Some(currency) = supported_currencies().get(row.selected() as usize) {
+                    let result = ui.state.borrow_mut().set_budget_currency(currency.code.clone());
+                    match result {
+                        Ok(()) => ui.refresh(),
+                        Err(error) => ui.show_error(&error),
+                    }
+                }
+            });
+        }
+        let row = currency_row("Default currency", &default_currency);
+        group.add(&row);
         let ui = self.clone();
-        currency.connect_selected_notify(move |row| {
+        row.connect_selected_notify(move |row| {
             if let Some(currency) = supported_currencies().get(row.selected() as usize) {
-                let result = ui.state.borrow_mut().set_currency(currency.code.clone());
+                let result = ui.state.borrow_mut().set_default_currency(currency.code.clone());
                 match result {
-                    Ok(()) => ui.refresh(),
+                    Ok(()) => {
+                        ui.sync_mcp();
+                        ui.refresh();
+                    }
                     Err(error) => ui.show_error(&error),
                 }
             }
         });
+        page.add(&group);
+        page.add(&self.cloud_preferences_group());
+        page.add(&self.mcp_preferences_group());
+        dialog.add(&page);
         dialog.present(Some(&self.window));
     }
 
@@ -2218,6 +2234,25 @@ fn date_entry(title: &str, text: &str) -> adw::EntryRow {
             calendar.unblock_signal(&selected_handler);
         }
     });
+    row
+}
+
+/// A searchable currency picker showing `selected`.
+fn currency_row(title: &str, selected: &str) -> adw::ComboRow {
+    let currencies = supported_currencies();
+    let names = currencies
+        .iter()
+        .map(|currency| format!("{} ({}, {})", currency.name, currency.code, currency.symbol))
+        .collect::<Vec<_>>();
+    let refs = names.iter().map(String::as_str).collect::<Vec<_>>();
+    let row = combo_row(title, &refs);
+    row.set_enable_search(true);
+    row.set_selected(
+        currencies
+            .iter()
+            .position(|currency| currency.code == selected)
+            .unwrap_or(0) as u32,
+    );
     row
 }
 

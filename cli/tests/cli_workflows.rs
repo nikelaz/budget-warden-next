@@ -1426,3 +1426,80 @@ fn cloud_commands_report_configuration_and_sign_in_state_without_network() {
     assert_success(&output, &signed_out);
     assert_eq!(signed_out["data"]["signed_out"], false);
 }
+
+#[test]
+fn budget_currency_is_stored_in_the_budget() {
+    let sandbox = Sandbox::new();
+    run_success(&sandbox, &["config", "set", "--currency", "bgn"]);
+
+    // New budgets take the configured currency unless one is given.
+    let defaulted = sandbox.path("defaulted.budget");
+    let created = create_budget(&sandbox, &defaulted, "Defaulted", "empty");
+    assert_eq!(created["data"]["budget"]["currency"], "BGN");
+    assert_eq!(created["meta"]["currency"], "BGN");
+
+    let file = sandbox.path("trip.budget");
+    let file_arg = file.to_str().unwrap();
+    let created = run_success(
+        &sandbox,
+        &["budget", "create", "--file", file_arg, "--title", "Trip", "--template", "empty", "--currency", "eur"],
+    );
+    assert_eq!(created["data"]["budget"]["currency"], "EUR");
+
+    let changed = run_success(&sandbox, &["budget", "currency", "--file", file_arg, "--currency", "jpy"]);
+    assert_eq!(changed["data"]["currency"], "JPY");
+    assert_eq!(changed["meta"]["currency"], "JPY");
+    let stored: Value = serde_json::from_slice(&fs::read(&file).unwrap()).unwrap();
+    assert_eq!(stored["currency"], "JPY");
+
+    let (output, value) = run(&sandbox, &["budget", "currency", "--file", file_arg, "--currency", "euro"]);
+    assert!(!output.status.success());
+    assert_eq!(value["ok"], false);
+
+    // A copy keeps the source budget's currency over the configured one.
+    let copy = sandbox.path("copy.budget");
+    let copied = run_success(
+        &sandbox,
+        &["budget", "create", "--file", copy.to_str().unwrap(), "--title", "Copy", "--from", file_arg],
+    );
+    assert_eq!(copied["data"]["budget"]["currency"], "JPY");
+
+    // Text output labels amounts with the budget's currency.
+    let output = Command::new(env!("CARGO_BIN_EXE_budget-warden"))
+        .arg("--config-dir")
+        .arg(sandbox.path("config"))
+        .args(["--output", "text", "category", "create", "--file", file_arg, "--title", "Food", "--type", "expenses", "--planned", "12.50"])
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(text.contains("12.50 JPY"), "{text}");
+}
+
+#[test]
+fn budgets_without_a_currency_keep_their_file_shape() {
+    let sandbox = Sandbox::new();
+    let file = sandbox.path("plain.budget");
+    let created = create_budget(&sandbox, &file, "Plain", "empty");
+    assert!(created["data"]["budget"]["currency"].is_null());
+    assert!(created["meta"].get("currency").is_none());
+    let stored: Value = serde_json::from_slice(&fs::read(&file).unwrap()).unwrap();
+    assert!(stored.get("currency").is_none());
+    assert_eq!(stored["schema_version"], 2);
+}
+
+#[test]
+fn apply_sets_the_budget_currency() {
+    let sandbox = Sandbox::new();
+    let file = sandbox.path("apply.budget");
+    create_budget(&sandbox, &file, "Apply", "empty");
+    let request = serde_json::json!({
+        "version": 1,
+        "file": file.to_str().unwrap(),
+        "operations": [{"op": "set_budget_currency", "currency": "chf"}],
+    });
+    let (output, value) = run_with_stdin(&sandbox, &["apply", "--input", "-"], &request.to_string());
+    assert_success(&output, &value);
+    let stored: Value = serde_json::from_slice(&fs::read(&file).unwrap()).unwrap();
+    assert_eq!(stored["currency"], "CHF");
+}

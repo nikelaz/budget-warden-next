@@ -271,7 +271,7 @@ public sealed partial class AppViewModel
             : CoreApi.BudgetFromTemplateId(
                 template.TemplateId ?? throw new InvalidOperationException("Choose a budget template."),
                 trimmedTitle);
-        string json = CoreApi.EncodeBudget(budget);
+        string json = CoreApi.EncodeBudget(WithDefaultCurrency(budget));
         BwCloudBudget created = await Task.Run(() => drive.CreateBudget($"{trimmedTitle}.budget", json));
         RememberCloudBudget(created);
         await OpenBudgetAsync(created.LocalPath ?? throw new IOException("The new budget has no local copy."));

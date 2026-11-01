@@ -10,3 +10,4 @@ bin/
 obj/
 windows/test-artifacts/
 .codex-tmp/
+/.apple-release-secrets.env

@@ -363,6 +363,10 @@ pub struct CategoryChange {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct BudgetChangePayload {
     pub title: Option<String>,
+    /// Added after the first release, so it is omitted when unset and files
+    /// stay readable by earlier versions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub currency: Option<String>,
 }
 
 #[data]
@@ -461,22 +465,48 @@ fn merge_transaction_changes(
     mem
 }
 
-fn merge_budget_changes(
+/// Keeps the newest change of each budget field, so a currency change does
+/// not discard a concurrent title change. Earlier versions read only the last
+/// entry, so the result is ordered from oldest to newest.
+pub(crate) fn merge_budget_changes(
     mem: Vec<BudgetChange>,
     disk: Vec<BudgetChange>,
 ) -> Vec<BudgetChange> {
-    let latest_by_ts = |changes: Vec<BudgetChange>| -> Option<BudgetChange> {
-        changes.into_iter().max_by(|a, b| a.timestamp.cmp(&b.timestamp))
+    let all: Vec<BudgetChange> = mem.into_iter().chain(disk).collect();
+    let newest_with = |has_field: fn(&BudgetChangePayload) -> bool| {
+        all.iter()
+            .filter(|change| change.payload.as_ref().is_some_and(has_field))
+            .max_by(|a, b| a.timestamp.cmp(&b.timestamp))
+            .cloned()
     };
 
-    let winner = match (latest_by_ts(mem), latest_by_ts(disk)) {
-        (Some(m), Some(d)) => if d.timestamp > m.timestamp { d } else { m },
-        (Some(m), None) => m,
-        (None, Some(d)) => d,
-        (None, None) => return Vec::new(),
-    };
+    let mut winners: Vec<BudgetChange> = Vec::new();
+    let candidates = [
+        newest_with(|payload| payload.title.is_some()),
+        newest_with(|payload| payload.currency.is_some()),
+    ];
+    for change in candidates.into_iter().flatten() {
+        if !winners.iter().any(|winner| winner.change_id == change.change_id) {
+            winners.push(change);
+        }
+    }
+    winners.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+    winners
+}
 
-    vec![winner]
+/// The value of the newest budget change that sets a field.
+fn latest_budget_field<T>(
+    changes: &[BudgetChange],
+    field: impl Fn(&BudgetChangePayload) -> Option<T>,
+) -> Option<T> {
+    changes
+        .iter()
+        .filter_map(|change| {
+            let value = change.payload.as_ref().and_then(&field)?;
+            Some((&change.timestamp, value))
+        })
+        .max_by(|a, b| a.0.cmp(b.0))
+        .map(|(_, value)| value)
 }
 
 type CategoryChangesMap = HashMap<Uuid, HashMap<CategoryField, CategoryChange>>;
@@ -506,15 +536,17 @@ fn resolve_budget_title(
     mem_title: String,
     changes: &[BudgetChange],
 ) -> String {
-    let Some(change) = changes.last() else {
-        return mem_title;
-    };
+    latest_budget_field(changes, |payload| payload.title.clone()).unwrap_or(mem_title)
+}
 
-    let Some(ref payload) = change.payload else {
-        return mem_title;
-    };
-
-    payload.title.clone().unwrap_or(mem_title)
+fn resolve_budget_currency(
+    mem_currency: Option<String>,
+    disk_currency: Option<String>,
+    changes: &[BudgetChange],
+) -> Option<String> {
+    latest_budget_field(changes, |payload| payload.currency.clone())
+        .or(mem_currency)
+        .or(disk_currency)
 }
 
 fn apply_category_changes(
@@ -713,6 +745,11 @@ fn merge_divergent_budgets(
         budget_in_memory.title,
         &merged_changes.budget,
     );
+    let currency = resolve_budget_currency(
+        budget_in_memory.currency,
+        budget_on_disk.currency,
+        &merged_changes.budget,
+    );
 
     let categories = build_merged_categories(
         budget_in_memory.categories,
@@ -726,6 +763,7 @@ fn merge_divergent_budgets(
         revision_id: Uuid::new_v4(),
         schema_version: budget_in_memory.schema_version.max(budget_on_disk.schema_version),
         title,
+        currency,
         categories,
         changes: merged_changes,
         url: budget_in_memory.url,
@@ -769,6 +807,7 @@ mod tests {
             revision_id: Uuid::new_v4(),
             schema_version: 2,
             title: title.to_string(),
+            currency: None,
             categories,
             changes,
             url: Some(String::new()),
@@ -841,6 +880,7 @@ mod tests {
             timestamp: ts(100, 0, DEVICE_A),
             payload: Some(BudgetChangePayload {
                 title: Some("Title A".to_string()),
+                currency: None,
             }),
         });
 
@@ -850,6 +890,7 @@ mod tests {
             timestamp: ts(200, 0, DEVICE_B),
             payload: Some(BudgetChangePayload {
                 title: Some("Title B".to_string()),
+                currency: None,
             }),
         });
 
@@ -867,6 +908,7 @@ mod tests {
             timestamp: ts(300, 0, DEVICE_A),
             payload: Some(BudgetChangePayload {
                 title: Some("Title A".to_string()),
+                currency: None,
             }),
         });
 
@@ -876,6 +918,7 @@ mod tests {
             timestamp: ts(200, 0, DEVICE_B),
             payload: Some(BudgetChangePayload {
                 title: Some("Title B".to_string()),
+                currency: None,
             }),
         });
 
@@ -1213,6 +1256,7 @@ mod tests {
             timestamp: ts(100, 1, DEVICE_A),
             payload: Some(BudgetChangePayload {
                 title: Some("Logical Winner".to_string()),
+                currency: None,
             }),
         });
 
@@ -1222,6 +1266,7 @@ mod tests {
             timestamp: ts(100, 0, DEVICE_B),
             payload: Some(BudgetChangePayload {
                 title: Some("Logical Loser".to_string()),
+                currency: None,
             }),
         });
 

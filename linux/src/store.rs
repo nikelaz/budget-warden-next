@@ -67,7 +67,9 @@ pub struct AppState {
     settings_dir: PathBuf,
     pub budget: Option<BWBudget>,
     pub recent_files: Vec<PathBuf>,
-    pub currency: String,
+    /// The currency for new budgets and for budgets saved before budgets
+    /// stored one.
+    pub default_currency: String,
     pub page: AppPage,
     pub report_mode: ReportMode,
     /// The open budget was saved since the UI last checked, so a cloud
@@ -133,24 +135,46 @@ impl AppState {
             settings_dir: config_dir,
             budget: None,
             recent_files,
-            currency,
+            default_currency: currency,
             page: AppPage::Budget,
             report_mode: ReportMode::Planned,
             saved_since_sync: false,
         })
     }
 
-    pub fn set_currency(&mut self, code: String) -> Result<(), String> {
-        if !supported_currencies()
-            .iter()
-            .any(|currency| currency.code == code)
-        {
+    pub fn set_default_currency(&mut self, code: String) -> Result<(), String> {
+        if !is_supported_currency(&code) {
             return Err("Choose a supported ISO currency.".to_string());
         }
         fs::write(self.settings_dir.join("currency"), &code)
             .map_err(|error| format!("Could not save currency preference: {error}"))?;
-        self.currency = code;
+        self.default_currency = code;
         Ok(())
+    }
+
+    /// The currency the open budget's amounts are shown in.
+    pub fn currency(&self) -> String {
+        self.budget
+            .as_ref()
+            .map(|budget| self.currency_of(budget))
+            .unwrap_or_else(|| self.default_currency.clone())
+    }
+
+    /// A budget's currency, or the default for budgets without a supported one.
+    pub fn currency_of(&self, budget: &BWBudget) -> String {
+        budget
+            .currency
+            .clone()
+            .filter(|code| is_supported_currency(code))
+            .unwrap_or_else(|| self.default_currency.clone())
+    }
+
+    /// Changes the open budget's currency. Amounts are not converted.
+    pub fn set_budget_currency(&mut self, code: String) -> Result<(), String> {
+        if !is_supported_currency(&code) {
+            return Err("Choose a supported ISO currency.".to_string());
+        }
+        self.mutate(|budget| domain::update_budget_currency(budget, code))
     }
 
     pub fn open_budget(&mut self, path: &Path) -> Result<(), String> {
@@ -172,7 +196,7 @@ impl AppState {
         if path.exists() {
             return Err("A file already exists at that location.".to_string());
         }
-        let mut budget = new_budget(title, template)?;
+        let mut budget = new_budget(title, template, &self.default_currency)?;
         budget.url = Some(path.to_string_lossy().into_owned());
         write_budget_exclusive(&budget, &path)?;
         self.budget = Some(budget);
@@ -183,7 +207,7 @@ impl AppState {
 
     /// Encodes a new budget that is not saved anywhere yet, for uploading.
     pub fn new_budget_json(&self, title: &str, template: &BudgetTemplate) -> Result<String, String> {
-        encode_budget(&new_budget(title, template)?)
+        encode_budget(&new_budget(title, template, &self.default_currency)?)
     }
 
     /// Whether the open budget was saved since the last call.
@@ -396,12 +420,17 @@ impl AppState {
     }
 }
 
-fn new_budget(title: &str, template: &BudgetTemplate) -> Result<BWBudget, String> {
+/// A new budget in the previous budget's currency, or `default_currency`.
+fn new_budget(
+    title: &str,
+    template: &BudgetTemplate,
+    default_currency: &str,
+) -> Result<BWBudget, String> {
     let title = title.trim();
     if title.is_empty() {
         return Err("Enter a budget title.".to_string());
     }
-    Ok(match template {
+    let budget = match template {
         BudgetTemplate::BasicMonthly => {
             budget_from_template(BWTemplateType::BasicMonthly, title.to_string())
         }
@@ -413,7 +442,17 @@ fn new_budget(title: &str, template: &BudgetTemplate) -> Result<BWBudget, String
             let previous = read_budget(previous_path)?;
             budget_from_previous_budget(previous, title.to_string())?
         }
-    })
+    };
+    if budget.currency.is_some() {
+        return Ok(budget);
+    }
+    domain::update_budget_currency(budget, default_currency.to_string())
+}
+
+fn is_supported_currency(code: &str) -> bool {
+    supported_currencies()
+        .iter()
+        .any(|currency| currency.code == code)
 }
 
 pub fn read_budget(path: &Path) -> Result<BWBudget, String> {
@@ -790,7 +829,7 @@ mod tests {
                 settings_dir: self.0.join("settings"),
                 budget: None,
                 recent_files: Vec::new(),
-                currency: "USD".to_string(),
+                default_currency: "USD".to_string(),
                 page: AppPage::Budget,
                 report_mode: ReportMode::Planned,
                 saved_since_sync: false,
@@ -891,8 +930,27 @@ mod tests {
         let fixture = Fixture::new();
         let mut state = fixture.state();
         fs::create_dir(state.settings_dir.join("currency")).unwrap();
-        assert!(state.set_currency("EUR".to_string()).is_err());
-        assert_eq!(state.currency, "USD");
+        assert!(state.set_default_currency("EUR".to_string()).is_err());
+        assert_eq!(state.default_currency, "USD");
+    }
+
+    #[test]
+    fn budgets_keep_their_own_currency() {
+        let fixture = Fixture::new();
+        let mut state = fixture.state();
+        let path = fixture.0.join("trip.budget");
+        state.create_budget("Trip", &BudgetTemplate::Empty, &path).unwrap();
+        // New budgets take the default currency.
+        assert_eq!(read_budget(&path).unwrap().currency.as_deref(), Some("USD"));
+
+        state.set_budget_currency("EUR".to_string()).unwrap();
+        assert_eq!(state.currency(), "EUR");
+        assert_eq!(read_budget(&path).unwrap().currency.as_deref(), Some("EUR"));
+        assert!(state.set_budget_currency("ZZZ".to_string()).is_err());
+
+        // Budgets without a currency use the default.
+        state.budget = Some(BWBudget::new("Old".to_string()));
+        assert_eq!(state.currency(), "USD");
     }
 
     #[test]

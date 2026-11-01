@@ -70,6 +70,7 @@ pub enum BudgetCommand {
     Create(BudgetCreateArgs),
     Show(FileArgs),
     Rename(BudgetRenameArgs),
+    Currency(BudgetCurrencyArgs),
     Copy(BudgetCopyArgs),
     Move(BudgetMoveArgs),
     Delete(BudgetDeleteArgs),
@@ -95,6 +96,10 @@ pub struct BudgetCreateArgs {
     pub template: Option<String>,
     #[arg(long, value_name = "PATH", conflicts_with = "template")]
     pub from: Option<PathBuf>,
+    /// ISO 4217 code for the budget's amounts. Defaults to the copied
+    /// budget's currency, then to `config set --currency`.
+    #[arg(long, value_name = "CODE")]
+    pub currency: Option<String>,
     #[arg(long, value_name = "UUID")]
     pub overwrite_budget_id: Option<Uuid>,
     #[arg(long)]
@@ -107,6 +112,19 @@ pub struct BudgetRenameArgs {
     pub file: FileArgs,
     #[arg(long)]
     pub title: String,
+    #[arg(long, value_name = "UUID")]
+    pub if_revision: Option<Uuid>,
+    #[arg(long)]
+    pub dry_run: bool,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct BudgetCurrencyArgs {
+    #[command(flatten)]
+    pub file: FileArgs,
+    /// ISO 4217 code such as EUR. Amounts are not converted.
+    #[arg(long, value_name = "CODE")]
+    pub currency: String,
     #[arg(long, value_name = "UUID")]
     pub if_revision: Option<Uuid>,
     #[arg(long)]

@@ -1,0 +1,144 @@
+name: Apple App Store release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apple-app-store-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Package and upload ${{ matrix.platform }}
+    runs-on: macos-26
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos
+            profile_secret: MACOS_APP_STORE_PROFILE_BASE64
+          - platform: ios
+            profile_secret: IOS_APP_STORE_PROFILE_BASE64
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID || 'KCDH4VF88Y' }}
+      APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Validate release tag and credentials
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_REF_TYPE: ${{ github.ref_type }}
+          BUILD_NUMBER_OFFSET: ${{ vars.APPLE_BUILD_NUMBER_OFFSET || '1000' }}
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          APPLE_DISTRIBUTION_P12_BASE64: ${{ secrets.APPLE_DISTRIBUTION_P12_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          MAC_INSTALLER_P12_BASE64: ${{ secrets.MAC_INSTALLER_P12_BASE64 }}
+          APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets[matrix.profile_secret] }}
+          RELEASE_PLATFORM: ${{ matrix.platform }}
+        run: |
+          python3 - <<'PY'
+          import os, re
+          if os.environ['RELEASE_REF_TYPE'] != 'tag':
+              raise SystemExit('Select a version tag when manually running this workflow.')
+          tag = os.environ['RELEASE_TAG']
+          if not re.fullmatch(r'v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', tag):
+              raise SystemExit('Expected a release tag such as v3.0.1 (no prerelease suffix).')
+          required = [
+              'APP_STORE_CONNECT_KEY_ID', 'APP_STORE_CONNECT_ISSUER_ID',
+              'APP_STORE_CONNECT_PRIVATE_KEY', 'APPLE_DISTRIBUTION_P12_BASE64',
+              'APPLE_CERTIFICATE_PASSWORD', 'APPLE_PROVISIONING_PROFILE_BASE64',
+          ]
+          if os.environ['RELEASE_PLATFORM'] == 'macos':
+              required.append('MAC_INSTALLER_P12_BASE64')
+          missing = [name for name in required if not os.environ.get(name)]
+          if missing:
+              raise SystemExit('Missing GitHub secrets: ' + ', '.join(missing))
+          offset = int(os.environ['BUILD_NUMBER_OFFSET'])
+          build = offset + int(os.environ['GITHUB_RUN_NUMBER'])
+          attempt = int(os.environ['GITHUB_RUN_ATTEMPT'])
+          if offset < 0 or not 1 <= build <= 9999 or not 1 <= attempt <= 99:
+              raise SystemExit('Build number must fit Apple limits: major 1–9999, minor 1–99.')
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              output.write(f'APPLE_RELEASE_VERSION={tag[1:]}\n')
+              output.write(f'APPLE_RELEASE_BUILD={build}.{attempt}\n')
+          PY
+
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install 1.97.1 --profile minimal
+          rustup default 1.97.1
+
+      - name: Test Rust core
+        run: cargo test --manifest-path core/Cargo.toml --locked
+
+      - name: Generate release Apple bindings
+        run: bash scripts/apple/build-core.sh
+
+      - name: Install signing credentials
+        env:
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          APPLE_DISTRIBUTION_P12_BASE64: ${{ secrets.APPLE_DISTRIBUTION_P12_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          MAC_INSTALLER_P12_BASE64: ${{ secrets.MAC_INSTALLER_P12_BASE64 }}
+          APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets[matrix.profile_secret] }}
+          RELEASE_PLATFORM: ${{ matrix.platform }}
+        run: python3 scripts/apple/signing.py "$RELEASE_PLATFORM"
+
+      - name: Archive and export App Store package
+        env:
+          RELEASE_PLATFORM: ${{ matrix.platform }}
+        run: bash scripts/apple/release.sh "$RELEASE_PLATFORM" package
+
+      - name: Save signed packages and symbols
+        uses: actions/upload-artifact@v6
+        with:
+          name: BudgetWarden-${{ matrix.platform }}-${{ github.ref_name }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/apple-release/${{ matrix.platform }}/package/
+            ${{ runner.temp }}/apple-release/${{ matrix.platform }}/dSYMs.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload to App Store Connect
+        env:
+          RELEASE_PLATFORM: ${{ matrix.platform }}
+        run: bash scripts/apple/release.sh "$RELEASE_PLATFORM" upload
+
+      - name: Remove signing credentials
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, shutil, subprocess
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'apple-signing'
+          original = root / 'original-keychains.txt'
+          try:
+              if original.exists():
+                  subprocess.run(['security', 'list-keychains', '-d', 'user', '-s',
+                                  *original.read_text().splitlines()], check=True)
+          finally:
+              try:
+                  keychain = root / 'release.keychain-db'
+                  if keychain.exists():
+                      subprocess.run(['security', 'delete-keychain', str(keychain)], check=True)
+              finally:
+                  profiles = root / 'installed-profiles.json'
+                  if profiles.exists():
+                      for path in json.loads(profiles.read_text()):
+                          pathlib.Path(path).unlink(missing_ok=True)
+                  shutil.rmtree(root, ignore_errors=True)
+          PY

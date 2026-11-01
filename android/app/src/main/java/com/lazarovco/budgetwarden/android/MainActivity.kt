@@ -87,6 +87,7 @@ import com.lazarovco.budgetwarden.core.encodeBudget
 import com.lazarovco.budgetwarden.core.moveTransaction
 import com.lazarovco.budgetwarden.core.newTransaction
 import com.lazarovco.budgetwarden.core.updateCategory
+import com.lazarovco.budgetwarden.core.updateBudgetCurrency
 import com.lazarovco.budgetwarden.core.updateBudgetTitle
 import com.lazarovco.budgetwarden.core.updateTransaction
 import com.lazarovco.budgetwarden.android.data.BudgetRepository
@@ -96,13 +97,16 @@ import com.lazarovco.budgetwarden.android.domain.Budget
 import com.lazarovco.budgetwarden.android.domain.BudgetDates
 import com.lazarovco.budgetwarden.android.domain.Category
 import com.lazarovco.budgetwarden.android.domain.CategoryType
+import com.lazarovco.budgetwarden.android.domain.DEFAULT_CURRENCY_PREFERENCE
 import com.lazarovco.budgetwarden.android.domain.Money
 import com.lazarovco.budgetwarden.android.domain.TemplateSelection
 import com.lazarovco.budgetwarden.android.domain.TransactionListItem
+import com.lazarovco.budgetwarden.android.domain.currencyCode
 import com.lazarovco.budgetwarden.android.domain.rawValue
+import com.lazarovco.budgetwarden.android.domain.systemCurrencyCode
+import com.lazarovco.budgetwarden.android.domain.withDefaultCurrency
 import com.lazarovco.budgetwarden.android.ui.theme.BudgetWardenAndroidTheme
 import java.text.SimpleDateFormat
-import java.util.Currency
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
@@ -151,9 +155,11 @@ fun BudgetWardenAndroidApp() {
     var selectedTab by rememberSaveable { mutableStateOf(AppDestination.BUDGET) }
     var transactionSearchActive by rememberSaveable { mutableStateOf(false) }
     var transactionSearchText by rememberSaveable { mutableStateOf("") }
-    var currencyCode by rememberSaveable {
-        mutableStateOf(preferences.getString("currency_code", null) ?: defaultCurrencyCode())
+    // The currency for new budgets and for budgets saved before budgets stored one.
+    var defaultCurrencyCode by rememberSaveable {
+        mutableStateOf(preferences.getString(DEFAULT_CURRENCY_PREFERENCE, null) ?: systemCurrencyCode())
     }
+    val currencyCode = currentBudget?.currencyCode(defaultCurrencyCode) ?: defaultCurrencyCode
     var createBudgetOpen by rememberSaveable { mutableStateOf(false) }
     var pendingCreationTitle by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingCreationTemplate by rememberSaveable { mutableStateOf<String?>(null) }
@@ -223,8 +229,8 @@ fun BudgetWardenAndroidApp() {
         scope.launch { googleDrive.refresh() }
     }
 
-    LaunchedEffect(mcpServer, currentBudget?.url, currencyCode) {
-        mcpServer.updateBudgets(currentBudget?.url?.let(Uri::parse), currencyCode)
+    LaunchedEffect(mcpServer, currentBudget?.url, defaultCurrencyCode) {
+        mcpServer.updateBudgets(currentBudget?.url?.let(Uri::parse), defaultCurrencyCode)
     }
 
     LaunchedEffect(mcpServer, sessionViewModel) {
@@ -394,7 +400,8 @@ fun BudgetWardenAndroidApp() {
 
                         AppDestination.SETTINGS -> SettingsScreen(
                             budget = budget,
-                            currencyCode = currencyCode,
+                            budgetCurrencyCode = currencyCode,
+                            defaultCurrencyCode = defaultCurrencyCode,
                             mcpState = mcpState,
                             modifier = Modifier.padding(innerPadding),
                             onMcpEnabledChange = mcpServer::setEnabled,
@@ -405,9 +412,12 @@ fun BudgetWardenAndroidApp() {
                             onConnectGoogleDrive = ::connectGoogleDrive,
                             onSignOutGoogleDrive = googleDrive::signOut,
                             onShareCloudBudget = { sharingCloudBudget = it },
-                            onCurrencyChange = {
-                                currencyCode = it
-                                preferences.edit().putString("currency_code", it).apply()
+                            onBudgetCurrencyChange = { code ->
+                                mutateBudget { updateBudgetCurrency(it, code) }
+                            },
+                            onDefaultCurrencyChange = {
+                                defaultCurrencyCode = it
+                                preferences.edit().putString(DEFAULT_CURRENCY_PREFERENCE, it).apply()
                             },
                             onRenameBudget = { title ->
                                 mutateBudget { updateBudgetTitle(it, title.trim()) }
@@ -440,7 +450,7 @@ fun BudgetWardenAndroidApp() {
                             val created = template.templateId?.let { budgetFromTemplateId(it, title.trim()) }
                                 ?: previous?.let { budgetFromPreviousBudget(it, title.trim()) }
                                 ?: budgetFromTemplateId(TemplateSelection.BASIC.templateId!!, title.trim())
-                            googleDrive.create(repository.normalizedFileName(title), encodeBudget(created))
+                            googleDrive.create(repository.normalizedFileName(title), encodeBudget(created.withDefaultCurrency(defaultCurrencyCode)))
                         }
                             .onSuccess(::openBudget)
                             .onFailure {
@@ -875,8 +885,7 @@ internal fun newCategoryTitleResource(type: CategoryType): Int = when (type) {
     CategoryType.DEBT -> R.string.new_debt
 }
 
-private fun defaultCurrencyCode(): String =
-    runCatching { Currency.getInstance(Locale.getDefault()).currencyCode }.getOrDefault("USD")
+
 
 internal fun currentMonthTitle(now: Date = Date()): String =
     SimpleDateFormat("LLLL yyyy", Locale.getDefault()).format(now)

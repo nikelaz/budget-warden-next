@@ -10,6 +10,7 @@
 import AppKit
 import Combine
 import Foundation
+import AppIntents
 import UniformTypeIdentifiers
 import BWAppleCore
 
@@ -48,11 +49,22 @@ final class BWStore: ObservableObject {
             iCloud.includeSharedBudgets(among: recentFiles)
         }
     }
-    @Published var selectedCurrency: BWCurrency {
+    /// The currency for new budgets and for budgets saved before budgets
+    /// stored one.
+    @Published var defaultCurrency: BWCurrency {
         didSet {
-            UserDefaults.standard.set(selectedCurrency.rawValue, forKey: Self.currencyKey)
+            UserDefaults.standard.set(defaultCurrency.rawValue, forKey: Self.currencyKey)
             shareBudgetsWithMcp()
         }
+    }
+
+    /// The currency the open budget's amounts are shown in.
+    var currency: BWCurrency {
+        currentBudget.map(currency(of:)) ?? defaultCurrency
+    }
+
+    func currency(of budget: BWBudget) -> BWCurrency {
+        budget.currency.flatMap(BWCurrency.init(rawValue:)) ?? defaultCurrency
     }
     @Published private(set) var mcpSettings: BWMcpSettings?
     @Published private(set) var mcpStatus: BWMcpServerStatus?
@@ -61,6 +73,8 @@ final class BWStore: ObservableObject {
     @Published private(set) var mcpShowBudgetRequest = UUID()
 
     private var mcpServer: BWMcpServerController?
+    /// The budgets the MCP server and Shortcuts can read and change.
+    let library: BWBudgetLibrary
 
     /// Budgets in Google Drive, including ones shared with the user.
     let googleDrive: BWGoogleDriveController
@@ -75,11 +89,16 @@ final class BWStore: ObservableObject {
     init() {
         let cloudChanges = BWBudgetChangeRelay()
         self.cloudChanges = cloudChanges
+        let libraryEvents = BWBudgetLibraryEventRelay()
+        library = BWBudgetLibrary(
+            newBudgetDirectory: { BWStore.mcpBudgetDirectory() },
+            events: { event in libraryEvents.handler?(event) }
+        )
         googleDrive = BWGoogleDriveController { url in cloudChanges.notify(url) }
         iCloud = BWICloudBudgetLibrary { url in cloudChanges.notify(url) }
 
         let defaults = UserDefaults.standard
-        selectedCurrency = defaults.string(forKey: Self.currencyKey)
+        defaultCurrency = defaults.string(forKey: Self.currencyKey)
             .flatMap(BWCurrency.init(rawValue:)) ?? .defaultCurrency
 
         let deviceID: UUID
@@ -100,11 +119,10 @@ final class BWStore: ObservableObject {
 
         mcpServer = BWMcpServerController(
             keyPrefix: "BW_MCP_",
-            newBudgetDirectory: { BWStore.mcpBudgetDirectory() },
-            budgetDidChange: { [weak self] url in self?.reloadBudget(changedAt: url) },
-            budgetWasCreated: { [weak self] url in self?.rememberRecent(url) },
+            library: library,
             showBudget: { [weak self] url in self?.showBudgetRequestedByMcp(at: url) }
         )
+        libraryEvents.handler = { [weak self] event in self?.handle(event) }
         shareBudgetsWithMcp()
         refreshMcpState()
 
@@ -188,11 +206,34 @@ final class BWStore: ObservableObject {
                     : nil
             } ?? URL(fileURLWithPath: path)
         }
-        mcpServer?.updateBudgets(
-            open: openURL,
-            recent: recentFiles,
-            currencyCode: selectedCurrency.rawValue
-        )
+        library.update(open: openURL, recent: recentFiles, defaultCurrencyCode: defaultCurrency.rawValue)
+    }
+
+    /// Follows changes the MCP server or Shortcuts made to budget files.
+    private func handle(_ event: BWBudgetLibraryEvent) {
+        switch event {
+        case .changed(let url):
+            reloadBudget(changedAt: url)
+            googleDrive.sync(budgetAt: url)
+        case .created(let url):
+            rememberRecent(url)
+        case .deleted(let url):
+            let target = url.standardizedFileURL
+            if openBudgetURL?.standardizedFileURL == target {
+                currentSecurityScopedURL?.stopAccessingSecurityScopedResource()
+                currentSecurityScopedURL = nil
+                currentBudget = nil
+                iCloud.watch(nil)
+            }
+            let documentController = NSDocumentController.shared
+            let remaining = documentController.recentDocumentURLs.filter { $0.standardizedFileURL != target }
+            documentController.clearRecentDocuments(nil)
+            for recent in remaining.reversed() {
+                documentController.noteNewRecentDocumentURL(recent)
+            }
+            recentFiles = documentController.recentDocumentURLs
+            BWAppShortcuts.updateAppShortcutParameters()
+        }
     }
 
     /// Re-reads the open budget after the MCP server or cloud sync changed
@@ -246,7 +287,7 @@ final class BWStore: ObservableObject {
         guard panel.runModal() == .OK, let url = panel.url else { return false }
 
         do {
-            var newBudget = try Self.newBudget(title: title, template: template)
+            var newBudget = try newBudget(title: title, template: template)
             newBudget.url = url.path
             try writeBudget(newBudget, to: url)
             selectBudget(newBudget)
@@ -265,7 +306,7 @@ final class BWStore: ObservableObject {
         windowStore: BWWindowStore
     ) async -> Bool {
         do {
-            let json = try encodeBudget(budget: Self.newBudget(title: title, template: template))
+            let json = try encodeBudget(budget: newBudget(title: title, template: template))
             let fileName = Self.fileName(for: title)
             let url: URL
             if location == .googleDrive {
@@ -283,12 +324,25 @@ final class BWStore: ObservableObject {
         }
     }
 
-    private static func newBudget(title: String, template: BWBudgetTemplateSelection) throws -> BWBudget {
+    /// A new budget in the previous budget's currency, or the default one.
+    private func newBudget(title: String, template: BWBudgetTemplateSelection) throws -> BWBudget {
+        let budget: BWBudget
         switch template {
         case .builtIn(let id):
-            return try BWCore.budgetFromTemplateId(templateId: id, title: title)
-        case .previousBudget(let budget):
-            return try BWCore.budgetFromPreviousBudget(budget: budget, title: title)
+            budget = try BWCore.budgetFromTemplateId(templateId: id, title: title)
+        case .previousBudget(let previous):
+            budget = try BWCore.budgetFromPreviousBudget(budget: previous, title: title)
+        }
+        return budget.currency == nil
+            ? try BWCore.updateBudgetCurrency(budget: budget, currency: defaultCurrency.rawValue)
+            : budget
+    }
+
+    /// Changes the currency of the open budget. Amounts are not converted.
+    func setBudgetCurrency(_ currency: BWCurrency, windowStore: BWWindowStore) {
+        guard let budget = currentBudget, budget.currency != currency.rawValue else { return }
+        _ = mutate(windowStore: windowStore) {
+            try BWCore.updateBudgetCurrency(budget: budget, currency: currency.rawValue)
         }
     }
 
@@ -329,13 +383,14 @@ final class BWStore: ObservableObject {
     }
 
     private func openBudget(at url: URL) throws {
-        let scoped = url.startAccessingSecurityScopedResource()
+        let alreadyScoped = currentSecurityScopedURL?.standardizedFileURL == url.standardizedFileURL
+        let scoped = !alreadyScoped && url.startAccessingSecurityScopedResource()
         do {
             let opened = try readBudget(at: url)
             if let previous = currentSecurityScopedURL, previous != url {
                 previous.stopAccessingSecurityScopedResource()
             }
-            currentSecurityScopedURL = scoped ? url : nil
+            currentSecurityScopedURL = (alreadyScoped || scoped) ? url : nil
             currentBudget = opened
             rememberRecent(url)
             iCloud.watch(iCloud.contains(url) ? url : nil)
@@ -555,6 +610,7 @@ final class BWStore: ObservableObject {
     private func rememberRecent(_ url: URL) {
         NSDocumentController.shared.noteNewRecentDocumentURL(url.standardizedFileURL)
         recentFiles = NSDocumentController.shared.recentDocumentURLs
+        BWAppShortcuts.updateAppShortcutParameters()
     }
 
     private static var budgetFileType: UTType {

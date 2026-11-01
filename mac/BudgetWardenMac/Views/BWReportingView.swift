@@ -21,7 +21,7 @@ struct BWReportingView: View {
             if let budget = store.currentBudget {
                 BWBudgetReportingContent(
                     budget: budget,
-                    currency: store.selectedCurrency,
+                    currency: store.currency,
                     amountMode: amountMode,
                     scope: .fullPage
                 )
