@@ -110,30 +110,7 @@ struct BWTransactionsView: View {
             }
             .toolbar {
                 ToolbarItemGroup(placement: .principal) {
-                    Menu {
-                        ForEach(store.recentFiles, id: \.self) { url in
-                            Button {
-                                Task { _ = await store.openBudget(at: url, windowStore: windowStore) }
-                            } label: {
-                                if store.currentBudget?.url == url.path {
-                                    Label(store.currentBudget?.title ?? url.deletingPathExtension().lastPathComponent, systemImage: "checkmark")
-                                }
-                                else {
-                                    Text(url.deletingPathExtension().lastPathComponent)
-                                }
-                            }
-                        }
-
-                        Divider()
-
-                        Button {
-                            windowStore.openBudgetDialog()
-                        } label: {
-                            Label("New Budget", systemImage: "plus")
-                        }
-                    } label: {
-                        Text(store.currentBudget?.title ?? "Budget")
-                    }
+                    BWBudgetSwitcherMenu(store: store, windowStore: windowStore)
 
                     Button {
                         isCreatingTransaction = true

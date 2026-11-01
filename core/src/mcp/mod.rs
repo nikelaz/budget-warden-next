@@ -148,8 +148,14 @@ impl BWMcpServer {
         config: BWMcpServerConfig,
     ) -> Result<BWMcpServerStatus, String> {
         let token = config.token.trim().to_string();
-        if token.len() < 16 || !token.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
-            return Err("The MCP server token must be at least 16 letters, digits, '-' or '_'.".to_string());
+        if token.len() < 16
+            || !token
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        {
+            return Err(
+                "The MCP server token must be at least 16 letters, digits, '-' or '_'.".to_string(),
+            );
         }
         let port = match config.port {
             0 => DEFAULT_MCP_PORT,
@@ -157,7 +163,10 @@ impl BWMcpServer {
             port => return Err(format!("{port} is not a valid TCP port.")),
         };
 
-        let mut running = self.running.lock().map_err(|_| "The MCP server state is unavailable.".to_string())?;
+        let mut running = self
+            .running
+            .lock()
+            .map_err(|_| "The MCP server state is unavailable.".to_string())?;
         if let Some(previous) = running.take() {
             previous.listener.stop();
         }
@@ -201,7 +210,11 @@ impl BWMcpServer {
     }
 
     pub fn stop(&self) {
-        let previous = self.running.lock().ok().and_then(|mut running| running.take());
+        let previous = self
+            .running
+            .lock()
+            .ok()
+            .and_then(|mut running| running.take());
         if let Some(previous) = previous {
             previous.listener.stop();
         }

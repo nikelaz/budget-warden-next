@@ -1,20 +1,20 @@
-/* 
+/*
  * Budget Warden
  * Copyright (c) 2026 Lazarov & Co EOOD
  * Author: Nikola Lazarov
  *
- * Licensed under the Source-Available Educational License. 
+ * Licensed under the Source-Available Educational License.
  * See the LICENSE file in the project root for full terms.
  */
 
 use std::collections::HashMap;
 
-use boltffi::*;
-use serde::{Serialize, Deserialize};
-use uuid::Uuid;
-use chrono::{Datelike, Local};
 use crate::crdt::*;
 use crate::validation::{checked_money_sum, validate_money_amount};
+use boltffi::*;
+use chrono::{Datelike, Local};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 pub(crate) const CURRENT_SCHEMA_VERSION: i32 = 2;
 
@@ -37,7 +37,7 @@ pub struct BWBudget {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub currency: Option<String>,
     pub categories: Vec<BWCategory>,
-    pub changes: CRDTChanges, 
+    pub changes: CRDTChanges,
 
     #[serde(skip_serializing)]
     pub url: Option<String>,
@@ -80,11 +80,10 @@ impl BWBudget {
     }
 
     pub fn ordered_categories(&self, category_type: Option<BWCategoryType>) -> Vec<BWCategory> {
-        let mut categories: Vec<_> = self.categories
+        let mut categories: Vec<_> = self
+            .categories
             .iter()
-            .filter(|category| {
-                category_type.is_none_or(|value| category.category_type == value)
-            })
+            .filter(|category| category_type.is_none_or(|value| category.category_type == value))
             .cloned()
             .collect();
 
@@ -103,13 +102,15 @@ pub struct BWCategory {
     pub amount_actual: BWMoneyAmount,
     pub amount_accumulated: BWMoneyAmount,
     pub category_type: BWCategoryType,
-    pub transactions: Vec<BWTransaction>
+    pub transactions: Vec<BWTransaction>,
 }
 
 impl BWCategory {
     pub fn update_actuals(&mut self) -> Result<(), String> {
         self.amount_actual = checked_money_sum(
-            self.transactions.iter().map(|transaction| transaction.amount),
+            self.transactions
+                .iter()
+                .map(|transaction| transaction.amount),
             &format!("Category {} actual amount", self.id),
         )?;
         Ok(())
@@ -122,7 +123,7 @@ pub struct BWTransaction {
     pub id: Uuid,
     pub title: String,
     pub description: String,
-    pub date: BWDate, 
+    pub date: BWDate,
     pub amount: BWMoneyAmount,
 }
 
@@ -161,7 +162,8 @@ impl BWCategoryType {
             BWCategoryType::Expenses => "Expenses",
             BWCategoryType::Savings => "Savings",
             BWCategoryType::Debt => "Debt",
-        }.to_string()
+        }
+        .to_string()
     }
 }
 
@@ -178,9 +180,9 @@ impl BWDate {
     pub fn now() -> BWDate {
         let today = Local::now().date_naive();
         Self {
-             year: today.year(),
-             month: today.month() as i32,
-             day: today.day() as i32,
+            year: today.year(),
+            month: today.month() as i32,
+            day: today.day() as i32,
         }
     }
 }

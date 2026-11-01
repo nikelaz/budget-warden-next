@@ -14,7 +14,8 @@ use serde_json::{Value, json};
 use super::http::{Request, Response};
 use super::tools::{self, BudgetService};
 
-pub(super) const SUPPORTED_PROTOCOL_VERSIONS: [&str; 3] = ["2025-06-18", "2025-03-26", "2024-11-05"];
+pub(super) const SUPPORTED_PROTOCOL_VERSIONS: [&str; 3] =
+    ["2025-06-18", "2025-03-26", "2024-11-05"];
 
 const PARSE_ERROR: i64 = -32700;
 const INVALID_REQUEST: i64 = -32600;
@@ -55,7 +56,11 @@ pub(super) fn handle_post(request: &Request, service: &BudgetService) -> Respons
             .filter_map(|message| handle_message(message, service))
             .collect(),
         Value::Object(_) => handle_message(message, service).into_iter().collect(),
-        _ => vec![error_response(Value::Null, INVALID_REQUEST, "Invalid request")],
+        _ => vec![error_response(
+            Value::Null,
+            INVALID_REQUEST,
+            "Invalid request",
+        )],
     };
 
     match (replies.len(), batch) {
@@ -68,7 +73,11 @@ pub(super) fn handle_post(request: &Request, service: &BudgetService) -> Respons
 /// Handles one JSON-RPC message and returns its response, if it needs one.
 pub(super) fn handle_message(message: Value, service: &BudgetService) -> Option<Value> {
     let Value::Object(object) = message else {
-        return Some(error_response(Value::Null, INVALID_REQUEST, "Invalid request"));
+        return Some(error_response(
+            Value::Null,
+            INVALID_REQUEST,
+            "Invalid request",
+        ));
     };
     let id = object.get("id").cloned();
     let Some(method) = object.get("method").and_then(Value::as_str) else {
@@ -117,14 +126,19 @@ fn initialize(params: &Value) -> Value {
 }
 
 fn call_tool(params: &Value, service: &BudgetService) -> Result<Value, (i64, String)> {
-    let name = params
-        .get("name")
-        .and_then(Value::as_str)
-        .ok_or((INVALID_PARAMS, "tools/call requires a tool name".to_string()))?;
+    let name = params.get("name").and_then(Value::as_str).ok_or((
+        INVALID_PARAMS,
+        "tools/call requires a tool name".to_string(),
+    ))?;
     let arguments = match params.get("arguments") {
         None | Some(Value::Null) => Value::Object(Default::default()),
         Some(arguments @ Value::Object(_)) => arguments.clone(),
-        Some(_) => return Err((INVALID_PARAMS, "Tool arguments must be an object".to_string())),
+        Some(_) => {
+            return Err((
+                INVALID_PARAMS,
+                "Tool arguments must be an object".to_string(),
+            ));
+        }
     };
     if !tools::definitions()
         .iter()

@@ -367,7 +367,10 @@ pub(crate) fn migrate_legacy_budget(value: Value, url: String) -> Result<BWBudge
             budget: vec![BudgetChange {
                 change_id: Uuid::new_v4(),
                 timestamp: baseline_timestamp,
-                payload: Some(BudgetChangePayload { title: Some(title), currency: None }),
+                payload: Some(BudgetChangePayload {
+                    title: Some(title),
+                    currency: None,
+                }),
             }],
             categories: category_changes,
             transactions: transaction_changes,

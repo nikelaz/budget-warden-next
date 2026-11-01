@@ -1,17 +1,17 @@
-/* 
+/*
  * Budget Warden
  * Copyright (c) 2026 Lazarov & Co EOOD
  * Author: Nikola Lazarov
  *
- * Licensed under the Source-Available Educational License. 
+ * Licensed under the Source-Available Educational License.
  * See the LICENSE file in the project root for full terms.
  */
 
+use crate::crdt::*;
+use crate::models::*;
+use crate::validation::{validate_budget, validate_category, validate_money_amount};
 use boltffi::*;
 use uuid::Uuid;
-use crate::models::*;
-use crate::crdt::*;
-use crate::validation::{validate_budget, validate_category, validate_money_amount};
 
 fn validated_budget(budget: BWBudget) -> Result<BWBudget, String> {
     validate_budget(&budget)?;
@@ -34,10 +34,7 @@ pub fn merge_budget_for_save(
 }
 
 #[export]
-pub fn update_budget_title(
-    mut budget: BWBudget,
-    title: String,
-) -> Result<BWBudget, String> {
+pub fn update_budget_title(mut budget: BWBudget, title: String) -> Result<BWBudget, String> {
     validate_budget(&budget)?;
 
     if title.trim().is_empty() {
@@ -49,10 +46,13 @@ pub fn update_budget_title(
     }
 
     budget.title = title.clone();
-    record_budget_change(&mut budget, BudgetChangePayload {
-        title: Some(title),
-        currency: None,
-    });
+    record_budget_change(
+        &mut budget,
+        BudgetChangePayload {
+            title: Some(title),
+            currency: None,
+        },
+    );
 
     validated_budget(budget)
 }
@@ -60,10 +60,7 @@ pub fn update_budget_title(
 /// Sets the currency the budget's amounts are in. `currency` is an ISO 4217
 /// code such as `eur` or `EUR`; it is stored in upper case.
 #[export]
-pub fn update_budget_currency(
-    mut budget: BWBudget,
-    currency: String,
-) -> Result<BWBudget, String> {
+pub fn update_budget_currency(mut budget: BWBudget, currency: String) -> Result<BWBudget, String> {
     validate_budget(&budget)?;
     let currency = normalize_currency_code(currency)?;
 
@@ -72,10 +69,13 @@ pub fn update_budget_currency(
     }
 
     budget.currency = Some(currency.clone());
-    record_budget_change(&mut budget, BudgetChangePayload {
-        title: None,
-        currency: Some(currency),
-    });
+    record_budget_change(
+        &mut budget,
+        BudgetChangePayload {
+            title: None,
+            currency: Some(currency),
+        },
+    );
 
     validated_budget(budget)
 }
@@ -86,7 +86,10 @@ pub fn update_budget_currency(
 pub fn normalize_currency_code(currency: String) -> Result<String, String> {
     let code = currency.trim().to_ascii_uppercase();
     if code.len() != 3 || !code.bytes().all(|byte| byte.is_ascii_uppercase()) {
-        return Err(format!("{} is not a three-letter ISO 4217 currency code", currency.trim()));
+        return Err(format!(
+            "{} is not a three-letter ISO 4217 currency code",
+            currency.trim()
+        ));
     }
     Ok(code)
 }
@@ -114,21 +117,20 @@ fn record_budget_change(budget: &mut BWBudget, payload: BudgetChangePayload) {
 pub fn create_transaction(
     mut budget: BWBudget,
     category_id: Uuid,
-    transaction: BWTransaction
+    transaction: BWTransaction,
 ) -> Result<BWBudget, String> {
     validate_budget(&budget)?;
     validate_money_amount(transaction.amount, "Transaction amount")?;
 
-    let category = budget.categories
+    let category = budget
+        .categories
         .iter_mut()
         .find(|x| x.id == category_id)
-        .ok_or_else(|| {
-            format!("Could not find category with id: {category_id} in this budget")
-        })?;
+        .ok_or_else(|| format!("Could not find category with id: {category_id} in this budget"))?;
 
     category.transactions.push(transaction.clone());
-    
-    let change = new_change_transaction_create(category_id, transaction.clone()); 
+
+    let change = new_change_transaction_create(category_id, transaction.clone());
 
     budget.changes.transactions.insert(transaction.id, change);
 
@@ -139,73 +141,80 @@ pub fn create_transaction(
 pub fn update_transaction(
     mut budget: BWBudget,
     category_id: Uuid,
-    transaction: BWTransaction
+    transaction: BWTransaction,
 ) -> Result<BWBudget, String> {
     validate_budget(&budget)?;
     validate_money_amount(transaction.amount, "Transaction amount")?;
 
-    let category = budget.categories
+    let category = budget
+        .categories
         .iter_mut()
         .find(|x| x.id == category_id)
-        .ok_or_else(|| {
-            format!("Could not find category with id: {category_id} in this budget")
-        })?;
+        .ok_or_else(|| format!("Could not find category with id: {category_id} in this budget"))?;
 
-    let transaction_in_budget = category.transactions
+    let transaction_in_budget = category
+        .transactions
         .iter_mut()
         .find(|x| x.id == transaction.id)
-        .ok_or_else(|| {
-            format!("Could not find the transaction in budget")
-        })?;
+        .ok_or_else(|| format!("Could not find the transaction in budget"))?;
 
     if transaction_in_budget.title != transaction.title {
         transaction_in_budget.title = transaction.title.clone();
-        let change = new_change_transaction_update(category_id, transaction.clone(), TransactionField::Title);
+        let change = new_change_transaction_update(
+            category_id,
+            transaction.clone(),
+            TransactionField::Title,
+        );
         let transaction_changes = budget.changes.transactions.get_mut(&transaction.id);
 
-        let transaction_changes = transaction_changes
-            .ok_or_else(|| {
-                format!("Could not update transaction, crdt changes in the file are corrupted.")
-            })?;
+        let transaction_changes = transaction_changes.ok_or_else(|| {
+            format!("Could not update transaction, crdt changes in the file are corrupted.")
+        })?;
 
         transaction_changes.insert(TransactionField::Title, change);
     }
 
     if transaction_in_budget.description != transaction.description {
         transaction_in_budget.description = transaction.description.clone();
-        let change = new_change_transaction_update(category_id, transaction.clone(), TransactionField::Description);
+        let change = new_change_transaction_update(
+            category_id,
+            transaction.clone(),
+            TransactionField::Description,
+        );
         let transaction_changes = budget.changes.transactions.get_mut(&transaction.id);
 
-        let transaction_changes = transaction_changes
-            .ok_or_else(|| {
-                format!("Could not update transaction, crdt changes in the file are corrupted.")
-            })?;
+        let transaction_changes = transaction_changes.ok_or_else(|| {
+            format!("Could not update transaction, crdt changes in the file are corrupted.")
+        })?;
 
         transaction_changes.insert(TransactionField::Description, change);
     }
 
     if transaction_in_budget.date != transaction.date {
         transaction_in_budget.date = transaction.date.clone();
-        let change = new_change_transaction_update(category_id, transaction.clone(), TransactionField::Date);
+        let change =
+            new_change_transaction_update(category_id, transaction.clone(), TransactionField::Date);
         let transaction_changes = budget.changes.transactions.get_mut(&transaction.id);
 
-        let transaction_changes = transaction_changes
-            .ok_or_else(|| {
-                format!("Could not update transaction, crdt changes in the file are corrupted.")
-            })?;
+        let transaction_changes = transaction_changes.ok_or_else(|| {
+            format!("Could not update transaction, crdt changes in the file are corrupted.")
+        })?;
 
         transaction_changes.insert(TransactionField::Date, change);
     }
 
     if transaction_in_budget.amount != transaction.amount {
         transaction_in_budget.amount = transaction.amount.clone();
-        let change = new_change_transaction_update(category_id, transaction.clone(), TransactionField::Amount);
+        let change = new_change_transaction_update(
+            category_id,
+            transaction.clone(),
+            TransactionField::Amount,
+        );
         let transaction_changes = budget.changes.transactions.get_mut(&transaction.id);
 
-        let transaction_changes = transaction_changes
-            .ok_or_else(|| {
-                format!("Could not update transaction, crdt changes in the file are corrupted.")
-            })?;
+        let transaction_changes = transaction_changes.ok_or_else(|| {
+            format!("Could not update transaction, crdt changes in the file are corrupted.")
+        })?;
 
         transaction_changes.insert(TransactionField::Amount, change);
     }
@@ -217,18 +226,18 @@ pub fn update_transaction(
 pub fn delete_transaction(
     mut budget: BWBudget,
     category_id: Uuid,
-    transaction_id: Uuid
+    transaction_id: Uuid,
 ) -> Result<BWBudget, String> {
     validate_budget(&budget)?;
 
-    let category = budget.categories
+    let category = budget
+        .categories
         .iter_mut()
         .find(|x| x.id == category_id)
-        .ok_or_else(|| {
-            format!("Could not find category with id: {category_id} in this budget")
-        })?;
+        .ok_or_else(|| format!("Could not find category with id: {category_id} in this budget"))?;
 
-    let position = category.transactions
+    let position = category
+        .transactions
         .iter()
         .position(|x| x.id == transaction_id)
         .ok_or_else(|| {
@@ -237,7 +246,10 @@ pub fn delete_transaction(
 
     category.transactions.remove(position);
 
-    budget.changes.transaction_tombstones.insert(transaction_id, HlcTimestamp::now());
+    budget
+        .changes
+        .transaction_tombstones
+        .insert(transaction_id, HlcTimestamp::now());
 
     validated_budget(budget)
 }
@@ -251,14 +263,16 @@ pub fn move_transaction(
 ) -> Result<BWBudget, String> {
     validate_budget(&budget)?;
 
-    let origin_category_index = budget.categories
+    let origin_category_index = budget
+        .categories
         .iter()
         .position(|category| category.id == origin_category_id)
         .ok_or_else(|| {
             format!("Could not find category with id: {origin_category_id} in this budget")
         })?;
 
-    let target_category_index = budget.categories
+    let target_category_index = budget
+        .categories
         .iter()
         .position(|category| category.id == target_category_id)
         .ok_or_else(|| {
@@ -277,15 +291,13 @@ pub fn move_transaction(
         return validated_budget(budget);
     }
 
-    let transaction = budget.categories[origin_category_index]
-        .transactions[transaction_index]
-        .clone();
-    let change = new_change_transaction_update(
-        target_category_id,
-        transaction,
-        TransactionField::Category,
-    );
-    let transaction_changes = budget.changes.transactions
+    let transaction =
+        budget.categories[origin_category_index].transactions[transaction_index].clone();
+    let change =
+        new_change_transaction_update(target_category_id, transaction, TransactionField::Category);
+    let transaction_changes = budget
+        .changes
+        .transactions
         .get_mut(&transaction_id)
         .ok_or_else(|| {
             format!("Could not move transaction, crdt changes in the file are corrupted.")
@@ -304,10 +316,7 @@ pub fn move_transaction(
 }
 
 #[export]
-pub fn create_category(
-    mut budget: BWBudget,
-    category: BWCategory
-) -> Result<BWBudget, String> {
+pub fn create_category(mut budget: BWBudget, category: BWCategory) -> Result<BWBudget, String> {
     validate_budget(&budget)?;
     validate_category(&category)?;
 
@@ -320,10 +329,7 @@ pub fn create_category(
     validated_budget(budget)
 }
 
-fn ordered_category_ids(
-    categories: &[BWCategory],
-    category_type: BWCategoryType,
-) -> Vec<Uuid> {
+fn ordered_category_ids(categories: &[BWCategory], category_type: BWCategoryType) -> Vec<Uuid> {
     let mut categories_of_type: Vec<(usize, &BWCategory)> = categories
         .iter()
         .enumerate()
@@ -337,10 +343,7 @@ fn ordered_category_ids(
         .collect()
 }
 
-fn update_category_ordinals(
-    categories: &mut [BWCategory],
-    ordered_category_ids: &[Uuid],
-) {
+fn update_category_ordinals(categories: &mut [BWCategory], ordered_category_ids: &[Uuid]) {
     for (ordinal, category_id) in ordered_category_ids.iter().enumerate() {
         if let Some(category) = categories
             .iter_mut()
@@ -352,26 +355,24 @@ fn update_category_ordinals(
 }
 
 fn sort_categories(categories: &mut [BWCategory]) {
-    categories.sort_by_key(|category| (
-        category.category_type as i32,
-        category.ordinal,
-    ));
+    categories.sort_by_key(|category| (category.category_type as i32, category.ordinal));
 }
 
 #[export]
-pub fn update_category(
-    mut budget: BWBudget,
-    category: BWCategory
-) -> Result<BWBudget, String> {
+pub fn update_category(mut budget: BWBudget, category: BWCategory) -> Result<BWBudget, String> {
     validate_budget(&budget)?;
     validate_category(&category)?;
 
-    let original_category = budget.categories
+    let original_category = budget
+        .categories
         .iter()
         .find(|item| item.id == category.id)
         .cloned()
         .ok_or_else(|| {
-            format!("Could not find category with id: {} in this budget", category.id)
+            format!(
+                "Could not find category with id: {} in this budget",
+                category.id
+            )
         })?;
 
     let original_categories = budget.categories.clone();
@@ -380,7 +381,10 @@ pub fn update_category(
         .iter_mut()
         .find(|x| x.id == category.id)
         .ok_or_else(|| {
-            format!("Could not find category with id: {} in this budget", category.id)
+            format!(
+                "Could not find category with id: {} in this budget",
+                category.id
+            )
         })?;
 
     category_in_budget.title = category.title;
@@ -390,21 +394,24 @@ pub fn update_category(
 
     if original_category.category_type == category.category_type {
         if original_category.ordinal != category.ordinal {
-            let mut ordered_ids = ordered_category_ids(
-                &updated_categories,
-                category.category_type,
-            );
+            let mut ordered_ids = ordered_category_ids(&updated_categories, category.category_type);
             let target_index = usize::try_from(category.ordinal)
                 .ok()
                 .filter(|index| *index < ordered_ids.len())
                 .ok_or_else(|| {
-                    format!("Could not move category to invalid ordinal: {}", category.ordinal)
+                    format!(
+                        "Could not move category to invalid ordinal: {}",
+                        category.ordinal
+                    )
                 })?;
             let current_index = ordered_ids
                 .iter()
                 .position(|category_id| *category_id == category.id)
                 .ok_or_else(|| {
-                    format!("Could not find category with id: {} in this budget", category.id)
+                    format!(
+                        "Could not find category with id: {} in this budget",
+                        category.id
+                    )
                 })?;
 
             let moved_category_id = ordered_ids.remove(current_index);
@@ -412,16 +419,11 @@ pub fn update_category(
             update_category_ordinals(&mut updated_categories, &ordered_ids);
         }
     } else {
-        let old_type_ids = ordered_category_ids(
-            &updated_categories,
-            original_category.category_type,
-        );
+        let old_type_ids =
+            ordered_category_ids(&updated_categories, original_category.category_type);
         update_category_ordinals(&mut updated_categories, &old_type_ids);
 
-        let mut new_type_ids = ordered_category_ids(
-            &updated_categories,
-            category.category_type,
-        );
+        let mut new_type_ids = ordered_category_ids(&updated_categories, category.category_type);
         new_type_ids.retain(|category_id| *category_id != category.id);
         new_type_ids.push(category.id);
         update_category_ordinals(&mut updated_categories, &new_type_ids);
@@ -436,7 +438,10 @@ pub fn update_category(
             .iter()
             .find(|category| category.id == updated_category.id)
             .ok_or_else(|| {
-                format!("Could not find category with id: {} in this budget", updated_category.id)
+                format!(
+                    "Could not find category with id: {} in this budget",
+                    updated_category.id
+                )
             })?;
         let mut fields = Vec::new();
 
@@ -461,9 +466,10 @@ pub fn update_category(
         }
     }
 
-    if category_changes.iter().any(|(category_id, _)| {
-        !budget.changes.categories.contains_key(category_id)
-    }) {
+    if category_changes
+        .iter()
+        .any(|(category_id, _)| !budget.changes.categories.contains_key(category_id))
+    {
         return Err(format!(
             "Could not update category, crdt changes in the file are corrupted."
         ));
@@ -472,24 +478,24 @@ pub fn update_category(
     budget.categories = updated_categories;
 
     for (category_id, fields) in category_changes {
-        let updated_category = budget.categories
+        let updated_category = budget
+            .categories
             .iter()
             .find(|category| category.id == category_id)
             .cloned()
             .ok_or_else(|| {
                 format!("Could not find category with id: {category_id} in this budget")
             })?;
-        let changes = budget.changes.categories
+        let changes = budget
+            .changes
+            .categories
             .get_mut(&category_id)
             .ok_or_else(|| {
                 format!("Could not update category, crdt changes in the file are corrupted.")
             })?;
 
         for field in fields {
-            let change = new_change_category_update(
-                updated_category.clone(),
-                field.clone(),
-            );
+            let change = new_change_category_update(updated_category.clone(), field.clone());
             changes.insert(field, change);
         }
     }
@@ -498,34 +504,25 @@ pub fn update_category(
 }
 
 #[export]
-pub fn delete_category(
-    mut budget: BWBudget,
-    category_id: Uuid
-) -> Result<BWBudget, String> {
+pub fn delete_category(mut budget: BWBudget, category_id: Uuid) -> Result<BWBudget, String> {
     validate_budget(&budget)?;
 
-    let deleted_category = budget.categories
+    let deleted_category = budget
+        .categories
         .iter()
         .find(|category| category.id == category_id)
         .cloned()
-        .ok_or_else(|| {
-            format!("Could not find category with id: {category_id} in this budget")
-        })?;
+        .ok_or_else(|| format!("Could not find category with id: {category_id} in this budget"))?;
     let original_categories = budget.categories.clone();
     let mut remaining_categories = budget.categories.clone();
     let category_index = remaining_categories
         .iter()
         .position(|category| category.id == category_id)
-        .ok_or_else(|| {
-            format!("Could not find category with id: {category_id} in this budget")
-        })?;
+        .ok_or_else(|| format!("Could not find category with id: {category_id} in this budget"))?;
 
     remaining_categories.remove(category_index);
 
-    let ordered_ids = ordered_category_ids(
-        &remaining_categories,
-        deleted_category.category_type,
-    );
+    let ordered_ids = ordered_category_ids(&remaining_categories, deleted_category.category_type);
     update_category_ordinals(&mut remaining_categories, &ordered_ids);
     sort_categories(&mut remaining_categories);
 
@@ -540,9 +537,10 @@ pub fn delete_category(
         })
         .collect();
 
-    if changed_category_ids.iter().any(|changed_category_id| {
-        !budget.changes.categories.contains_key(changed_category_id)
-    }) {
+    if changed_category_ids
+        .iter()
+        .any(|changed_category_id| !budget.changes.categories.contains_key(changed_category_id))
+    {
         return Err(format!(
             "Could not delete category, crdt changes in the file are corrupted."
         ));
@@ -551,18 +549,18 @@ pub fn delete_category(
     budget.categories = remaining_categories;
 
     for changed_category_id in changed_category_ids {
-        let changed_category = budget.categories
+        let changed_category = budget
+            .categories
             .iter()
             .find(|category| category.id == changed_category_id)
             .cloned()
             .ok_or_else(|| {
                 format!("Could not find category with id: {changed_category_id} in this budget")
             })?;
-        let change = new_change_category_update(
-            changed_category,
-            CategoryField::Ordinal,
-        );
-        let category_changes = budget.changes.categories
+        let change = new_change_category_update(changed_category, CategoryField::Ordinal);
+        let category_changes = budget
+            .changes
+            .categories
             .get_mut(&changed_category_id)
             .ok_or_else(|| {
                 format!("Could not delete category, crdt changes in the file are corrupted.")
@@ -571,7 +569,9 @@ pub fn delete_category(
         category_changes.insert(CategoryField::Ordinal, change);
     }
 
-    budget.changes.category_tombstones
+    budget
+        .changes
+        .category_tombstones
         .insert(category_id, HlcTimestamp::now());
 
     validated_budget(budget)
@@ -650,7 +650,10 @@ mod tests {
         assert_eq!(updated.currency.as_deref(), Some("EUR"));
         assert_eq!(updated.changes.budget.len(), 1);
         assert_eq!(
-            updated.changes.budget[0].payload.as_ref().and_then(|p| p.currency.as_deref()),
+            updated.changes.budget[0]
+                .payload
+                .as_ref()
+                .and_then(|p| p.currency.as_deref()),
             Some("EUR"),
         );
     }
@@ -659,7 +662,10 @@ mod tests {
     fn update_budget_currency_rejects_invalid_codes() {
         for code in ["", "EU", "EURO", "E1R", "€"] {
             let budget = BWBudget::new("Trip".to_string());
-            assert!(update_budget_currency(budget, code.to_string()).is_err(), "{code:?}");
+            assert!(
+                update_budget_currency(budget, code.to_string()).is_err(),
+                "{code:?}"
+            );
         }
     }
 
@@ -673,7 +679,12 @@ mod tests {
         assert_eq!(budget.changes.budget.len(), 2);
         // Earlier versions read only the last change, which must be the newest.
         assert_eq!(
-            budget.changes.budget.last().and_then(|c| c.payload.as_ref()).and_then(|p| p.title.as_deref()),
+            budget
+                .changes
+                .budget
+                .last()
+                .and_then(|c| c.payload.as_ref())
+                .and_then(|p| p.title.as_deref()),
             Some("Holiday"),
         );
     }
@@ -697,12 +708,25 @@ mod tests {
     #[test]
     fn newer_currency_change_wins() {
         let _ = initialize_core(Uuid::from_u128(0xD0A6));
-        let base = update_budget_currency(BWBudget::new("Trip".to_string()), "USD".to_string()).unwrap();
+        let base =
+            update_budget_currency(BWBudget::new("Trip".to_string()), "USD".to_string()).unwrap();
         let older = update_budget_currency(base.clone(), "EUR".to_string()).unwrap();
         let newer = update_budget_currency(base, "GBP".to_string()).unwrap();
 
-        assert_eq!(merge_budget_for_save(older.clone(), newer.clone()).unwrap().currency.as_deref(), Some("GBP"));
-        assert_eq!(merge_budget_for_save(newer, older).unwrap().currency.as_deref(), Some("GBP"));
+        assert_eq!(
+            merge_budget_for_save(older.clone(), newer.clone())
+                .unwrap()
+                .currency
+                .as_deref(),
+            Some("GBP")
+        );
+        assert_eq!(
+            merge_budget_for_save(newer, older)
+                .unwrap()
+                .currency
+                .as_deref(),
+            Some("GBP")
+        );
     }
 
     #[test]

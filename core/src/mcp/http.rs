@@ -12,8 +12,8 @@
 //! Only `POST <token>/mcp` carries protocol traffic. The server never opens an
 //! SSE stream, so `GET` answers 405 as the transport allows.
 
-use std::io::{self, BufRead, BufReader, Read, Write};
 use std::collections::HashMap;
+use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -100,7 +100,10 @@ impl Listener {
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
         }
-        let connections = self.connections.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let connections = self
+            .connections
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         for stream in connections.values() {
             let _ = stream.shutdown(Shutdown::Both);
         }
@@ -144,7 +147,9 @@ fn accept_loop(
                 let mut stream = stream;
                 let _ = stream.set_nonblocking(false);
                 let registered = {
-                    let mut open = connections.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+                    let mut open = connections
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner());
                     if open.len() >= MAX_CONNECTIONS {
                         None
                     } else {
@@ -156,7 +161,11 @@ fn accept_loop(
                     }
                 };
                 let Some(id) = registered else {
-                    let _ = write_response(&mut stream, Response::text(503, "Too many connections"), false);
+                    let _ = write_response(
+                        &mut stream,
+                        Response::text(503, "Too many connections"),
+                        false,
+                    );
                     continue;
                 };
                 let endpoint = endpoint.clone();
@@ -167,10 +176,15 @@ fn accept_loop(
                     .name("bw-mcp-connection".to_string())
                     .spawn(move || {
                         let _ = serve_connection(stream, &endpoint, &service, &shutdown);
-                        open.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).remove(&id);
+                        open.lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner())
+                            .remove(&id);
                     });
                 if spawned.is_err() {
-                    connections.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).remove(&id);
+                    connections
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .remove(&id);
                 }
             }
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
@@ -205,7 +219,11 @@ fn serve_connection(
         // The server may have been stopped, or its URL replaced, while this
         // request was arriving.
         if shutdown.load(Ordering::SeqCst) {
-            write_response(&mut writer, Response::text(503, "The MCP server has stopped"), false)?;
+            write_response(
+                &mut writer,
+                Response::text(503, "The MCP server has stopped"),
+                false,
+            )?;
             return Ok(());
         }
         let keep_alive = !request
@@ -274,7 +292,8 @@ fn read_request(reader: &mut BufReader<TcpStream>) -> Result<Option<Request>, Re
     }
 
     let mut parts = request_line.split_whitespace();
-    let (Some(method), Some(path), Some(version)) = (parts.next(), parts.next(), parts.next()) else {
+    let (Some(method), Some(path), Some(version)) = (parts.next(), parts.next(), parts.next())
+    else {
         return Err(RequestError::Bad(400, "Malformed request line"));
     };
     if !version.starts_with("HTTP/1.") {

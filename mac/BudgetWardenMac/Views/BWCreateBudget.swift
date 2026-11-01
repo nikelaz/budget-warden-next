@@ -24,6 +24,8 @@ struct CreateBudgetView: View {
     @State private var recentTemplates: [BWBudgetTemplateSelection] = []
     @State private var location: BWBudgetLocation = .thisMac
     @State private var isSaving = false
+    /// Set while the setup questions for the selected template are shown.
+    @State private var setup: BWTemplateSetupModel?
 
     let onCreateSuccess: () -> Void
 
@@ -37,6 +39,59 @@ struct CreateBudgetView: View {
     }
 
     var body: some View {
+        // The setup page is its own sheet so it opens at its own size; a
+        // sheet does not grow when its content does.
+        detailsPage
+            .sheet(item: $setup) { setup in
+                setupPage(setup)
+                    .environmentObject(store)
+                    .environmentObject(windowStore)
+            }
+    }
+
+    private func setupPage(_ setup: BWTemplateSetupModel) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(selectedTemplateTitle ?? "Set Up Your Budget")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                Text("Answer what you know. Suggestions update as you go, and you can change every amount later.")
+                    .foregroundStyle(.secondary)
+            }
+            .padding(20)
+
+            Divider()
+
+            BWTemplateSetupView(model: setup, currency: store.defaultCurrency)
+
+            Divider()
+
+            HStack {
+                Button("Back") {
+                    self.setup = nil
+                }
+
+                Spacer()
+
+                Button("Skip") {
+                    save(template: selectedTemplate)
+                }
+                .help("Create the categories without planned amounts")
+                .disabled(isSaving)
+
+                Button("Create") {
+                    save(template: .builtInSetup(setup.templateID, setup.currentAnswers))
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(!setup.canCreate || isSaving)
+                .help(setup.unansweredRequired.first.map { "Answer: \($0.title)" } ?? "")
+            }
+            .padding(20)
+        }
+        .frame(width: 720, height: 560)
+    }
+
+    private var detailsPage: some View {
         VStack(alignment: .leading, spacing: 20) {
             Text("New Budget")
                 .font(.title2)
@@ -96,22 +151,19 @@ struct CreateBudgetView: View {
                 }
                 .keyboardShortcut(.cancelAction)
 
-                Button("Save") {
-                    isSaving = true
-                    Task(priority: .userInitiated) {
-                        defer { isSaving = false }
-                        if await store.createBudget(
-                            title: title,
-                            template: selectedTemplate,
-                            location: location,
-                            windowStore: windowStore
-                        ) {
-                            onCreateSuccess()
-                        }
+                if let setupTemplateID {
+                    Button("Continue") {
+                        setup = BWTemplateSetupModel(templateID: setupTemplateID)
                     }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!isValid)
+                } else {
+                    Button("Save") {
+                        save(template: selectedTemplate)
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!isValid || isSaving)
                 }
-                .keyboardShortcut(.defaultAction)
-                .disabled(!isValid || isSaving)
             }
         }
         .padding(20)
@@ -128,6 +180,36 @@ struct CreateBudgetView: View {
             case .googleDrive: store.googleDrive.isSignedIn
             }
         }
+    }
+
+    private func save(template: BWBudgetTemplateSelection) {
+        isSaving = true
+        Task(priority: .userInitiated) {
+            defer { isSaving = false }
+            if await store.createBudget(
+                title: title,
+                template: template,
+                location: location,
+                windowStore: windowStore
+            ) {
+                setup = nil
+                onCreateSuccess()
+            }
+        }
+    }
+
+    private var selectedCatalogEntry: BWTemplateCatalogEntry? {
+        guard case .builtIn(let id) = selectedTemplate else { return nil }
+        return templateCatalog.first(where: { $0.id == id })
+    }
+
+    /// The selected template's ID when it has setup questions.
+    private var setupTemplateID: String? {
+        selectedCatalogEntry.flatMap { $0.setupKind == "questions" ? $0.id : nil }
+    }
+
+    private var selectedTemplateTitle: String? {
+        selectedCatalogEntry.map { "\($0.family) · \($0.title)" }
     }
 
     private var selectedTemplateDescription: String? {

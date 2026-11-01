@@ -13,10 +13,7 @@ use crate::models::BWMoneyAmount;
 use crate::validation::{checked_money_sum, validate_money_amount};
 
 #[export]
-pub fn parse_money_amount(
-    text: String,
-    empty_value: Option<i64>,
-) -> Option<BWMoneyAmount> {
+pub fn parse_money_amount(text: String, empty_value: Option<i64>) -> Option<BWMoneyAmount> {
     let value = text.trim();
     if value.is_empty() {
         let amount = BWMoneyAmount {
@@ -33,7 +30,9 @@ pub fn parse_money_amount(
     let fraction_text = parts.next();
 
     if parts.next().is_some()
-        || !whole_text.chars().all(|character| character.is_ascii_digit())
+        || !whole_text
+            .chars()
+            .all(|character| character.is_ascii_digit())
         || fraction_text.is_some_and(|fraction| {
             !(1..=2).contains(&fraction.len())
                 || !fraction.chars().all(|character| character.is_ascii_digit())
@@ -64,9 +63,7 @@ pub fn format_money_input(amount: BWMoneyAmount) -> Result<String, String> {
 }
 
 #[export]
-pub fn sum_money_amounts(
-    amounts: Vec<BWMoneyAmount>,
-) -> Result<BWMoneyAmount, String> {
+pub fn sum_money_amounts(amounts: Vec<BWMoneyAmount>) -> Result<BWMoneyAmount, String> {
     checked_money_sum(amounts, "Money amount total")
 }
 
@@ -76,10 +73,22 @@ mod tests {
 
     #[test]
     fn parses_supported_money_input() {
-        assert_eq!(parse_money_amount("12".to_string(), None).unwrap().value, 1_200);
-        assert_eq!(parse_money_amount("12.3".to_string(), None).unwrap().value, 1_230);
-        assert_eq!(parse_money_amount(",45".to_string(), None).unwrap().value, 45);
-        assert_eq!(parse_money_amount("".to_string(), Some(0)).unwrap().value, 0);
+        assert_eq!(
+            parse_money_amount("12".to_string(), None).unwrap().value,
+            1_200
+        );
+        assert_eq!(
+            parse_money_amount("12.3".to_string(), None).unwrap().value,
+            1_230
+        );
+        assert_eq!(
+            parse_money_amount(",45".to_string(), None).unwrap().value,
+            45
+        );
+        assert_eq!(
+            parse_money_amount("".to_string(), Some(0)).unwrap().value,
+            0
+        );
     }
 
     #[test]

@@ -1,19 +1,19 @@
-/* 
+/*
  * Budget Warden
  * Copyright (c) 2026 Lazarov & Co EOOD
  * Author: Nikola Lazarov
  *
- * Licensed under the Source-Available Educational License. 
+ * Licensed under the Source-Available Educational License.
  * See the LICENSE file in the project root for full terms.
  */
 
-use boltffi::*;
-use uuid::Uuid;
-use std::collections::HashMap;
-use serde::{Serialize, Deserialize};
-use chrono::Utc;
 use crate::app_state::*;
 use crate::models::*;
+use boltffi::*;
+use chrono::Utc;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use uuid::Uuid;
 
 #[data]
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Ord, PartialOrd)]
@@ -95,74 +95,89 @@ pub struct TransactionChange {
 
 pub fn new_change_transaction_create(
     category_id: Uuid,
-    transaction: BWTransaction
+    transaction: BWTransaction,
 ) -> HashMap<TransactionField, TransactionChange> {
     let mut map = HashMap::new();
 
-    map.insert(TransactionField::Category, TransactionChange {
-        change_id: Uuid::new_v4(),
-        timestamp: HlcTimestamp::now(),
-        operation: CRDTOperation::Create,
-        category_id,
-        transaction_id: transaction.id,
-        payload: None,
-    });
+    map.insert(
+        TransactionField::Category,
+        TransactionChange {
+            change_id: Uuid::new_v4(),
+            timestamp: HlcTimestamp::now(),
+            operation: CRDTOperation::Create,
+            category_id,
+            transaction_id: transaction.id,
+            payload: None,
+        },
+    );
 
-    map.insert(TransactionField::Title, TransactionChange {
-        change_id: Uuid::new_v4(),
-        timestamp: HlcTimestamp::now(),
-        operation: CRDTOperation::Create,
-        category_id, 
-        transaction_id: transaction.id,
-        payload: Some(TransactionChangePayload {
-            title: Some(transaction.title),
-            description: None,
-            date: None,
-            amount: None,
-        })
-    });
+    map.insert(
+        TransactionField::Title,
+        TransactionChange {
+            change_id: Uuid::new_v4(),
+            timestamp: HlcTimestamp::now(),
+            operation: CRDTOperation::Create,
+            category_id,
+            transaction_id: transaction.id,
+            payload: Some(TransactionChangePayload {
+                title: Some(transaction.title),
+                description: None,
+                date: None,
+                amount: None,
+            }),
+        },
+    );
 
-    map.insert(TransactionField::Description, TransactionChange {
-        change_id: Uuid::new_v4(),
-        timestamp: HlcTimestamp::now(),
-        operation: CRDTOperation::Create,
-        category_id, 
-        transaction_id: transaction.id,
-        payload: Some(TransactionChangePayload {
-            title: None,
-            description: Some(transaction.description),
-            date: None,
-            amount: None,
-        })
-    });
+    map.insert(
+        TransactionField::Description,
+        TransactionChange {
+            change_id: Uuid::new_v4(),
+            timestamp: HlcTimestamp::now(),
+            operation: CRDTOperation::Create,
+            category_id,
+            transaction_id: transaction.id,
+            payload: Some(TransactionChangePayload {
+                title: None,
+                description: Some(transaction.description),
+                date: None,
+                amount: None,
+            }),
+        },
+    );
 
-    map.insert(TransactionField::Date, TransactionChange {
-        change_id: Uuid::new_v4(),
-        timestamp: HlcTimestamp::now(),
-        operation: CRDTOperation::Create,
-        category_id, 
-        transaction_id: transaction.id,
-        payload: Some(TransactionChangePayload {
-            title: None,
-            description: None,
-            date: Some(transaction.date),
-            amount: None,
-        })
-    });
+    map.insert(
+        TransactionField::Date,
+        TransactionChange {
+            change_id: Uuid::new_v4(),
+            timestamp: HlcTimestamp::now(),
+            operation: CRDTOperation::Create,
+            category_id,
+            transaction_id: transaction.id,
+            payload: Some(TransactionChangePayload {
+                title: None,
+                description: None,
+                date: Some(transaction.date),
+                amount: None,
+            }),
+        },
+    );
 
-    map.insert(TransactionField::Amount, TransactionChange {
-        change_id: Uuid::new_v4(),
-        timestamp: HlcTimestamp::now(),
-        operation: CRDTOperation::Create,
-        category_id, 
-        transaction_id: transaction.id,
-        payload: Some(TransactionChangePayload {
-            title: None,
-            description: None,
-            date: None,
-            amount: Some(transaction.amount),
-        })
-    });
+    map.insert(
+        TransactionField::Amount,
+        TransactionChange {
+            change_id: Uuid::new_v4(),
+            timestamp: HlcTimestamp::now(),
+            operation: CRDTOperation::Create,
+            category_id,
+            transaction_id: transaction.id,
+            payload: Some(TransactionChangePayload {
+                title: None,
+                description: None,
+                date: None,
+                amount: Some(transaction.amount),
+            }),
+        },
+    );
 
     map
 }
@@ -200,98 +215,108 @@ pub fn new_change_transaction_update(
         TransactionField::Category => None,
     };
 
-    TransactionChange { 
+    TransactionChange {
         change_id: Uuid::new_v4(),
         timestamp: HlcTimestamp::now(),
         operation: CRDTOperation::Update,
-        category_id, 
+        category_id,
         transaction_id: transaction.id,
         payload,
     }
 }
 
-pub fn new_change_category_create(
-    category: BWCategory,
-) -> HashMap<CategoryField, CategoryChange> {
+pub fn new_change_category_create(category: BWCategory) -> HashMap<CategoryField, CategoryChange> {
     let mut map = HashMap::new();
 
-    map.insert(CategoryField::Ordinal, CategoryChange {
-        change_id: Uuid::new_v4(),
-        timestamp: HlcTimestamp::now(),
-        operation: CRDTOperation::Create,
-        category_id: category.id,
-        payload: Some(CategoryChangePayload {
-            ordinal: Some(category.ordinal),
-            title: None,
-            amount_planned: None,
-            amount_accumulated: None,
-            category_type: None,
-        }),
-    });
+    map.insert(
+        CategoryField::Ordinal,
+        CategoryChange {
+            change_id: Uuid::new_v4(),
+            timestamp: HlcTimestamp::now(),
+            operation: CRDTOperation::Create,
+            category_id: category.id,
+            payload: Some(CategoryChangePayload {
+                ordinal: Some(category.ordinal),
+                title: None,
+                amount_planned: None,
+                amount_accumulated: None,
+                category_type: None,
+            }),
+        },
+    );
 
-    map.insert(CategoryField::Title, CategoryChange {
-        change_id: Uuid::new_v4(),
-        timestamp: HlcTimestamp::now(),
-        operation: CRDTOperation::Create,
-        category_id: category.id,
-        payload: Some(CategoryChangePayload {
-            ordinal: None,
-            title: Some(category.title),
-            amount_planned: None,
-            amount_accumulated: None,
-            category_type: None,
-        }),
-    });
+    map.insert(
+        CategoryField::Title,
+        CategoryChange {
+            change_id: Uuid::new_v4(),
+            timestamp: HlcTimestamp::now(),
+            operation: CRDTOperation::Create,
+            category_id: category.id,
+            payload: Some(CategoryChangePayload {
+                ordinal: None,
+                title: Some(category.title),
+                amount_planned: None,
+                amount_accumulated: None,
+                category_type: None,
+            }),
+        },
+    );
 
-    map.insert(CategoryField::AmountPlanned, CategoryChange {
-        change_id: Uuid::new_v4(),
-        timestamp: HlcTimestamp::now(),
-        operation: CRDTOperation::Create,
-        category_id: category.id,
-        payload: Some(CategoryChangePayload {
-            ordinal: None,
-            title: None,
-            amount_planned: Some(category.amount_planned),
-            amount_accumulated: None,
-            category_type: None,
-        }),
-    });
+    map.insert(
+        CategoryField::AmountPlanned,
+        CategoryChange {
+            change_id: Uuid::new_v4(),
+            timestamp: HlcTimestamp::now(),
+            operation: CRDTOperation::Create,
+            category_id: category.id,
+            payload: Some(CategoryChangePayload {
+                ordinal: None,
+                title: None,
+                amount_planned: Some(category.amount_planned),
+                amount_accumulated: None,
+                category_type: None,
+            }),
+        },
+    );
 
-    map.insert(CategoryField::AmountAccumulated, CategoryChange {
-        change_id: Uuid::new_v4(),
-        timestamp: HlcTimestamp::now(),
-        operation: CRDTOperation::Create,
-        category_id: category.id,
-        payload: Some(CategoryChangePayload {
-            ordinal: None,
-            title: None,
-            amount_planned: None,
-            amount_accumulated: Some(category.amount_accumulated),
-            category_type: None,
-        }),
-    });
+    map.insert(
+        CategoryField::AmountAccumulated,
+        CategoryChange {
+            change_id: Uuid::new_v4(),
+            timestamp: HlcTimestamp::now(),
+            operation: CRDTOperation::Create,
+            category_id: category.id,
+            payload: Some(CategoryChangePayload {
+                ordinal: None,
+                title: None,
+                amount_planned: None,
+                amount_accumulated: Some(category.amount_accumulated),
+                category_type: None,
+            }),
+        },
+    );
 
-    map.insert(CategoryField::CategoryType, CategoryChange {
-        change_id: Uuid::new_v4(),
-        timestamp: HlcTimestamp::now(),
-        operation: CRDTOperation::Create,
-        category_id: category.id,
-        payload: Some(CategoryChangePayload {
-            ordinal: None,
-            title: None,
-            amount_planned: None,
-            amount_accumulated: None,
-            category_type: Some(category.category_type),
-        }),
-    });
+    map.insert(
+        CategoryField::CategoryType,
+        CategoryChange {
+            change_id: Uuid::new_v4(),
+            timestamp: HlcTimestamp::now(),
+            operation: CRDTOperation::Create,
+            category_id: category.id,
+            payload: Some(CategoryChangePayload {
+                ordinal: None,
+                title: None,
+                amount_planned: None,
+                amount_accumulated: None,
+                category_type: Some(category.category_type),
+            }),
+        },
+    );
 
     map
 }
 
-pub fn new_change_category_update(
-    category: BWCategory,
-    field: CategoryField,
-) -> CategoryChange {
+pub fn new_change_category_update(category: BWCategory, field: CategoryField) -> CategoryChange {
     let payload = match field {
         CategoryField::Ordinal => CategoryChangePayload {
             ordinal: Some(category.ordinal),
@@ -486,7 +511,10 @@ pub(crate) fn merge_budget_changes(
         newest_with(|payload| payload.currency.is_some()),
     ];
     for change in candidates.into_iter().flatten() {
-        if !winners.iter().any(|winner| winner.change_id == change.change_id) {
+        if !winners
+            .iter()
+            .any(|winner| winner.change_id == change.change_id)
+        {
             winners.push(change);
         }
     }
@@ -532,10 +560,7 @@ fn merge_category_changes(
     mem
 }
 
-fn resolve_budget_title(
-    mem_title: String,
-    changes: &[BudgetChange],
-) -> String {
+fn resolve_budget_title(mem_title: String, changes: &[BudgetChange]) -> String {
     latest_budget_field(changes, |payload| payload.title.clone()).unwrap_or(mem_title)
 }
 
@@ -549,10 +574,7 @@ fn resolve_budget_currency(
         .or(disk_currency)
 }
 
-fn apply_category_changes(
-    cat: &mut BWCategory,
-    changes: &HashMap<CategoryField, CategoryChange>,
-) {
+fn apply_category_changes(cat: &mut BWCategory, changes: &HashMap<CategoryField, CategoryChange>) {
     for (field, change) in changes {
         if let Some(ref payload) = change.payload {
             match field {
@@ -665,7 +687,10 @@ fn build_merged_categories(
         }
 
         if let Some(category_id) = category_id {
-            txs_by_cat.entry(category_id).or_insert_with(Vec::new).push(tx);
+            txs_by_cat
+                .entry(category_id)
+                .or_insert_with(Vec::new)
+                .push(tx);
         }
     }
 
@@ -686,10 +711,7 @@ fn build_merged_categories(
         result.push(cat);
     }
 
-    result.sort_by_key(|category| (
-        category.category_type as i32,
-        category.ordinal,
-    ));
+    result.sort_by_key(|category| (category.category_type as i32, category.ordinal));
     result
 }
 
@@ -702,10 +724,7 @@ pub fn merge(budget_in_memory: BWBudget, budget_on_disk: BWBudget) -> BWBudget {
     merge_divergent_budgets(budget_in_memory, budget_on_disk)
 }
 
-pub(crate) fn merge_for_save(
-    budget_in_memory: BWBudget,
-    budget_on_disk: BWBudget,
-) -> BWBudget {
+pub(crate) fn merge_for_save(budget_in_memory: BWBudget, budget_on_disk: BWBudget) -> BWBudget {
     // A domain mutation intentionally retains the revision identity of the
     // snapshot it started from. Saving must still merge the mutated snapshot
     // with the current file and mint a new identity, even when the file has
@@ -713,11 +732,7 @@ pub(crate) fn merge_for_save(
     merge_divergent_budgets(budget_in_memory, budget_on_disk)
 }
 
-fn merge_divergent_budgets(
-    budget_in_memory: BWBudget,
-    budget_on_disk: BWBudget,
-) -> BWBudget {
-
+fn merge_divergent_budgets(budget_in_memory: BWBudget, budget_on_disk: BWBudget) -> BWBudget {
     let merged_changes = CRDTChanges {
         budget: merge_budget_changes(
             budget_in_memory.changes.budget,
@@ -741,10 +756,7 @@ fn merge_divergent_budgets(
         ),
     };
 
-    let title = resolve_budget_title(
-        budget_in_memory.title,
-        &merged_changes.budget,
-    );
+    let title = resolve_budget_title(budget_in_memory.title, &merged_changes.budget);
     let currency = resolve_budget_currency(
         budget_in_memory.currency,
         budget_on_disk.currency,
@@ -761,7 +773,9 @@ fn merge_divergent_budgets(
         id: budget_in_memory.id,
         revision: budget_in_memory.revision.max(budget_on_disk.revision) + 1,
         revision_id: Uuid::new_v4(),
-        schema_version: budget_in_memory.schema_version.max(budget_on_disk.schema_version),
+        schema_version: budget_in_memory
+            .schema_version
+            .max(budget_on_disk.schema_version),
         title,
         currency,
         categories,
@@ -782,7 +796,11 @@ mod tests {
     const DEVICE_B: Uuid = Uuid::from_u128(0xBBBB);
 
     fn ts(physical_ms: i64, logical: i32, device_id: Uuid) -> HlcTimestamp {
-        HlcTimestamp { physical_ms, logical, device_id }
+        HlcTimestamp {
+            physical_ms,
+            logical,
+            device_id,
+        }
     }
 
     fn empty_changes() -> CRDTChanges {
@@ -815,7 +833,12 @@ mod tests {
         }
     }
 
-    fn make_category(id: Uuid, ordinal: i32, title: &str, transactions: Vec<BWTransaction>) -> BWCategory {
+    fn make_category(
+        id: Uuid,
+        ordinal: i32,
+        title: &str,
+        transactions: Vec<BWTransaction>,
+    ) -> BWCategory {
         let amount_actual = BWMoneyAmount {
             value: transactions.iter().map(|t| t.amount.value).sum(),
         };
@@ -836,7 +859,11 @@ mod tests {
             id,
             title: title.to_string(),
             description: String::new(),
-            date: BWDate { year: 2026, month: 7, day: 1 },
+            date: BWDate {
+                year: 2026,
+                month: 7,
+                day: 1,
+            },
             amount: BWMoneyAmount { value: amount },
         }
     }
@@ -941,38 +968,46 @@ mod tests {
         let cat_id = Uuid::from_u128(0xCA7);
 
         let mut mem_changes = empty_changes();
-        mem_changes.categories.insert(cat_id, HashMap::from([
-            (CategoryField::Title, CategoryChange {
-                change_id: Uuid::new_v4(),
-                timestamp: ts(100, 0, DEVICE_A),
-                operation: CRDTOperation::Update,
-                category_id: cat_id,
-                payload: Some(CategoryChangePayload {
-                    ordinal: None,
-                    title: Some("Old Title".to_string()),
-                    amount_planned: None,
-                    amount_accumulated: None,
-                    category_type: None,
-                }),
-            }),
-        ]));
+        mem_changes.categories.insert(
+            cat_id,
+            HashMap::from([(
+                CategoryField::Title,
+                CategoryChange {
+                    change_id: Uuid::new_v4(),
+                    timestamp: ts(100, 0, DEVICE_A),
+                    operation: CRDTOperation::Update,
+                    category_id: cat_id,
+                    payload: Some(CategoryChangePayload {
+                        ordinal: None,
+                        title: Some("Old Title".to_string()),
+                        amount_planned: None,
+                        amount_accumulated: None,
+                        category_type: None,
+                    }),
+                },
+            )]),
+        );
 
         let mut disk_changes = empty_changes();
-        disk_changes.categories.insert(cat_id, HashMap::from([
-            (CategoryField::Title, CategoryChange {
-                change_id: Uuid::new_v4(),
-                timestamp: ts(200, 0, DEVICE_B),
-                operation: CRDTOperation::Update,
-                category_id: cat_id,
-                payload: Some(CategoryChangePayload {
-                    ordinal: None,
-                    title: Some("New Title".to_string()),
-                    amount_planned: None,
-                    amount_accumulated: None,
-                    category_type: None,
-                }),
-            }),
-        ]));
+        disk_changes.categories.insert(
+            cat_id,
+            HashMap::from([(
+                CategoryField::Title,
+                CategoryChange {
+                    change_id: Uuid::new_v4(),
+                    timestamp: ts(200, 0, DEVICE_B),
+                    operation: CRDTOperation::Update,
+                    category_id: cat_id,
+                    payload: Some(CategoryChangePayload {
+                        ordinal: None,
+                        title: Some("New Title".to_string()),
+                        amount_planned: None,
+                        amount_accumulated: None,
+                        category_type: None,
+                    }),
+                },
+            )]),
+        );
 
         let cat = make_category(cat_id, 0, "Original", vec![]);
         let mem = make_budget("B", 1, vec![cat.clone()], mem_changes);
@@ -988,41 +1023,59 @@ mod tests {
         let cat_id = Uuid::from_u128(0xCA7);
 
         let mut mem_changes = empty_changes();
-        mem_changes.categories.insert(cat_id, HashMap::from([
-            (CategoryField::Title, CategoryChange {
-                change_id: Uuid::new_v4(),
-                timestamp: ts(100, 0, DEVICE_A),
-                operation: CRDTOperation::Update,
-                category_id: cat_id,
-                payload: Some(CategoryChangePayload {
-                    ordinal: None,
-                    title: Some("Mem Title".to_string()),
-                    amount_planned: None,
-                    amount_accumulated: None,
-                    category_type: None,
-                }),
-            }),
-        ]));
+        mem_changes.categories.insert(
+            cat_id,
+            HashMap::from([(
+                CategoryField::Title,
+                CategoryChange {
+                    change_id: Uuid::new_v4(),
+                    timestamp: ts(100, 0, DEVICE_A),
+                    operation: CRDTOperation::Update,
+                    category_id: cat_id,
+                    payload: Some(CategoryChangePayload {
+                        ordinal: None,
+                        title: Some("Mem Title".to_string()),
+                        amount_planned: None,
+                        amount_accumulated: None,
+                        category_type: None,
+                    }),
+                },
+            )]),
+        );
 
         let mut disk_changes = empty_changes();
-        disk_changes.categories.insert(cat_id, HashMap::from([
-            (CategoryField::AmountPlanned, CategoryChange {
-                change_id: Uuid::new_v4(),
-                timestamp: ts(100, 0, DEVICE_B),
-                operation: CRDTOperation::Update,
-                category_id: cat_id,
-                payload: Some(CategoryChangePayload {
-                    ordinal: None,
-                    title: None,
-                    amount_planned: Some(BWMoneyAmount { value: 50000 }),
-                    amount_accumulated: None,
-                    category_type: None,
-                }),
-            }),
-        ]));
+        disk_changes.categories.insert(
+            cat_id,
+            HashMap::from([(
+                CategoryField::AmountPlanned,
+                CategoryChange {
+                    change_id: Uuid::new_v4(),
+                    timestamp: ts(100, 0, DEVICE_B),
+                    operation: CRDTOperation::Update,
+                    category_id: cat_id,
+                    payload: Some(CategoryChangePayload {
+                        ordinal: None,
+                        title: None,
+                        amount_planned: Some(BWMoneyAmount { value: 50000 }),
+                        amount_accumulated: None,
+                        category_type: None,
+                    }),
+                },
+            )]),
+        );
 
-        let mem = make_budget("B", 1, vec![make_category(cat_id, 0, "Original", vec![])], mem_changes);
-        let disk = make_budget("B", 1, vec![make_category(cat_id, 0, "Original", vec![])], disk_changes);
+        let mem = make_budget(
+            "B",
+            1,
+            vec![make_category(cat_id, 0, "Original", vec![])],
+            mem_changes,
+        );
+        let disk = make_budget(
+            "B",
+            1,
+            vec![make_category(cat_id, 0, "Original", vec![])],
+            disk_changes,
+        );
         let result = merge(mem, disk);
 
         assert_eq!(result.categories[0].title, "Mem Title");
@@ -1035,38 +1088,46 @@ mod tests {
         let tx_id = Uuid::from_u128(0x7A);
 
         let mut mem_changes = empty_changes();
-        mem_changes.transactions.insert(tx_id, HashMap::from([
-            (TransactionField::Title, TransactionChange {
-                change_id: Uuid::new_v4(),
-                timestamp: ts(100, 0, DEVICE_A),
-                operation: CRDTOperation::Update,
-                category_id: cat_id,
-                transaction_id: tx_id,
-                payload: Some(TransactionChangePayload {
-                    title: Some("Old Tx".to_string()),
-                    description: None,
-                    date: None,
-                    amount: None,
-                }),
-            }),
-        ]));
+        mem_changes.transactions.insert(
+            tx_id,
+            HashMap::from([(
+                TransactionField::Title,
+                TransactionChange {
+                    change_id: Uuid::new_v4(),
+                    timestamp: ts(100, 0, DEVICE_A),
+                    operation: CRDTOperation::Update,
+                    category_id: cat_id,
+                    transaction_id: tx_id,
+                    payload: Some(TransactionChangePayload {
+                        title: Some("Old Tx".to_string()),
+                        description: None,
+                        date: None,
+                        amount: None,
+                    }),
+                },
+            )]),
+        );
 
         let mut disk_changes = empty_changes();
-        disk_changes.transactions.insert(tx_id, HashMap::from([
-            (TransactionField::Title, TransactionChange {
-                change_id: Uuid::new_v4(),
-                timestamp: ts(200, 0, DEVICE_B),
-                operation: CRDTOperation::Update,
-                category_id: cat_id,
-                transaction_id: tx_id,
-                payload: Some(TransactionChangePayload {
-                    title: Some("New Tx".to_string()),
-                    description: None,
-                    date: None,
-                    amount: None,
-                }),
-            }),
-        ]));
+        disk_changes.transactions.insert(
+            tx_id,
+            HashMap::from([(
+                TransactionField::Title,
+                TransactionChange {
+                    change_id: Uuid::new_v4(),
+                    timestamp: ts(200, 0, DEVICE_B),
+                    operation: CRDTOperation::Update,
+                    category_id: cat_id,
+                    transaction_id: tx_id,
+                    payload: Some(TransactionChangePayload {
+                        title: Some("New Tx".to_string()),
+                        description: None,
+                        date: None,
+                        amount: None,
+                    }),
+                },
+            )]),
+        );
 
         let tx = make_transaction(tx_id, "Original", 1000);
         let cat = make_category(cat_id, 0, "Cat", vec![tx.clone()]);
@@ -1084,28 +1145,36 @@ mod tests {
         let tx_id = Uuid::from_u128(0x7A);
 
         let mut mem_changes = empty_changes();
-        mem_changes.transactions.insert(tx_id, HashMap::from([
-            (TransactionField::Category, TransactionChange {
-                change_id: Uuid::new_v4(),
-                timestamp: ts(100, 0, DEVICE_A),
-                operation: CRDTOperation::Update,
-                category_id: first_cat_id,
-                transaction_id: tx_id,
-                payload: None,
-            }),
-        ]));
+        mem_changes.transactions.insert(
+            tx_id,
+            HashMap::from([(
+                TransactionField::Category,
+                TransactionChange {
+                    change_id: Uuid::new_v4(),
+                    timestamp: ts(100, 0, DEVICE_A),
+                    operation: CRDTOperation::Update,
+                    category_id: first_cat_id,
+                    transaction_id: tx_id,
+                    payload: None,
+                },
+            )]),
+        );
 
         let mut disk_changes = empty_changes();
-        disk_changes.transactions.insert(tx_id, HashMap::from([
-            (TransactionField::Category, TransactionChange {
-                change_id: Uuid::new_v4(),
-                timestamp: ts(200, 0, DEVICE_B),
-                operation: CRDTOperation::Update,
-                category_id: second_cat_id,
-                transaction_id: tx_id,
-                payload: None,
-            }),
-        ]));
+        disk_changes.transactions.insert(
+            tx_id,
+            HashMap::from([(
+                TransactionField::Category,
+                TransactionChange {
+                    change_id: Uuid::new_v4(),
+                    timestamp: ts(200, 0, DEVICE_B),
+                    operation: CRDTOperation::Update,
+                    category_id: second_cat_id,
+                    transaction_id: tx_id,
+                    payload: None,
+                },
+            )]),
+        );
 
         let tx = make_transaction(tx_id, "Moved Tx", 1000);
         let mem = make_budget(
@@ -1128,11 +1197,13 @@ mod tests {
         );
         let result = merge(mem, disk);
 
-        let first_category = result.categories
+        let first_category = result
+            .categories
             .iter()
             .find(|category| category.id == first_cat_id)
             .unwrap();
-        let second_category = result.categories
+        let second_category = result
+            .categories
             .iter()
             .find(|category| category.id == second_cat_id)
             .unwrap();
@@ -1147,7 +1218,9 @@ mod tests {
         let cat_id = Uuid::from_u128(0xCA7);
 
         let mut disk_changes = empty_changes();
-        disk_changes.category_tombstones.insert(cat_id, ts(100, 0, DEVICE_B));
+        disk_changes
+            .category_tombstones
+            .insert(cat_id, ts(100, 0, DEVICE_B));
 
         let cat = make_category(cat_id, 0, "Deleted", vec![]);
         let mem = make_budget("B", 1, vec![cat.clone()], empty_changes());
@@ -1163,7 +1236,9 @@ mod tests {
         let tx_id = Uuid::from_u128(0x7A);
 
         let mut disk_changes = empty_changes();
-        disk_changes.transaction_tombstones.insert(tx_id, ts(100, 0, DEVICE_B));
+        disk_changes
+            .transaction_tombstones
+            .insert(tx_id, ts(100, 0, DEVICE_B));
 
         let tx = make_transaction(tx_id, "Deleted Tx", 5000);
         let cat = make_category(cat_id, 0, "Cat", vec![tx.clone()]);
@@ -1236,10 +1311,14 @@ mod tests {
         let id = Uuid::from_u128(0xDE);
 
         let mut mem_changes = empty_changes();
-        mem_changes.category_tombstones.insert(id, ts(100, 0, DEVICE_A));
+        mem_changes
+            .category_tombstones
+            .insert(id, ts(100, 0, DEVICE_A));
 
         let mut disk_changes = empty_changes();
-        disk_changes.category_tombstones.insert(id, ts(200, 0, DEVICE_B));
+        disk_changes
+            .category_tombstones
+            .insert(id, ts(200, 0, DEVICE_B));
 
         let mem = make_budget("B", 1, vec![], mem_changes);
         let disk = make_budget("B", 1, vec![], disk_changes);

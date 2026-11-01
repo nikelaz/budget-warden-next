@@ -11,10 +11,7 @@ use boltffi::*;
 
 use crate::models::{BWBudget, BWCategory, BWMoneyAmount};
 
-pub(crate) fn validate_money_amount(
-    amount: BWMoneyAmount,
-    context: &str,
-) -> Result<(), String> {
+pub(crate) fn validate_money_amount(amount: BWMoneyAmount, context: &str) -> Result<(), String> {
     if amount.value < 0 {
         return Err(format!("{context} cannot be negative"));
     }
@@ -22,10 +19,7 @@ pub(crate) fn validate_money_amount(
     Ok(())
 }
 
-pub(crate) fn checked_money_sum<I>(
-    amounts: I,
-    context: &str,
-) -> Result<BWMoneyAmount, String>
+pub(crate) fn checked_money_sum<I>(amounts: I, context: &str) -> Result<BWMoneyAmount, String>
 where
     I: IntoIterator<Item = BWMoneyAmount>,
 {
@@ -54,7 +48,10 @@ pub(crate) fn validate_category(category: &BWCategory) -> Result<(), String> {
     )?;
 
     checked_money_sum(
-        category.transactions.iter().map(|transaction| transaction.amount),
+        category
+            .transactions
+            .iter()
+            .map(|transaction| transaction.amount),
         &format!("Category {} transaction total", category.id),
     )?;
 

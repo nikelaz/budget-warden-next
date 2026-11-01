@@ -3,7 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="referrer" content="no-referrer">
+  <!-- Send only the origin: the Picker checks it against the API key's
+       website restrictions, and the page's query (file ID, email) stays private. -->
+  <meta name="referrer" content="strict-origin">
   <title>Add a Budget · Budget Warden</title>
   <style>
     :root { color-scheme: light dark; --text: #1d1d1f; --muted: #6e6e73; --bg: #f5f5f7; --accent: #0a66d8; }

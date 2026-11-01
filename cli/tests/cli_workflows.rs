@@ -258,9 +258,9 @@ fn budget_lifecycle_covers_templates_reuse_copy_move_list_and_delete() {
     let moved_arg = moved.to_str().unwrap();
 
     let templates = run_success(&sandbox, &["template", "list"]);
-    assert_eq!(templates["data"].as_array().unwrap().len(), 9);
+    assert_eq!(templates["data"].as_array().unwrap().len(), 6);
     let template = run_success(&sandbox, &["template", "show", "basic-monthly"]);
-    assert_eq!(template["data"]["categories"].as_array().unwrap().len(), 13);
+    assert_eq!(template["data"]["categories"].as_array().unwrap().len(), 14);
 
     let created = create_budget(&sandbox, &source, "September", "basic-monthly");
     let source_budget = &created["data"]["budget"];
@@ -274,6 +274,13 @@ fn budget_lifecycle_covers_templates_reuse_copy_move_list_and_delete() {
         .as_str()
         .unwrap()
         .to_string();
+    // Templates start at zero; plan Food so reuse can be checked to copy it.
+    run_success(
+        &sandbox,
+        &[
+            "category", "update", "--file", source_arg, "--id", &food_id, "--planned", "640.00",
+        ],
+    );
 
     let transaction = run_success(
         &sandbox,

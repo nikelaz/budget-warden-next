@@ -16,6 +16,8 @@ import BWAppleCore
 
 enum BWBudgetTemplateSelection: Hashable {
     case builtIn(String)
+    /// A built-in template with answers to its setup questions.
+    case builtInSetup(String, [BWSetupAnswer])
     case previousBudget(BWBudget)
 }
 
@@ -330,6 +332,8 @@ final class BWStore: ObservableObject {
         switch template {
         case .builtIn(let id):
             budget = try BWCore.budgetFromTemplateId(templateId: id, title: title)
+        case .builtInSetup(let id, let answers):
+            budget = try BWCore.budgetFromTemplateSetup(templateId: id, title: title, answers: answers)
         case .previousBudget(let previous):
             budget = try BWCore.budgetFromPreviousBudget(budget: previous, title: title)
         }

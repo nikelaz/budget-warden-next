@@ -53,7 +53,10 @@ impl BudgetService {
     }
 
     pub fn call(&self, name: &str, arguments: &Value) -> ToolResult {
-        let _guard = self.lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = self
+            .lock
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let arguments = Arguments(arguments);
         match name {
             "list_budgets" => self.list_budgets(),
@@ -162,11 +165,19 @@ impl BudgetService {
     /// The budget's currency, or the app's default for budgets saved before
     /// budgets stored one.
     fn currency(&self, budget: &BWBudget) -> String {
-        budget.currency.clone().unwrap_or_else(|| self.host.currency_code())
+        budget
+            .currency
+            .clone()
+            .unwrap_or_else(|| self.host.currency_code())
     }
 
     fn budget_json(&self, location: &str, budget: &BWBudget, include_transactions: bool) -> Value {
-        let mut value = budget_json(location, budget, self.is_open(location), include_transactions);
+        let mut value = budget_json(
+            location,
+            budget,
+            self.is_open(location),
+            include_transactions,
+        );
         value["currency"] = json!(self.currency(budget));
         value
     }
@@ -245,7 +256,9 @@ impl BudgetService {
 
     fn get_budget(&self, arguments: Arguments) -> ToolResult {
         let loaded = self.resolve(arguments)?;
-        let include_transactions = arguments.optional_bool("include_transactions")?.unwrap_or(false);
+        let include_transactions = arguments
+            .optional_bool("include_transactions")?
+            .unwrap_or(false);
         let mut value = self.budget_json(&loaded.location, &loaded.budget, include_transactions);
         value["totals"] = report_json(&loaded.budget)?["totals"].take();
         Ok(value)
@@ -253,13 +266,17 @@ impl BudgetService {
 
     fn rename_budget(&self, arguments: Arguments) -> ToolResult {
         let title = arguments.required_str("title")?.trim().to_string();
-        let loaded = self.mutate(arguments, |budget| domain::update_budget_title(budget, title))?;
+        let loaded = self.mutate(arguments, |budget| {
+            domain::update_budget_title(budget, title)
+        })?;
         Ok(self.budget_json(&loaded.location, &loaded.budget, false))
     }
 
     fn set_budget_currency(&self, arguments: Arguments) -> ToolResult {
         let currency = arguments.required_str("currency")?.to_string();
-        let loaded = self.mutate(arguments, |budget| domain::update_budget_currency(budget, currency))?;
+        let loaded = self.mutate(arguments, |budget| {
+            domain::update_budget_currency(budget, currency)
+        })?;
         Ok(self.budget_json(&loaded.location, &loaded.budget, false))
     }
 
@@ -304,7 +321,9 @@ impl BudgetService {
         let category_type = arguments
             .optional_category_type("type")?
             .ok_or("Missing required argument 'type'")?;
-        let planned = arguments.optional_amount("planned_amount")?.unwrap_or(BWMoneyAmount { value: 0 });
+        let planned = arguments
+            .optional_amount("planned_amount")?
+            .unwrap_or(BWMoneyAmount { value: 0 });
         let accumulated = arguments
             .optional_amount("accumulated_amount")?
             .unwrap_or(BWMoneyAmount { value: 0 });
@@ -345,7 +364,10 @@ impl BudgetService {
 
     fn update_category(&self, arguments: Arguments) -> ToolResult {
         let id = arguments.required_uuid("category_id")?;
-        let title = arguments.optional_str("title")?.map(str::trim).map(str::to_string);
+        let title = arguments
+            .optional_str("title")?
+            .map(str::trim)
+            .map(str::to_string);
         if title.as_deref().is_some_and(str::is_empty) {
             return Err("Category title cannot be empty".to_string());
         }
@@ -411,7 +433,9 @@ impl BudgetService {
         let from = arguments.optional_date("from_date")?;
         let to = arguments.optional_date("to_date")?;
         let search = arguments.optional_str("search")?.map(str::to_lowercase);
-        let limit = arguments.optional_index("limit")?.unwrap_or(DEFAULT_TRANSACTION_LIMIT);
+        let limit = arguments
+            .optional_index("limit")?
+            .unwrap_or(DEFAULT_TRANSACTION_LIMIT);
         let offset = arguments.optional_index("offset")?.unwrap_or(0);
         if let Some(category_id) = category_id {
             find_category(&loaded.budget, category_id)?;
@@ -423,7 +447,12 @@ impl BudgetService {
             .iter()
             .filter(|category| category_id.is_none_or(|id| category.id == id))
             .filter(|category| category_type.is_none_or(|kind| category.category_type == kind))
-            .flat_map(|category| category.transactions.iter().map(move |transaction| (category, transaction)))
+            .flat_map(|category| {
+                category
+                    .transactions
+                    .iter()
+                    .map(move |transaction| (category, transaction))
+            })
             .filter(|(_, transaction)| from.is_none_or(|from| transaction.date >= from))
             .filter(|(_, transaction)| to.is_none_or(|to| transaction.date <= to))
             .filter(|(_, transaction)| {
@@ -434,7 +463,10 @@ impl BudgetService {
             })
             .collect();
         matches.sort_by(|(_, left), (_, right)| {
-            right.date.cmp(&left.date).then_with(|| left.title.cmp(&right.title))
+            right
+                .date
+                .cmp(&left.date)
+                .then_with(|| left.title.cmp(&right.title))
         });
 
         let total = matches.len();
@@ -455,7 +487,9 @@ impl BudgetService {
     fn create_transaction(&self, arguments: Arguments) -> ToolResult {
         let category_id = arguments.required_uuid("category_id")?;
         let title = required_title(arguments)?;
-        let amount = arguments.optional_amount("amount")?.ok_or("Missing required argument 'amount'")?;
+        let amount = arguments
+            .optional_amount("amount")?
+            .ok_or("Missing required argument 'amount'")?;
         let date = arguments.optional_date("date")?;
         let description = arguments.optional_str("description")?.map(str::to_string);
         let transaction = crate::models::new_transaction(title, description, date, amount)?;
@@ -470,7 +504,10 @@ impl BudgetService {
 
     fn update_transaction(&self, arguments: Arguments) -> ToolResult {
         let id = arguments.required_uuid("transaction_id")?;
-        let title = arguments.optional_str("title")?.map(str::trim).map(str::to_string);
+        let title = arguments
+            .optional_str("title")?
+            .map(str::trim)
+            .map(str::to_string);
         if title.as_deref().is_some_and(str::is_empty) {
             return Err("Transaction title cannot be empty".to_string());
         }
@@ -548,7 +585,10 @@ fn transaction_count(budget: &BWBudget) -> usize {
 }
 
 fn position_error(position: usize, count: usize) -> String {
-    format!("Position {position} is out of range; this category group allows 0 to {}", count.saturating_sub(1))
+    format!(
+        "Position {position} is out of range; this category group allows 0 to {}",
+        count.saturating_sub(1)
+    )
 }
 
 fn required_title(arguments: Arguments) -> Result<String, String> {
@@ -570,7 +610,11 @@ pub(crate) fn budget_file_name(title: &str) -> String {
         })
         .collect();
     let cleaned = cleaned.trim().trim_matches('.');
-    let stem = if cleaned.is_empty() { "Untitled Budget" } else { cleaned };
+    let stem = if cleaned.is_empty() {
+        "Untitled Budget"
+    } else {
+        cleaned
+    };
     format!("{stem}.budget")
 }
 
@@ -599,7 +643,12 @@ fn category_type_name(category_type: BWCategoryType) -> &'static str {
     }
 }
 
-fn budget_json(location: &str, budget: &BWBudget, is_open: bool, include_transactions: bool) -> Value {
+fn budget_json(
+    location: &str,
+    budget: &BWBudget,
+    is_open: bool,
+    include_transactions: bool,
+) -> Value {
     let categories: Vec<Value> = budget
         .ordered_categories(None)
         .iter()
@@ -791,7 +840,8 @@ impl<'a> Arguments<'a> {
     fn optional_uuid(&self, name: &str) -> Result<Option<Uuid>, String> {
         self.optional_str(name)?
             .map(|value| {
-                Uuid::parse_str(value.trim()).map_err(|_| format!("Argument '{name}' must be a UUID"))
+                Uuid::parse_str(value.trim())
+                    .map_err(|_| format!("Argument '{name}' must be a UUID"))
             })
             .transpose()
     }
@@ -806,7 +856,11 @@ impl<'a> Arguments<'a> {
             None => return Ok(None),
             Some(Value::String(value)) => value.clone(),
             Some(Value::Number(value)) => value.to_string(),
-            Some(_) => return Err(format!("Argument '{name}' must be a decimal amount such as \"12.50\"")),
+            Some(_) => {
+                return Err(format!(
+                    "Argument '{name}' must be a decimal amount such as \"12.50\""
+                ));
+            }
         };
         if text.trim().is_empty() {
             return Err(format!("Argument '{name}' cannot be empty"));
@@ -819,8 +873,9 @@ impl<'a> Arguments<'a> {
     fn optional_date(&self, name: &str) -> Result<Option<BWDate>, String> {
         self.optional_str(name)?
             .map(|value| {
-                let date = NaiveDate::parse_from_str(value.trim(), "%Y-%m-%d")
-                    .map_err(|_| format!("Argument '{name}' must be a date in YYYY-MM-DD format"))?;
+                let date = NaiveDate::parse_from_str(value.trim(), "%Y-%m-%d").map_err(|_| {
+                    format!("Argument '{name}' must be a date in YYYY-MM-DD format")
+                })?;
                 use chrono::Datelike;
                 Ok(BWDate {
                     year: date.year(),

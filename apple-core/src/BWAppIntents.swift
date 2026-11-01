@@ -508,24 +508,18 @@ public enum BWShortcutCategoryType: String, AppEnum, CaseIterable, Codable, Hash
 public enum BWShortcutTemplate: String, AppEnum, CaseIterable, Codable, Hashable, Sendable {
     case monthly = "basic-monthly"
     case weekly = "weekly-personal"
-    case biweekly = "biweekly-paycheck"
     case freelancer = "freelancer-monthly"
     case smallBusiness = "small-business-monthly"
-    case event = "event-planning"
     case vacation
-    case businessTrip = "business-trip"
     case empty
 
     public static var typeDisplayRepresentation: TypeDisplayRepresentation { TypeDisplayRepresentation(name: "Budget Template") }
     public static var caseDisplayRepresentations: [BWShortcutTemplate: DisplayRepresentation] { [
-        .monthly: "Monthly Budget",
-        .weekly: "Weekly Personal",
-        .biweekly: "Biweekly Paycheck",
-        .freelancer: "Freelancer Monthly",
-        .smallBusiness: "Small Business Monthly",
-        .event: "Event Planning",
-        .vacation: "Vacation",
-        .businessTrip: "Business Trip",
+        .monthly: "Personal Monthly Budget",
+        .weekly: "Personal Weekly Budget",
+        .freelancer: "Freelancer Monthly Budget",
+        .smallBusiness: "Small Business Monthly Budget",
+        .vacation: "Trip Budget",
         .empty: "Empty Budget",
     ] }
 }

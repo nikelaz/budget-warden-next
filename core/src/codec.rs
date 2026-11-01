@@ -1,17 +1,17 @@
-/* 
+/*
  * Budget Warden
  * Copyright (c) 2026 Lazarov & Co EOOD
  * Author: Nikola Lazarov
  *
- * Licensed under the Source-Available Educational License. 
+ * Licensed under the Source-Available Educational License.
  * See the LICENSE file in the project root for full terms.
  */
 
-use boltffi::*;
 use crate::crdt::observe_budget_timestamps;
 use crate::legacy_migration::migrate_legacy_budget;
 use crate::models::{BWBudget, CURRENT_SCHEMA_VERSION};
 use crate::validation::validate_budget;
+use boltffi::*;
 
 const NEWER_SCHEMA_ERROR: &str = "This budget was created with a newer version of Budget Warden. Please update Budget Warden to open it.";
 
@@ -54,8 +54,8 @@ pub fn decode_budget(json: &str, url: String) -> Result<BWBudget, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::*;
     use crate::crdt::*;
+    use crate::models::*;
     use chrono::{Datelike, Local};
     use uuid::Uuid;
 
@@ -68,26 +68,26 @@ mod tests {
             schema_version: 2,
             title: "Test Budget".to_string(),
             currency: None,
-            categories: vec![
-                BWCategory {
+            categories: vec![BWCategory {
+                id: Uuid::new_v4(),
+                ordinal: 0,
+                title: "Salary".to_string(),
+                amount_planned: BWMoneyAmount { value: 480000 },
+                amount_actual: BWMoneyAmount { value: 0 },
+                amount_accumulated: BWMoneyAmount { value: 0 },
+                category_type: BWCategoryType::Income,
+                transactions: vec![BWTransaction {
                     id: Uuid::new_v4(),
-                    ordinal: 0,
-                    title: "Salary".to_string(),
-                    amount_planned: BWMoneyAmount { value: 480000 },
-                    amount_actual: BWMoneyAmount { value: 0 },
-                    amount_accumulated: BWMoneyAmount { value: 0 },
-                    category_type: BWCategoryType::Income,
-                    transactions: vec![
-                        BWTransaction {
-                            id: Uuid::new_v4(),
-                            title: "July Paycheck".to_string(),
-                            description: String::new(),
-                            date: BWDate { year: 2026, month: 7, day: 1 },
-                            amount: BWMoneyAmount { value: 480000 },
-                        }
-                    ],
-                }
-            ],
+                    title: "July Paycheck".to_string(),
+                    description: String::new(),
+                    date: BWDate {
+                        year: 2026,
+                        month: 7,
+                        day: 1,
+                    },
+                    amount: BWMoneyAmount { value: 480000 },
+                }],
+            }],
             changes: CRDTChanges {
                 budget: Vec::new(),
                 categories: std::collections::HashMap::new(),
@@ -120,7 +120,10 @@ mod tests {
         let json = encode_budget(&budget).unwrap();
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert!(value.get("currency").is_none());
-        assert_eq!(value["schema_version"], serde_json::json!(CURRENT_SCHEMA_VERSION));
+        assert_eq!(
+            value["schema_version"],
+            serde_json::json!(CURRENT_SCHEMA_VERSION)
+        );
 
         let decoded = decode_budget(&json, String::new()).unwrap();
         assert!(decoded.currency.is_none());
@@ -138,7 +141,10 @@ mod tests {
         let decoded = decode_budget(&json, String::new()).unwrap();
         assert_eq!(decoded.currency.as_deref(), Some("EUR"));
         assert_eq!(
-            decoded.changes.budget[0].payload.as_ref().and_then(|p| p.currency.as_deref()),
+            decoded.changes.budget[0]
+                .payload
+                .as_ref()
+                .and_then(|p| p.currency.as_deref()),
             Some("EUR"),
         );
     }
@@ -167,7 +173,14 @@ mod tests {
         });
         let decoded = decode_budget(&json.to_string(), String::new()).unwrap();
         assert!(decoded.currency.is_none());
-        assert!(decoded.changes.budget[0].payload.as_ref().unwrap().currency.is_none());
+        assert!(
+            decoded.changes.budget[0]
+                .payload
+                .as_ref()
+                .unwrap()
+                .currency
+                .is_none()
+        );
     }
 
     #[test]
@@ -224,8 +237,7 @@ mod tests {
     #[test]
     fn test_decode_budget_migrates_live_legacy_fixture() {
         let json = include_str!("../tests/fixtures/legacy_budget.json");
-        let legacy_revision_id =
-            Uuid::parse_str("FD966378-22B3-4C83-A7E9-11D6F239AB5C").unwrap();
+        let legacy_revision_id = Uuid::parse_str("FD966378-22B3-4C83-A7E9-11D6F239AB5C").unwrap();
 
         let migrated = decode_budget(json, "/tmp/legacy.budget".to_string()).unwrap();
 
@@ -246,10 +258,7 @@ mod tests {
         assert!(migrated.requires_migration_writeback);
 
         assert_eq!(migrated.changes.budget.len(), 1);
-        assert_eq!(
-            migrated.changes.categories.len(),
-            migrated.categories.len()
-        );
+        assert_eq!(migrated.changes.categories.len(), migrated.categories.len());
         assert!(migrated.changes.transactions.is_empty());
         assert!(migrated.changes.category_tombstones.is_empty());
         assert!(migrated.changes.transaction_tombstones.is_empty());

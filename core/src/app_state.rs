@@ -1,16 +1,16 @@
-/* 
+/*
  * Budget Warden
  * Copyright (c) 2026 Lazarov & Co EOOD
  * Author: Nikola Lazarov
  *
- * Licensed under the Source-Available Educational License. 
+ * Licensed under the Source-Available Educational License.
  * See the LICENSE file in the project root for full terms.
  */
 
-use std::sync::OnceLock;
-use std::sync::Mutex;
 use crate::crdt::HlcTimestamp;
 use boltffi::*;
+use std::sync::Mutex;
+use std::sync::OnceLock;
 use uuid::Uuid;
 
 static APP_STATE: OnceLock<AppState> = OnceLock::new();

@@ -1,21 +1,22 @@
-/* 
+/*
  * Budget Warden
  * Copyright (c) 2026 Lazarov & Co EOOD
  * Author: Nikola Lazarov
  *
- * Licensed under the Source-Available Educational License. 
+ * Licensed under the Source-Available Educational License.
  * See the LICENSE file in the project root for full terms.
  */
 
 pub mod app_state;
-pub mod models;
+pub mod cloud;
 pub mod codec;
 pub mod crdt;
 pub mod domain;
 mod legacy_migration;
-pub mod templates;
+pub mod mcp;
+pub mod models;
 pub mod money;
 pub mod reporting;
+pub mod template_setup;
+pub mod templates;
 pub mod validation;
-pub mod mcp;
-pub mod cloud;

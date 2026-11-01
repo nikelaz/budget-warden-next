@@ -19,12 +19,9 @@ pub enum BWTemplateType {
     Empty,
     BasicMonthly,
     WeeklyPersonal,
-    BiweeklyPaycheck,
     FreelancerMonthly,
     SmallBusinessMonthly,
-    EventPlanning,
     Vacation,
-    BusinessTrip,
 }
 
 #[data]
@@ -94,280 +91,86 @@ fn template_details(template: BWTemplateType) -> BWTemplateCatalogEntry {
             "basic-monthly",
             "Monthly Budget",
             "Personal",
-            "Common monthly income, expense, and savings categories.",
+            "Answer a few questions about your pay, housing, and goals to plan each month.",
             vec![
-                category(0, "Salary", 480000, BWCategoryType::Income),
-                category(0, "Fun & Entertainment", 20000, BWCategoryType::Expenses),
-                category(1, "Health & Fitness", 15000, BWCategoryType::Expenses),
-                category(2, "Giving", 24000, BWCategoryType::Expenses),
-                category(3, "Utilities", 28000, BWCategoryType::Expenses),
-                category(4, "Miscellaneous", 15000, BWCategoryType::Expenses),
-                category(5, "Insurance", 30000, BWCategoryType::Expenses),
-                category(6, "Housing", 120000, BWCategoryType::Expenses),
-                category(7, "Food", 64000, BWCategoryType::Expenses),
-                category(8, "Personal Care", 18000, BWCategoryType::Expenses),
-                category(9, "Transportation", 24000, BWCategoryType::Expenses),
-                category(0, "Emergency Fund", 50000, BWCategoryType::Savings),
-                category(1, "Retirement", 72000, BWCategoryType::Savings),
+                category(0, "Salary", 0, BWCategoryType::Income),
+                category(0, "Fun & Entertainment", 0, BWCategoryType::Expenses),
+                category(1, "Health & Fitness", 0, BWCategoryType::Expenses),
+                category(2, "Giving", 0, BWCategoryType::Expenses),
+                category(3, "Utilities", 0, BWCategoryType::Expenses),
+                category(4, "Miscellaneous", 0, BWCategoryType::Expenses),
+                category(5, "Insurance", 0, BWCategoryType::Expenses),
+                category(6, "Housing", 0, BWCategoryType::Expenses),
+                category(7, "Food", 0, BWCategoryType::Expenses),
+                category(8, "Personal Care", 0, BWCategoryType::Expenses),
+                category(9, "Transportation", 0, BWCategoryType::Expenses),
+                category(0, "Emergency Fund", 0, BWCategoryType::Savings),
+                category(1, "Retirement", 0, BWCategoryType::Savings),
+                category(0, "Debt Payments", 0, BWCategoryType::Debt),
             ],
         ),
         BWTemplateType::WeeklyPersonal => (
             "weekly-personal",
-            "Weekly Personal",
+            "Weekly Budget",
             "Personal",
-            "Plan weekly essentials, set aside money for upcoming bills, and build savings.",
+            "Answer a few questions about your pay, housing, and goals to plan each week.",
             vec![
-                category(0, "Weekly Income", 0, BWCategoryType::Income),
-                category(1, "Other Income", 0, BWCategoryType::Income),
-                category(0, "Housing & Utilities", 0, BWCategoryType::Expenses),
-                category(1, "Groceries", 0, BWCategoryType::Expenses),
-                category(2, "Dining Out", 0, BWCategoryType::Expenses),
-                category(3, "Transportation", 0, BWCategoryType::Expenses),
-                category(4, "Health & Personal Care", 0, BWCategoryType::Expenses),
-                category(5, "Family & Household", 0, BWCategoryType::Expenses),
-                category(6, "Fun & Entertainment", 0, BWCategoryType::Expenses),
-                category(7, "Giving", 0, BWCategoryType::Expenses),
-                category(8, "Miscellaneous", 0, BWCategoryType::Expenses),
+                category(0, "Salary", 0, BWCategoryType::Income),
+                category(0, "Fun & Entertainment", 0, BWCategoryType::Expenses),
+                category(1, "Health & Fitness", 0, BWCategoryType::Expenses),
+                category(2, "Giving", 0, BWCategoryType::Expenses),
+                category(3, "Utilities", 0, BWCategoryType::Expenses),
+                category(4, "Miscellaneous", 0, BWCategoryType::Expenses),
+                category(5, "Insurance", 0, BWCategoryType::Expenses),
+                category(6, "Housing", 0, BWCategoryType::Expenses),
+                category(7, "Food", 0, BWCategoryType::Expenses),
+                category(8, "Personal Care", 0, BWCategoryType::Expenses),
+                category(9, "Transportation", 0, BWCategoryType::Expenses),
                 category(0, "Emergency Fund", 0, BWCategoryType::Savings),
-                category(
-                    1,
-                    "Upcoming Bills & Annual Expenses",
-                    0,
-                    BWCategoryType::Savings,
-                ),
-                category(2, "Savings Goals", 0, BWCategoryType::Savings),
+                category(1, "Retirement", 0, BWCategoryType::Savings),
                 category(0, "Debt Payments", 0, BWCategoryType::Debt),
-            ],
-        ),
-        BWTemplateType::BiweeklyPaycheck => (
-            "biweekly-paycheck",
-            "Biweekly Paycheck",
-            "Personal",
-            "Give each paycheck a plan for bills, everyday spending, debt, and future needs.",
-            vec![
-                category(0, "Take-Home Pay", 0, BWCategoryType::Income),
-                category(1, "Other Income", 0, BWCategoryType::Income),
-                category(0, "Housing", 0, BWCategoryType::Expenses),
-                category(1, "Utilities", 0, BWCategoryType::Expenses),
-                category(2, "Phone & Internet", 0, BWCategoryType::Expenses),
-                category(3, "Insurance", 0, BWCategoryType::Expenses),
-                category(4, "Groceries", 0, BWCategoryType::Expenses),
-                category(5, "Dining Out", 0, BWCategoryType::Expenses),
-                category(6, "Transportation", 0, BWCategoryType::Expenses),
-                category(7, "Health & Personal Care", 0, BWCategoryType::Expenses),
-                category(8, "Childcare & Dependents", 0, BWCategoryType::Expenses),
-                category(9, "Fun & Entertainment", 0, BWCategoryType::Expenses),
-                category(10, "Giving", 0, BWCategoryType::Expenses),
-                category(11, "Miscellaneous", 0, BWCategoryType::Expenses),
-                category(0, "Emergency Fund", 0, BWCategoryType::Savings),
-                category(1, "Annual Bills & Repairs", 0, BWCategoryType::Savings),
-                category(2, "Retirement", 0, BWCategoryType::Savings),
-                category(3, "Savings Goals", 0, BWCategoryType::Savings),
-                category(0, "Credit Card Payments", 0, BWCategoryType::Debt),
-                category(1, "Loan Payments", 0, BWCategoryType::Debt),
             ],
         ),
         BWTemplateType::FreelancerMonthly => (
             "freelancer-monthly",
-            "Freelancer Monthly",
+            "Freelancer Monthly Budget",
             "Business",
-            "Plan client income, business costs, owner pay, and reserves for taxes and quieter months.",
+            "Pay yourself from client income after business costs, taxes, and a buffer for quieter months.",
             vec![
-                category(0, "Project Payments", 0, BWCategoryType::Income),
-                category(1, "Retainers", 0, BWCategoryType::Income),
-                category(2, "Other Revenue", 0, BWCategoryType::Income),
+                category(0, "Client Income", 0, BWCategoryType::Income),
                 category(0, "Owner Pay", 0, BWCategoryType::Expenses),
-                category(1, "Subcontractors", 0, BWCategoryType::Expenses),
-                category(2, "Software & Subscriptions", 0, BWCategoryType::Expenses),
-                category(3, "Workspace & Utilities", 0, BWCategoryType::Expenses),
-                category(4, "Phone & Internet", 0, BWCategoryType::Expenses),
-                category(5, "Supplies & Equipment", 0, BWCategoryType::Expenses),
-                category(6, "Marketing & Website", 0, BWCategoryType::Expenses),
-                category(7, "Accounting & Legal", 0, BWCategoryType::Expenses),
-                category(8, "Business Insurance", 0, BWCategoryType::Expenses),
-                category(9, "Travel & Meetings", 0, BWCategoryType::Expenses),
-                category(
-                    10,
-                    "Bank & Payment Processing Fees",
-                    0,
-                    BWCategoryType::Expenses,
-                ),
-                category(11, "Training & Memberships", 0, BWCategoryType::Expenses),
+                category(1, "Business Costs", 0, BWCategoryType::Expenses),
                 category(0, "Tax Reserve", 0, BWCategoryType::Savings),
                 category(1, "Income Buffer", 0, BWCategoryType::Savings),
-                category(2, "Equipment Replacement", 0, BWCategoryType::Savings),
-                category(0, "Business Loan Payments", 0, BWCategoryType::Debt),
-                category(1, "Equipment Financing Payments", 0, BWCategoryType::Debt),
             ],
         ),
         BWTemplateType::SmallBusinessMonthly => (
             "small-business-monthly",
-            "Small Business Monthly",
+            "Small Business Monthly Budget",
             "Business",
-            "Plan monthly cash needs across sales, operating costs, taxes, reserves, and debt payments.",
+            "Plan monthly cash across sales, the main costs, taxes, owner pay, and a reserve.",
             vec![
-                category(0, "Product Sales", 0, BWCategoryType::Income),
-                category(1, "Service Revenue", 0, BWCategoryType::Income),
-                category(2, "Subscription Revenue", 0, BWCategoryType::Income),
-                category(3, "Other Revenue", 0, BWCategoryType::Income),
+                category(0, "Sales", 0, BWCategoryType::Income),
                 category(0, "Inventory & Materials", 0, BWCategoryType::Expenses),
                 category(1, "Payroll & Benefits", 0, BWCategoryType::Expenses),
-                category(2, "Owner Pay", 0, BWCategoryType::Expenses),
-                category(3, "Contractors", 0, BWCategoryType::Expenses),
-                category(4, "Rent & Utilities", 0, BWCategoryType::Expenses),
-                category(5, "Software & Hosting", 0, BWCategoryType::Expenses),
-                category(6, "Phone & Internet", 0, BWCategoryType::Expenses),
-                category(7, "Marketing & Advertising", 0, BWCategoryType::Expenses),
-                category(8, "Shipping & Delivery", 0, BWCategoryType::Expenses),
-                category(9, "Supplies & Maintenance", 0, BWCategoryType::Expenses),
-                category(10, "Business Insurance", 0, BWCategoryType::Expenses),
-                category(11, "Accounting & Legal", 0, BWCategoryType::Expenses),
-                category(12, "Licenses & Permits", 0, BWCategoryType::Expenses),
-                category(
-                    13,
-                    "Bank & Payment Processing Fees",
-                    0,
-                    BWCategoryType::Expenses,
-                ),
-                category(14, "Taxes", 0, BWCategoryType::Expenses),
-                category(0, "Operating Reserve", 0, BWCategoryType::Savings),
-                category(1, "Equipment Replacement", 0, BWCategoryType::Savings),
-                category(2, "Growth Fund", 0, BWCategoryType::Savings),
-                category(0, "Business Loan Payments", 0, BWCategoryType::Debt),
-                category(1, "Business Credit Payments", 0, BWCategoryType::Debt),
-            ],
-        ),
-        BWTemplateType::EventPlanning => (
-            "event-planning",
-            "Event Planning",
-            "Events",
-            "Plan event funding, suppliers, guest needs, and a reserve for unexpected costs.",
-            vec![
-                category(0, "Event Budget", 0, BWCategoryType::Income),
-                category(1, "Ticket Sales", 0, BWCategoryType::Income),
-                category(2, "Sponsorships", 0, BWCategoryType::Income),
-                category(3, "Vendor Fees", 0, BWCategoryType::Income),
-                category(4, "Contributions", 0, BWCategoryType::Income),
-                category(0, "Venue & Rentals", 0, BWCategoryType::Expenses),
-                category(1, "Catering & Drinks", 0, BWCategoryType::Expenses),
-                category(2, "Speakers & Entertainment", 0, BWCategoryType::Expenses),
-                category(3, "Audio, Video & Lighting", 0, BWCategoryType::Expenses),
-                category(4, "Decor & Signage", 0, BWCategoryType::Expenses),
-                category(5, "Marketing & Ticketing", 0, BWCategoryType::Expenses),
-                category(6, "Staff & Contractors", 0, BWCategoryType::Expenses),
-                category(7, "Security & First Aid", 0, BWCategoryType::Expenses),
-                category(8, "Insurance & Permits", 0, BWCategoryType::Expenses),
-                category(9, "Travel & Accommodation", 0, BWCategoryType::Expenses),
-                category(10, "Transport & Parking", 0, BWCategoryType::Expenses),
-                category(11, "Cleaning & Waste", 0, BWCategoryType::Expenses),
-                category(12, "Payment Processing Fees", 0, BWCategoryType::Expenses),
-                category(
-                    13,
-                    "Accessibility & Guest Services",
-                    0,
-                    BWCategoryType::Expenses,
-                ),
-                category(0, "Contingency Reserve", 0, BWCategoryType::Savings),
-                category(0, "Event Financing Payments", 0, BWCategoryType::Debt),
-                category(1, "Supplier Credit Payments", 0, BWCategoryType::Debt),
+                category(2, "Rent & Utilities", 0, BWCategoryType::Expenses),
+                category(3, "Operating Costs", 0, BWCategoryType::Expenses),
+                category(4, "Owner Pay", 0, BWCategoryType::Expenses),
+                category(0, "Tax Reserve", 0, BWCategoryType::Savings),
+                category(1, "Operating Reserve", 0, BWCategoryType::Savings),
             ],
         ),
         BWTemplateType::Vacation => (
             "vacation",
-            "Vacation",
+            "Trip Budget",
             "Travel",
-            "Plan your travel budget, bookings, everyday trip spending, and an emergency buffer.",
+            "Plan tickets, where you stay, a daily allowance for everything else, and a buffer for surprises.",
             vec![
                 category(0, "Travel Budget", 0, BWCategoryType::Income),
-                category(
-                    0,
-                    "Flights & Long-Distance Travel",
-                    0,
-                    BWCategoryType::Expenses,
-                ),
+                category(0, "Getting There", 0, BWCategoryType::Expenses),
                 category(1, "Accommodation", 0, BWCategoryType::Expenses),
-                category(2, "Groceries & Dining", 0, BWCategoryType::Expenses),
-                category(
-                    3,
-                    "Local Transport & Car Rental",
-                    0,
-                    BWCategoryType::Expenses,
-                ),
-                category(4, "Fuel, Tolls & Parking", 0, BWCategoryType::Expenses),
-                category(5, "Activities & Excursions", 0, BWCategoryType::Expenses),
-                category(6, "Travel Insurance", 0, BWCategoryType::Expenses),
-                category(
-                    7,
-                    "Passports, Visas & Entry Fees",
-                    0,
-                    BWCategoryType::Expenses,
-                ),
-                category(8, "Baggage & Booking Fees", 0, BWCategoryType::Expenses),
-                category(9, "Phone & Internet", 0, BWCategoryType::Expenses),
-                category(10, "Travel Health & Supplies", 0, BWCategoryType::Expenses),
-                category(11, "Souvenirs & Shopping", 0, BWCategoryType::Expenses),
-                category(12, "Tips & Local Taxes", 0, BWCategoryType::Expenses),
-                category(
-                    13,
-                    "Currency Exchange & ATM Fees",
-                    0,
-                    BWCategoryType::Expenses,
-                ),
-                category(0, "Emergency Buffer", 0, BWCategoryType::Savings),
-            ],
-        ),
-        BWTemplateType::BusinessTrip => (
-            "business-trip",
-            "Business Trip",
-            "Travel",
-            "Plan your travel budget, work commitments, trip expenses, and an emergency buffer.",
-            vec![
-                category(0, "Travel Budget", 0, BWCategoryType::Income),
-                category(
-                    0,
-                    "Flights & Long-Distance Travel",
-                    0,
-                    BWCategoryType::Expenses,
-                ),
-                category(1, "Accommodation", 0, BWCategoryType::Expenses),
-                category(2, "Meals & Incidentals", 0, BWCategoryType::Expenses),
-                category(
-                    3,
-                    "Local Transport & Car Rental",
-                    0,
-                    BWCategoryType::Expenses,
-                ),
-                category(4, "Fuel, Tolls & Parking", 0, BWCategoryType::Expenses),
-                category(5, "Travel Insurance", 0, BWCategoryType::Expenses),
-                category(
-                    6,
-                    "Passports, Visas & Entry Fees",
-                    0,
-                    BWCategoryType::Expenses,
-                ),
-                category(7, "Baggage & Booking Fees", 0, BWCategoryType::Expenses),
-                category(8, "Phone & Internet", 0, BWCategoryType::Expenses),
-                category(
-                    9,
-                    "Conference & Registration Fees",
-                    0,
-                    BWCategoryType::Expenses,
-                ),
-                category(10, "Workspace & Meeting Rooms", 0, BWCategoryType::Expenses),
-                category(
-                    11,
-                    "Business Supplies & Printing",
-                    0,
-                    BWCategoryType::Expenses,
-                ),
-                category(12, "Client Hospitality", 0, BWCategoryType::Expenses),
-                category(13, "Tips & Local Taxes", 0, BWCategoryType::Expenses),
-                category(
-                    14,
-                    "Currency Exchange & ATM Fees",
-                    0,
-                    BWCategoryType::Expenses,
-                ),
+                category(2, "Per Diem", 0, BWCategoryType::Expenses),
+                category(3, "Activities & Extras", 0, BWCategoryType::Expenses),
                 category(0, "Emergency Buffer", 0, BWCategoryType::Savings),
             ],
         ),
@@ -380,7 +183,7 @@ fn template_details(template: BWTemplateType) -> BWTemplateCatalogEntry {
         family: family.to_string(),
         description: description.to_string(),
         default_reporting_mode: "income-allocation".to_string(),
-        setup_kind: "none".to_string(),
+        setup_kind: if template == BWTemplateType::Empty { "none" } else { "questions" }.to_string(),
         categories,
     }
 }
@@ -389,14 +192,11 @@ fn template_details(template: BWTemplateType) -> BWTemplateCatalogEntry {
 pub fn template_catalog() -> Vec<BWTemplateCatalogEntry> {
     [
         BWTemplateType::BasicMonthly,
-        BWTemplateType::Empty,
         BWTemplateType::WeeklyPersonal,
-        BWTemplateType::BiweeklyPaycheck,
         BWTemplateType::FreelancerMonthly,
         BWTemplateType::SmallBusinessMonthly,
-        BWTemplateType::EventPlanning,
         BWTemplateType::Vacation,
-        BWTemplateType::BusinessTrip,
+        BWTemplateType::Empty,
     ]
     .into_iter()
     .map(template_details)
@@ -415,23 +215,27 @@ pub fn budget_from_template_id(template_id: String, title: String) -> Result<BWB
 
 #[export]
 pub fn budget_from_template(template: BWTemplateType, title: String) -> BWBudget {
-    if template == BWTemplateType::Empty {
-        return BWBudget::new(title);
-    }
+    budget_from_definitions(title, template_details(template).categories)
+        .expect("built-in template categories must be valid")
+}
 
-    let details = template_details(template);
+/// Builds a fresh budget whose categories have new IDs and initialized
+/// change history.
+pub(crate) fn budget_from_definitions(
+    title: String,
+    definitions: Vec<BWTemplateCategoryDefinition>,
+) -> Result<BWBudget, String> {
     let mut new_budget = BWBudget::new(title);
-    for definition in details.categories {
+    for definition in definitions {
         let template_category = create_category(
             definition.ordinal,
             definition.title,
             definition.amount_planned.value,
             definition.category_type,
         );
-        new_budget = add_category(new_budget, template_category)
-            .expect("built-in template categories must be valid");
+        new_budget = add_category(new_budget, template_category)?;
     }
-    new_budget
+    Ok(new_budget)
 }
 
 #[export]
@@ -505,7 +309,7 @@ mod tests {
 
     #[test]
     fn travel_templates_include_funding_without_assuming_an_amount() {
-        for template in [BWTemplateType::Vacation, BWTemplateType::BusinessTrip] {
+        for template in [BWTemplateType::Vacation] {
             let entry = template_details(template);
             let income: Vec<_> = entry
                 .categories
@@ -520,6 +324,25 @@ mod tests {
                     .iter()
                     .all(|category| category.amount_planned.value == 0)
             );
+        }
+    }
+
+    #[test]
+    fn catalog_lists_personal_templates_first_and_empty_last() {
+        let ids: Vec<_> = template_catalog().into_iter().map(|entry| entry.id).collect();
+        assert_eq!(&ids[..2], ["basic-monthly", "weekly-personal"]);
+        assert_eq!(ids.last().map(String::as_str), Some("empty"));
+    }
+
+    #[test]
+    fn templates_start_at_zero_until_setup_answers_are_given() {
+        for entry in template_catalog() {
+            assert!(
+                entry.categories.iter().all(|category| category.amount_planned.value == 0),
+                "{} has prefilled amounts",
+                entry.id
+            );
+            assert_eq!(entry.setup_kind == "questions", entry.template_type != BWTemplateType::Empty);
         }
     }
 
@@ -616,7 +439,9 @@ mod tests {
         let budget = budget_from_previous_budget(previous, "November".to_string()).unwrap();
         assert_eq!(budget.currency.as_deref(), Some("EUR"));
 
-        let without = budget_from_previous_budget(BWBudget::new("Old".to_string()), "New".to_string()).unwrap();
+        let without =
+            budget_from_previous_budget(BWBudget::new("Old".to_string()), "New".to_string())
+                .unwrap();
         assert!(without.currency.is_none());
     }
 }

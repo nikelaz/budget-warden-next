@@ -84,10 +84,7 @@ pub struct BWReportingSummary {
     pub comparison_segments: Vec<BWReportingComparisonSegment>,
 }
 
-fn amount_for_mode(
-    category: &BWCategory,
-    amount_mode: BWReportingAmountMode,
-) -> BWMoneyAmount {
+fn amount_for_mode(category: &BWCategory, amount_mode: BWReportingAmountMode) -> BWMoneyAmount {
     match amount_mode {
         BWReportingAmountMode::Planned => category.amount_planned,
         BWReportingAmountMode::Actual => category.amount_actual,
@@ -110,9 +107,7 @@ fn total_for_types(
     )
 }
 
-fn component_for_category_type(
-    category_type: BWCategoryType,
-) -> BWReportingComponent {
+fn component_for_category_type(category_type: BWCategoryType) -> BWReportingComponent {
     match category_type {
         BWCategoryType::Income => BWReportingComponent::Income,
         BWCategoryType::Expenses => BWReportingComponent::Expenses,
@@ -122,9 +117,7 @@ fn component_for_category_type(
 }
 
 #[export]
-pub fn build_reporting_summary(
-    budget: &BWBudget,
-) -> Result<BWReportingSummary, String> {
+pub fn build_reporting_summary(budget: &BWBudget) -> Result<BWReportingSummary, String> {
     validate_budget(budget)?;
 
     let income = total_for_types(
@@ -332,24 +325,12 @@ mod tests {
     #[test]
     fn rejects_negative_or_overflowing_amounts() {
         let mut negative = BWBudget::new("Negative".to_string());
-        negative.categories = vec![category(
-            "Expense",
-            BWCategoryType::Expenses,
-            0,
-            -1,
-            0,
-        )];
+        negative.categories = vec![category("Expense", BWCategoryType::Expenses, 0, -1, 0)];
         assert!(build_reporting_summary(&negative).is_err());
 
         let mut overflowing = BWBudget::new("Overflow".to_string());
         overflowing.categories = vec![
-            category(
-                "Expense 1",
-                BWCategoryType::Expenses,
-                0,
-                i64::MAX,
-                0,
-            ),
+            category("Expense 1", BWCategoryType::Expenses, 0, i64::MAX, 0),
             category("Expense 2", BWCategoryType::Expenses, 1, 1, 0),
         ];
         assert!(build_reporting_summary(&overflowing).is_err());

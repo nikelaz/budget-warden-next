@@ -340,7 +340,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = BudgetWarden;
 				BW_GOOGLE_CLIENT_ID = 448533380151-o4on0hg4krhpa6bba4oh2es6nr37t2m6.apps.googleusercontent.com;
-				BW_GOOGLE_PICKER_URL = "";
+				BW_GOOGLE_PICKER_URL = "https://www.budgetwarden.com/pick";
 				CODE_SIGN_ENTITLEMENTS = BudgetWardenIOS/BudgetWardenIOS.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
@@ -376,7 +376,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = BudgetWarden;
 				BW_GOOGLE_CLIENT_ID = 448533380151-o4on0hg4krhpa6bba4oh2es6nr37t2m6.apps.googleusercontent.com;
-				BW_GOOGLE_PICKER_URL = "";
+				BW_GOOGLE_PICKER_URL = "https://www.budgetwarden.com/pick";
 				CODE_SIGN_ENTITLEMENTS = BudgetWardenIOS/BudgetWardenIOS.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
