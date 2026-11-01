@@ -2008,7 +2008,7 @@ impl AppUi {
         let group = adw::PreferencesGroup::builder()
             .title("Currency")
             .description(
-                "Each budget keeps its own currency. New budgets, and budgets from earlier versions of Budget Warden, use the default currency.",
+                "Each budget keeps its own currency. New budgets use the default currency.",
             )
             .build();
         let (budget_currency, default_currency) = {
