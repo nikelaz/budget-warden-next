@@ -4,6 +4,7 @@ xcuserdata/
 .build/
 /cli/target/
 /linux/target/
+/linux/dist/
 DerivedData/
 .swiftpm/
 bin/

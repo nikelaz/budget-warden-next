@@ -1,0 +1,35 @@
+{
+  "app-id": "com.lazarovco.BudgetWarden",
+  "branch": "stable",
+  "runtime": "org.gnome.Platform",
+  "runtime-version": "49",
+  "sdk": "org.gnome.Sdk",
+  "sdk-extensions": ["org.freedesktop.Sdk.Extension.rust-stable"],
+  "command": "budget-warden-linux",
+  "finish-args": [
+    "--share=ipc",
+    "--socket=wayland",
+    "--socket=fallback-x11",
+    "--device=dri",
+    "--share=network"
+  ],
+  "build-options": {
+    "append-path": "/usr/lib/sdk/rust-stable/bin",
+    "env": {"CARGO_HOME": "/run/build/budget-warden/cargo-home"}
+  },
+  "modules": [
+    {
+      "name": "budget-warden",
+      "buildsystem": "simple",
+      "build-commands": [
+        "cargo build --offline --locked --release --manifest-path linux/Cargo.toml --target-dir target",
+        "install -Dm755 target/release/budget-warden-linux /app/bin/budget-warden-linux",
+        "install -Dm644 linux/data/com.lazarovco.BudgetWarden.desktop /app/share/applications/com.lazarovco.BudgetWarden.desktop",
+        "install -Dm644 linux/data/com.lazarovco.BudgetWarden.metainfo.xml /app/share/metainfo/com.lazarovco.BudgetWarden.metainfo.xml",
+        "install -Dm644 linux/data/icons/hicolor/scalable/apps/com.lazarovco.BudgetWarden.svg /app/share/icons/hicolor/scalable/apps/com.lazarovco.BudgetWarden.svg",
+        "install -Dm644 linux/data/application-x-budget-warden-budget.xml /app/share/mime/packages/com.lazarovco.BudgetWarden.xml"
+      ],
+      "sources": [{"type": "dir", "path": "source"}]
+    }
+  ]
+}
