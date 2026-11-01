@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -228,7 +228,8 @@ fn cloud_budgets_are_created_edited_shared_and_discovered() {
     let shared = partner.cloud.budgets[0].clone();
     assert!(shared.shared_with_me);
     assert_eq!(budget_subtitle(&shared), "Shared by ana");
-    partner.cloud.open(shared.id.clone());
+    // Without a working copy, opening downloads the budget first.
+    assert_eq!(partner.cloud.open(shared.id.clone()), None);
     let events = wait_for(&mut partner.cloud, |events| {
         events
             .iter()
@@ -269,8 +270,12 @@ fn cloud_budgets_are_created_edited_shared_and_discovered() {
         synced(events).iter().any(|result| result.remote_changed)
     });
 
-    // The owner's next sync brings the partner's edit into the open budget.
-    owner.cloud.sync(created.id.clone());
+    // Reopening uses the working copy at once; the sync it starts brings
+    // the partner's edit into the open budget.
+    assert_eq!(
+        owner.cloud.open(created.id.clone()),
+        Some(PathBuf::from(&path))
+    );
     wait_for(&mut owner.cloud, |events| {
         synced(events).iter().any(|result| result.local_changed)
     });

@@ -417,6 +417,19 @@ impl BWGoogleDrive {
         self.sync_budget(file_id)
     }
 
+    /// The working copy this device already holds for a budget, found
+    /// without reaching Drive. Open it right away and sync it in the
+    /// background; `None` means the budget must be opened with
+    /// [`Self::open_budget`].
+    pub fn cached_working_copy(&self, file_id: String) -> Option<String> {
+        let state = self.cache.load_state();
+        let cached = state.files.get(&file_id)?;
+        let working_copy = self.cache.working_copy(&file_id, &cached.local_name);
+        working_copy
+            .is_file()
+            .then(|| working_copy.to_string_lossy().into_owned())
+    }
+
     /// Reconciles the working copy with Drive: downloads remote changes,
     /// merges them, and uploads local changes.
     pub fn sync_budget(&self, file_id: String) -> Result<BWCloudSyncResult, String> {
@@ -525,7 +538,8 @@ impl BWGoogleDrive {
 
     /// The Drive file ID whose working copy is at `path`.
     pub fn budget_id_for_path(&self, path: String) -> Option<String> {
-        let _state = lock(&self.state_lock);
+        // No `state_lock`: apps ask from their UI thread, sync holds the lock
+        // across network calls, and the state file is replaced atomically.
         let state = self.cache.load_state();
         self.cache.file_id_for_path(&state, Path::new(&path))
     }

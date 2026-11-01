@@ -76,7 +76,10 @@ impl AppUi {
     }
 
     pub(super) fn open_cloud_budget(self: &Rc<Self>, id: String) {
-        self.cloud.borrow().open(id);
+        let cached = self.cloud.borrow().open(id);
+        if let Some(path) = cached {
+            self.open_budget(path);
+        }
     }
 
     fn handle_cloud_event(self: &Rc<Self>, event: CloudEvent) {

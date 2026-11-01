@@ -233,8 +233,14 @@ public final class BWGoogleDriveController {
         budgets.first { $0.id == id }
     }
 
-    /// Downloads a budget if needed and returns its working copy.
+    /// Returns a budget's working copy. One already on this device is
+    /// returned at once and synced in the background; otherwise the budget
+    /// is downloaded first.
     public func open(_ budget: BWCloudBudget) async throws -> URL {
+        if let path = engine.drive.cachedWorkingCopy(fileId: budget.id) {
+            sync(id: budget.id)
+            return URL(fileURLWithPath: path)
+        }
         let result = try await engine.run { drive in try drive.openBudget(fileId: budget.id) }
         remember(result.budget)
         return URL(fileURLWithPath: result.localPath)
