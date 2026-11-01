@@ -13,10 +13,26 @@ public sealed partial class SettingsView : UserControl
     public SettingsView()
     {
         InitializeComponent();
-        CurrencyBox.Text = Vm.SelectedCurrency.DisplayName;
-        CurrencyBox.ItemsSource = new ObservableCollection<string>(
-            Vm.CurrencyOptions.Select(currency => currency.DisplayName));
+        foreach (AutoSuggestBox box in new[] { BudgetCurrencyBox, DefaultCurrencyBox })
+        {
+            box.Text = SelectedCurrency(box).DisplayName;
+            box.ItemsSource = new ObservableCollection<string>(
+                Vm.CurrencyOptions.Select(currency => currency.DisplayName));
+        }
+
+        // Show the newly opened budget's currency.
+        Vm.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(AppViewModel.BudgetCurrency)
+                && BudgetCurrencyBox.FocusState == FocusState.Unfocused)
+            {
+                BudgetCurrencyBox.Text = Vm.BudgetCurrency.DisplayName;
+            }
+        };
     }
+
+    private CurrencyOption SelectedCurrency(AutoSuggestBox box) =>
+        box == BudgetCurrencyBox ? Vm.BudgetCurrency : Vm.DefaultCurrency;
 
     private void CurrencyBox_TextChanged(
         AutoSuggestBox sender,
@@ -82,14 +98,28 @@ public sealed partial class SettingsView : UserControl
     {
         if (sender is AutoSuggestBox currencyBox)
         {
-            currencyBox.Text = Vm.SelectedCurrency.DisplayName;
+            currencyBox.Text = SelectedCurrency(currencyBox).DisplayName;
         }
     }
 
-    private void SelectCurrency(AutoSuggestBox sender, CurrencyOption currency)
+    private async void SelectCurrency(AutoSuggestBox sender, CurrencyOption currency)
     {
-        Vm.SelectedCurrency = currency;
         sender.Text = currency.DisplayName;
+        if (sender != BudgetCurrencyBox)
+        {
+            Vm.DefaultCurrency = currency;
+            return;
+        }
+
+        try
+        {
+            await Vm.SetBudgetCurrencyAsync(currency);
+        }
+        catch (Exception error)
+        {
+            sender.Text = Vm.BudgetCurrency.DisplayName;
+            await BudgetDialogs.ShowMessageAsync(this, "Could not change the currency", error.Message);
+        }
     }
 
     // Bindings also raise Toggled; only forward changes the user made.

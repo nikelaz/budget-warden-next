@@ -520,7 +520,7 @@ internal static class BudgetDialogs
         return textBox;
     }
 
-    private static async Task ShowMessageAsync(
+    internal static async Task ShowMessageAsync(
         FrameworkElement owner,
         string title,
         string message)

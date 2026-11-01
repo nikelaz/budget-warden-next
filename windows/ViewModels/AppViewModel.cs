@@ -71,8 +71,21 @@ public sealed partial class AppViewModel : ObservableObject
     [ObservableProperty]
     public partial ReportingPresentation Reporting { get; private set; } = ReportingPresentation.Empty;
 
+    /// <summary>
+    /// The currency for new budgets and for budgets saved before budgets
+    /// stored one.
+    /// </summary>
     [ObservableProperty]
-    public partial CurrencyOption SelectedCurrency { get; set; }
+    public partial CurrencyOption DefaultCurrency { get; set; }
+
+    /// <summary>The currency the open budget's amounts are shown in.</summary>
+    public CurrencyOption BudgetCurrency => CurrencyFor(CurrentBudget);
+
+    public CurrencyOption CurrencyFor(BwBudget? budget) =>
+        budget?.Currency is string code
+            && CurrencyOptions.FirstOrDefault(item => item.Code == code) is CurrencyOption option
+            ? option
+            : DefaultCurrency;
 
     public bool ShowWelcome => !HasBudget;
     public bool HasSelectedCategory => SelectedCategory is not null;
@@ -84,7 +97,7 @@ public sealed partial class AppViewModel : ObservableObject
     public AppViewModel()
     {
         InitializePersistence();
-        SelectedCurrency = CurrencyOptions.FirstOrDefault(item => item.Code == SelectedCurrencyCode)
+        DefaultCurrency = CurrencyOptions.FirstOrDefault(item => item.Code == DefaultCurrencyCode)
             ?? CurrencyOptions[0];
         InitializeMcpServer();
         InitializeCloud();
@@ -92,14 +105,15 @@ public sealed partial class AppViewModel : ObservableObject
 
     partial void OnSearchTextChanged(string value) => RefreshTransactions();
 
-    partial void OnSelectedCurrencyChanged(CurrencyOption value)
+    partial void OnDefaultCurrencyChanged(CurrencyOption value)
     {
-        if (value is null || value.Code == SelectedCurrencyCode)
+        if (value is null || value.Code == DefaultCurrencyCode)
         {
             return;
         }
 
-        SelectedCurrencyCode = value.Code;
+        DefaultCurrencyCode = value.Code;
+        ShareBudgetsWithMcp();
         Refresh();
     }
 
@@ -263,7 +277,7 @@ public sealed partial class AppViewModel : ObservableObject
 
     private string FormatMoney(long cents)
     {
-        CurrencyFormatter formatter = new(SelectedCurrency.Code)
+        CurrencyFormatter formatter = new(BudgetCurrency.Code)
         {
             IsGrouped = true,
         };
@@ -294,6 +308,7 @@ public sealed partial class AppViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowWelcome));
         OnPropertyChanged(nameof(HasBudget));
         OnPropertyChanged(nameof(BudgetTitle));
+        OnPropertyChanged(nameof(BudgetCurrency));
     }
 }
 

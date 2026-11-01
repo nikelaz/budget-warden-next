@@ -19,17 +19,22 @@
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1"
                 CornerRadius="{ThemeResource ControlCornerRadius}">
-                <Grid ColumnSpacing="24">
+                <Grid ColumnSpacing="24" RowSpacing="12">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
                     <TextBlock
-                        Text="Currency"
+                        Text="Budget currency"
                         VerticalAlignment="Center"
                         Style="{StaticResource BodyStrongTextBlockStyle}" />
                     <AutoSuggestBox
-                        x:Name="CurrencyBox"
+                        x:Name="BudgetCurrencyBox"
                         Grid.Column="1"
                         MinWidth="300"
                         PlaceholderText="Search by currency name or code"
@@ -38,8 +43,34 @@
                         SuggestionChosen="CurrencyBox_SuggestionChosen"
                         QuerySubmitted="CurrencyBox_QuerySubmitted"
                         LostFocus="CurrencyBox_LostFocus"
-                        AutomationProperties.Name="Currency"
+                        AutomationProperties.Name="Budget currency"
                         AutomationProperties.AutomationId="CurrencySearchBox" />
+                    <TextBlock
+                        Grid.Row="1"
+                        Text="Default currency"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <AutoSuggestBox
+                        x:Name="DefaultCurrencyBox"
+                        Grid.Row="1"
+                        Grid.Column="1"
+                        MinWidth="300"
+                        PlaceholderText="Search by currency name or code"
+                        QueryIcon="Find"
+                        TextChanged="CurrencyBox_TextChanged"
+                        SuggestionChosen="CurrencyBox_SuggestionChosen"
+                        QuerySubmitted="CurrencyBox_QuerySubmitted"
+                        LostFocus="CurrencyBox_LostFocus"
+                        AutomationProperties.Name="Default currency"
+                        AutomationProperties.AutomationId="DefaultCurrencySearchBox" />
+                    <TextBlock
+                        Grid.Row="2"
+                        Grid.ColumnSpan="2"
+                        MaxWidth="640"
+                        HorizontalAlignment="Left"
+                        TextWrapping="Wrap"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="Each budget keeps its own currency. New budgets, and budgets from earlier versions of Budget Warden, use the default currency." />
                 </Grid>
             </Border>
             <Border
