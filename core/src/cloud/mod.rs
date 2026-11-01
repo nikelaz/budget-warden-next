@@ -21,11 +21,11 @@
 //! apps store iCloud budgets as ordinary files in their ubiquity container.
 
 mod drive;
-mod google;
+pub(crate) mod google;
 pub mod http;
 #[cfg(feature = "native-http")]
 pub mod native;
-mod oauth;
+pub(crate) mod oauth;
 mod sync;
 #[cfg(any(test, feature = "test-support"))]
 pub mod testing;
