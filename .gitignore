@@ -12,3 +12,4 @@ obj/
 windows/test-artifacts/
 .codex-tmp/
 /.apple-release-secrets.env
+/.linux-release-secrets.env

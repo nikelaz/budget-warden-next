@@ -103,6 +103,40 @@ fn monthly_budget_transaction_reporting_and_reopen_flow() {
         .find(|category| category.title == "Housing")
         .unwrap()
         .id;
+
+    // Dragging a category onto another row moves it to that row's position.
+    let expense_ids = |app: &AppState| {
+        app.budget
+            .as_ref()
+            .unwrap()
+            .ordered_categories(Some(BWCategoryType::Expenses))
+            .iter()
+            .map(|category| category.id)
+            .collect::<Vec<_>>()
+    };
+    let before = expense_ids(&app);
+    let count = before.len();
+    assert!(
+        count >= 3,
+        "monthly template has several expense categories"
+    );
+    let start = before.iter().position(|id| *id == target_id).unwrap();
+    assert_eq!(app.category_position(target_id), Some((start, count)));
+    app.move_category_to(target_id, 0).unwrap();
+    let mut expected = before.clone();
+    expected.remove(start);
+    expected.insert(0, target_id);
+    assert_eq!(expense_ids(&app), expected);
+    app.move_category_to(target_id, 1).unwrap();
+    expected.swap(0, 1);
+    assert_eq!(expense_ids(&app), expected);
+    app.move_category(target_id, -1).unwrap();
+    app.move_category(target_id, -1).unwrap();
+    expected.swap(0, 1);
+    assert_eq!(expense_ids(&app), expected);
+    assert!(app.move_category_to(target_id, count).is_err());
+    assert_eq!(expense_ids(&app), expected);
+
     let (_, rent) = app
         .transaction(
             app.budget

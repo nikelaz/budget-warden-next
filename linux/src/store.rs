@@ -289,28 +289,48 @@ impl AppState {
         self.mutate(|budget| domain::update_category(budget, updated))
     }
 
-    pub fn move_category(&mut self, id: Uuid, offset: i32) -> Result<(), String> {
-        let budget = self
-            .budget
-            .as_ref()
-            .ok_or_else(|| "No budget is open.".to_string())?
-            .clone();
+    /// Returns the category's index within its type and the number of
+    /// categories of that type.
+    pub fn category_position(&self, id: Uuid) -> Option<(usize, usize)> {
+        let budget = self.budget.as_ref()?;
         let category = budget
             .categories
             .iter()
-            .find(|category| category.id == id)
+            .find(|category| category.id == id)?;
+        let categories = budget.ordered_categories(Some(category.category_type));
+        let index = categories.iter().position(|item| item.id == id)?;
+        Some((index, categories.len()))
+    }
+
+    /// Moves a category by `offset` places within its type. Moves past either
+    /// end are ignored.
+    pub fn move_category(&mut self, id: Uuid, offset: i32) -> Result<(), String> {
+        let (index, count) = self
+            .category_position(id)
             .ok_or_else(|| "Category no longer exists.".to_string())?;
-        let mut categories = budget.ordered_categories(Some(category.category_type));
-        let index = categories
-            .iter()
-            .position(|item| item.id == id)
-            .ok_or_else(|| "Category no longer exists.".to_string())?;
-        let target = index as i32 + offset;
-        if target < 0 || target >= categories.len() as i32 {
+        let target = index as i64 + offset as i64;
+        if target < 0 || target >= count as i64 {
             return Ok(());
         }
-        let mut updated = categories.remove(index);
-        updated.ordinal = target;
+        self.move_category_to(id, target as usize)
+    }
+
+    /// Moves a category to `index` within its type, shifting the categories in
+    /// between.
+    pub fn move_category_to(&mut self, id: Uuid, index: usize) -> Result<(), String> {
+        let (current, count) = self
+            .category_position(id)
+            .ok_or_else(|| "Category no longer exists.".to_string())?;
+        if index >= count {
+            return Err("Category position is out of range.".to_string());
+        }
+        if index == current {
+            return Ok(());
+        }
+        let mut updated = self
+            .category(id)
+            .ok_or_else(|| "Category no longer exists.".to_string())?;
+        updated.ordinal = index as i32;
         self.mutate(|budget| domain::update_category(budget, updated))
     }
 

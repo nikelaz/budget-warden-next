@@ -1,6 +1,6 @@
 [package]
 name = "budget-warden-linux"
-version = "0.1.0"
+version = "4.0.0"
 edition = "2024"
 description = "Budget Warden desktop app for Linux"
 license = "LicenseRef-Source-Available-Educational"

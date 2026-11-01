@@ -908,40 +908,179 @@ impl AppUi {
     }
 
     fn category_row(self: &Rc<Self>, category: &BWCategory, currency: &str) -> adw::ActionRow {
-        let count = category.transactions.len();
-        let subtitle = if matches!(
-            category.category_type,
-            BWCategoryType::Savings | BWCategoryType::Debt
-        ) {
-            format!(
-                "{} accumulated · {} transaction{}",
-                money_text(category.amount_accumulated.value, currency),
-                count,
-                if count == 1 { "" } else { "s" }
-            )
-        } else {
-            format!("{} transaction{}", count, if count == 1 { "" } else { "s" })
-        };
-        let row = action_row(&category.title, &subtitle);
+        let row = category_row_content(category, currency);
         row.set_widget_name(&format!("category-{}", category.id));
         row.set_activatable(true);
-        let amounts = gtk::Box::new(Orientation::Vertical, 3);
-        amounts.set_valign(Align::Center);
-        let planned = amount_label(&money_text(category.amount_planned.value, currency));
-        let actual = amount_label(&format!(
-            "{} actual",
-            money_text(category.amount_actual.value, currency)
-        ));
-        actual.add_css_class("caption");
-        actual.add_css_class("dim-label");
-        amounts.append(&planned);
-        amounts.append(&actual);
-        row.add_suffix(&amounts);
         row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
+        let handle = gtk::Image::from_icon_name("list-drag-handle-symbolic");
+        handle.add_css_class("dim-label");
+        handle.set_tooltip_text(Some("Drag to Reorder"));
+        row.add_prefix(&handle);
+        self.make_category_reorderable(&row, &handle, category, currency);
         let id = category.id;
         let ui = self.clone();
         row.connect_activated(move |_| ui.show_category_dialog(Some(id), None));
         row
+    }
+
+    /// Lets a category row be dragged onto another row of the same type, and
+    /// moved with Alt+Up/Alt+Down from the keyboard.
+    fn make_category_reorderable(
+        self: &Rc<Self>,
+        row: &adw::ActionRow,
+        handle: &gtk::Image,
+        category: &BWCategory,
+        currency: &str,
+    ) {
+        let id = category.id;
+        let category_type = category.category_type;
+
+        let source = gtk::DragSource::new();
+        source.set_actions(gtk::gdk::DragAction::MOVE);
+        let weak_row = row.downgrade();
+        let weak_handle = handle.downgrade();
+        let hotspot = Rc::new(Cell::new((0, 0)));
+        let prepare_hotspot = hotspot.clone();
+        source.connect_prepare(move |source, x, y| {
+            let row = weak_row.upgrade()?;
+            // A touch drag anywhere on the row would steal scrolling, so touch
+            // drags start only from the handle.
+            let touch = source
+                .current_event_device()
+                .is_some_and(|device| device.source() == gtk::gdk::InputSource::Touchscreen);
+            if touch {
+                let handle = weak_handle.upgrade()?;
+                let picked = row.pick(x, y, gtk::PickFlags::DEFAULT)?;
+                if picked != handle.clone().upcast::<gtk::Widget>() && !picked.is_ancestor(&handle)
+                {
+                    return None;
+                }
+            }
+            prepare_hotspot.set((x as i32, y as i32));
+            Some(gtk::gdk::ContentProvider::for_value(
+                &id.to_string().to_value(),
+            ))
+        });
+        let icon_category = category.clone();
+        let icon_currency = currency.to_string();
+        let weak_row = row.downgrade();
+        source.connect_drag_begin(move |_, drag| {
+            let Some(row) = weak_row.upgrade() else {
+                return;
+            };
+            let preview = category_row_content(&icon_category, &icon_currency);
+            preview.add_prefix(&gtk::Image::from_icon_name("list-drag-handle-symbolic"));
+            preview.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
+            let list = gtk::ListBox::new();
+            list.add_css_class("boxed-list");
+            list.set_size_request(row.width(), row.height());
+            list.append(&preview);
+            let icon = gtk::DragIcon::for_drag(drag);
+            if let Some(icon) = icon.downcast_ref::<gtk::DragIcon>() {
+                icon.set_child(Some(&list));
+            }
+            let (x, y) = hotspot.get();
+            drag.set_hotspot(x, y);
+            row.set_opacity(0.5);
+        });
+        let weak_row = row.downgrade();
+        source.connect_drag_end(move |_, _, _| {
+            if let Some(row) = weak_row.upgrade() {
+                row.set_opacity(1.0);
+            }
+        });
+        row.add_controller(source);
+
+        let target = gtk::DropTarget::new(String::static_type(), gtk::gdk::DragAction::MOVE);
+        let ui = Rc::downgrade(self);
+        target.connect_accept(move |_, drop| {
+            let Some(ui) = ui.upgrade() else {
+                return false;
+            };
+            // Only categories dragged from this app, of the same type, can be
+            // dropped here.
+            let dragged = drop
+                .drag()
+                .and_then(|drag| drag.content().value(String::static_type()).ok())
+                .and_then(|value| value.get::<String>().ok())
+                .and_then(|value| Uuid::parse_str(&value).ok());
+            dragged.is_some_and(|dragged| {
+                dragged != id
+                    && ui
+                        .state
+                        .borrow()
+                        .category(dragged)
+                        .is_some_and(|category| category.category_type == category_type)
+            })
+        });
+        let ui = Rc::downgrade(self);
+        target.connect_drop(move |_, value, _, _| {
+            let Some(ui) = ui.upgrade() else {
+                return false;
+            };
+            let Some(dragged) = value
+                .get::<String>()
+                .ok()
+                .and_then(|value| Uuid::parse_str(&value).ok())
+            else {
+                return false;
+            };
+            // The dragged category takes this row's place, so dropping onto a
+            // later row puts it after that row and onto an earlier one before it.
+            let Some((index, _)) = ui.state.borrow().category_position(id) else {
+                return false;
+            };
+            // Rebuilding the page replaces this row, so wait until the drop
+            // has finished.
+            gtk::glib::idle_add_local_once(move || ui.move_category_to(dragged, index));
+            true
+        });
+        row.add_controller(target);
+
+        let shortcuts = gtk::ShortcutController::new();
+        for (trigger, offset) in [("<Alt>Up", -1), ("<Alt>Down", 1)] {
+            let ui = Rc::downgrade(self);
+            let action = gtk::CallbackAction::new(move |_, _| {
+                let Some(ui) = ui.upgrade() else {
+                    return gtk::glib::Propagation::Proceed;
+                };
+                let Some((index, count)) = ui.state.borrow().category_position(id) else {
+                    return gtk::glib::Propagation::Proceed;
+                };
+                let target = index as i64 + offset;
+                if (0..count as i64).contains(&target) {
+                    gtk::glib::idle_add_local_once(move || {
+                        ui.move_category_to(id, target as usize);
+                    });
+                }
+                gtk::glib::Propagation::Stop
+            });
+            shortcuts.add_shortcut(gtk::Shortcut::new(
+                gtk::ShortcutTrigger::parse_string(trigger),
+                Some(action),
+            ));
+        }
+        row.add_controller(shortcuts);
+    }
+
+    fn move_category_to(self: &Rc<Self>, id: Uuid, index: usize) {
+        let result = self.state.borrow_mut().move_category_to(id, index);
+        match result {
+            Ok(()) => {
+                self.refresh();
+                self.focus_category_row(id);
+            }
+            Err(error) => self.show_error(&error),
+        }
+    }
+
+    fn focus_category_row(&self, id: Uuid) {
+        let Some(main) = self.main.borrow().clone() else {
+            return;
+        };
+        if let Some(row) = find_named_widget(main.content.upcast_ref(), &format!("category-{id}")) {
+            row.grab_focus();
+        }
     }
 
     fn reporting_page(self: &Rc<Self>, actions: &gtk::Box) -> PageView {
@@ -1377,51 +1516,6 @@ impl AppUi {
                 ui.open_category_window(id);
             });
             details.add(&view);
-            let position = action_row("Position", "Order within this category type");
-            let order = gtk::Box::new(Orientation::Horizontal, 0);
-            order.add_css_class("linked");
-            let up = gtk::Button::builder()
-                .icon_name("go-up-symbolic")
-                .tooltip_text("Move Up")
-                .valign(Align::Center)
-                .build();
-            let down = gtk::Button::builder()
-                .icon_name("go-down-symbolic")
-                .tooltip_text("Move Down")
-                .valign(Align::Center)
-                .build();
-            up.set_sensitive(self.category_can_move(id, -1));
-            down.set_sensitive(self.category_can_move(id, 1));
-            order.append(&up);
-            order.append(&down);
-            order.set_valign(Align::Center);
-            position.add_suffix(&order);
-            details.add(&position);
-            for (button, offset) in [(&up, -1), (&down, 1)] {
-                let ui = self.clone();
-                let error = form.error.clone();
-                let up_weak = up.downgrade();
-                let down_weak = down.downgrade();
-                let editing_budget = editing_budget.clone();
-                button.connect_clicked(move |_| {
-                    if !ui.is_current_budget(&editing_budget) {
-                        return;
-                    }
-                    let result = ui.state.borrow_mut().move_category(id, offset);
-                    match result {
-                        Ok(()) => {
-                            ui.refresh();
-                            if let Some(up) = up_weak.upgrade() {
-                                up.set_sensitive(ui.category_can_move(id, -1));
-                            }
-                            if let Some(down) = down_weak.upgrade() {
-                                down.set_sensitive(ui.category_can_move(id, 1));
-                            }
-                        }
-                        Err(message) => inline_error(&error, &message),
-                    }
-                });
-            }
             form.body.append(&details);
             let delete = gtk::Button::with_label("Delete Category…");
             delete.add_css_class("destructive-action");
@@ -1515,21 +1609,6 @@ impl AppUi {
             }
         });
         form.dialog.present(Some(&self.window));
-    }
-
-    fn category_can_move(&self, id: Uuid, offset: i32) -> bool {
-        let state = self.state.borrow();
-        let Some(category) = state.category(id) else {
-            return false;
-        };
-        let Some(budget) = state.budget.as_ref() else {
-            return false;
-        };
-        let categories = budget.ordered_categories(Some(category.category_type));
-        categories
-            .iter()
-            .position(|category| category.id == id)
-            .is_some_and(|index| (0..categories.len() as i32).contains(&(index as i32 + offset)))
     }
 
     fn show_transaction_dialog(
@@ -2141,6 +2220,51 @@ impl AppUi {
         *handle.scroll.borrow_mut() = Some(page.scroll.clone());
         restore_scroll(&page.scroll, previous);
     }
+}
+
+fn category_row_content(category: &BWCategory, currency: &str) -> adw::ActionRow {
+    let count = category.transactions.len();
+    let subtitle = if matches!(
+        category.category_type,
+        BWCategoryType::Savings | BWCategoryType::Debt
+    ) {
+        format!(
+            "{} accumulated · {} transaction{}",
+            money_text(category.amount_accumulated.value, currency),
+            count,
+            if count == 1 { "" } else { "s" }
+        )
+    } else {
+        format!("{} transaction{}", count, if count == 1 { "" } else { "s" })
+    };
+    let row = action_row(&category.title, &subtitle);
+    let amounts = gtk::Box::new(Orientation::Vertical, 3);
+    amounts.set_valign(Align::Center);
+    let planned = amount_label(&money_text(category.amount_planned.value, currency));
+    let actual = amount_label(&format!(
+        "{} actual",
+        money_text(category.amount_actual.value, currency)
+    ));
+    actual.add_css_class("caption");
+    actual.add_css_class("dim-label");
+    amounts.append(&planned);
+    amounts.append(&actual);
+    row.add_suffix(&amounts);
+    row
+}
+
+fn find_named_widget(root: &gtk::Widget, name: &str) -> Option<gtk::Widget> {
+    if root.widget_name() == name {
+        return Some(root.clone());
+    }
+    let mut child = root.first_child();
+    while let Some(widget) = child {
+        if let Some(found) = find_named_widget(&widget, name) {
+            return Some(found);
+        }
+        child = widget.next_sibling();
+    }
+    None
 }
 
 fn clamped_scroll(child: &impl IsA<gtk::Widget>, maximum_size: i32) -> gtk::ScrolledWindow {

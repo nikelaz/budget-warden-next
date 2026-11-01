@@ -55,6 +55,20 @@ and include the current working tree's source. Python 3.11+ and Rust/Cargo are
 required. The script uses temporary build directories and does not publish or
 sign artifacts.
 
+To include Google Drive, put the desktop OAuth credentials in the ignored
+`.linux-release-secrets.env` file at the repository root:
+
+```sh
+BUDGET_WARDEN_GOOGLE_CLIENT_ID='your-desktop-client-id'
+BUDGET_WARDEN_GOOGLE_CLIENT_SECRET='your-desktop-client-secret'
+BUDGET_WARDEN_GOOGLE_PICKER_URL='https://your-hosted-picker/'
+```
+
+The release script exports these settings for both AppImage and Flatpak builds.
+The picker URL is optional for sign-in and sync; it enables adding shared budgets.
+The desktop OAuth credentials are embedded in the executable, as expected for
+an installed-app OAuth client. Keep other deployment keys out of this file.
+
 ### Flatpak
 
 Install Flatpak and flatpak-builder, then prepare the build runtime once:
@@ -124,8 +138,9 @@ runtime compatibility.
 
 - Welcome screen with recent budgets and open/create actions
 - Core catalog templates and previous-budget reuse
-- Budget category groups, planned/actual totals, accumulated balances, category
-  ordering, editing, deletion, and per-category transaction windows
+- Budget category groups, planned/actual totals, accumulated balances,
+  drag-and-drop category ordering (Alt+Up/Alt+Down from the keyboard), editing,
+  deletion, and per-category transaction windows
 - Reporting overview cards, stacked income/allocation bars, and planned/actual
   doughnut breakdowns with amount and percentage legends
 - Search, date and amount filters, sorting, editing, moving, and deleting

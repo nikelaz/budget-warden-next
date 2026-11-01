@@ -17,6 +17,15 @@ esac
 [[ $(uname -s) == Linux ]] || { echo 'A Linux build host is required.' >&2; exit 1; }
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$root"
+# Local release configuration is intentionally excluded from version control.
+if [[ -f "$root/.linux-release-secrets.env" ]]; then
+    set -a
+    source "$root/.linux-release-secrets.env"
+    set +a
+fi
+if [[ -z ${BUDGET_WARDEN_GOOGLE_CLIENT_ID:-} || -z ${BUDGET_WARDEN_GOOGLE_CLIENT_SECRET:-} ]]; then
+    echo 'Warning: Google Drive will be hidden; configure the desktop OAuth client in .linux-release-secrets.env.' >&2
+fi
 need() { command -v "$1" >/dev/null || { echo "Missing required tool: $1" >&2; exit 1; }; }
 for tool in cargo python3 install sha256sum; do need "$tool"; done
 if [[ $format == all || $format == flatpak ]]; then
@@ -48,7 +57,7 @@ if [[ $format == all || $format == flatpak ]]; then
     # Stage only build inputs; never send local credentials or target directories
     # into the Flatpak sandbox. Include uncommitted source changes for local builds.
     python3 - "$root" "$work" <<'PY'
-import pathlib, shutil, sys
+import json, os, pathlib, shutil, sys
 root, work = map(pathlib.Path, sys.argv[1:])
 source = work / "source"
 for package in ("core", "linux"):
@@ -60,7 +69,15 @@ for package in ("core", "linux"):
             shutil.copytree(path, dest / name)
         elif path.is_file():
             shutil.copy2(path, dest / name)
-shutil.copy2(root / "linux/packaging/com.lazarovco.BudgetWarden.json", work / "manifest.json")
+manifest = json.loads((root / "linux/packaging/com.lazarovco.BudgetWarden.json").read_text())
+# flatpak-builder does not inherit the host environment inside its build sandbox.
+# Forward only the installed-app OAuth configuration embedded in the binary.
+env = manifest["build-options"]["env"]
+for name in ("BUDGET_WARDEN_GOOGLE_CLIENT_ID", "BUDGET_WARDEN_GOOGLE_CLIENT_SECRET",
+             "BUDGET_WARDEN_GOOGLE_PICKER_URL"):
+    if os.environ.get(name):
+        env[name] = os.environ[name]
+(work / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 PY
     (
         cd "$work/source"
