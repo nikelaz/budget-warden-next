@@ -178,7 +178,9 @@ public final class BWGoogleDriveController {
     private func authenticate(at url: URL) async throws -> URL {
         let scheme = googleAppleCallbackScheme(clientId: clientID)
         return try await withCheckedThrowingContinuation { continuation in
-            let session = ASWebAuthenticationSession(url: url, callbackURLScheme: scheme) { callback, error in
+            // AuthenticationServices calls this off the main thread, so it
+            // must not inherit the controller's main-actor isolation.
+            let session = ASWebAuthenticationSession(url: url, callbackURLScheme: scheme) { @Sendable callback, error in
                 if let callback {
                     continuation.resume(returning: callback)
                 } else {

@@ -7,6 +7,7 @@
  * See the LICENSE file in the project root for full terms.
  */
 
+import BWAppleCore
 import SwiftUI
 
 struct BWRootView: View {
