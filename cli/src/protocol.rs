@@ -26,6 +26,10 @@ pub struct Meta {
     pub write_occurred: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub migration_status: Option<String>,
+    /// ISO 4217 code stored in the budget. Absent for budgets saved before
+    /// budgets stored a currency.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub currency: Option<String>,
 }
 
 impl Meta {
@@ -37,6 +41,7 @@ impl Meta {
             revision_id: None,
             write_occurred: None,
             migration_status: None,
+            currency: None,
         }
     }
     pub fn budget(
@@ -50,6 +55,10 @@ impl Meta {
         self.revision = Some(revision);
         self.revision_id = Some(revision_id);
         self.write_occurred = Some(write_occurred);
+        self
+    }
+    pub fn currency(mut self, currency: Option<String>) -> Self {
+        self.currency = currency;
         self
     }
     pub fn migration(mut self, required: bool) -> Self {
@@ -73,6 +82,9 @@ pub struct ApplyRequest {
 pub enum Operation {
     RenameBudget {
         title: String,
+    },
+    SetBudgetCurrency {
+        currency: String,
     },
     CreateCategory {
         #[serde(default)]

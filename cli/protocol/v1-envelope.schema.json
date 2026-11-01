@@ -9,6 +9,6 @@
     "ok": {"type": "boolean"},
     "data": {},
     "error": {"oneOf": [{"type": "null"}, {"type": "object", "additionalProperties": false, "required": ["code", "message", "details", "retryable"], "properties": {"code": {"type": "string"}, "message": {"type": "string"}, "details": {}, "retryable": {"type": "boolean"}, "commit_outcome": {"enum": ["not_written", "written", "unknown"]}}}]},
-    "meta": {"oneOf": [{"type": "null"}, {"type": "object", "required": ["command"], "properties": {"command": {"type": "string"}, "budget_id": {"type": "string", "format": "uuid"}, "revision": {"type": "integer"}, "revision_id": {"type": "string", "format": "uuid"}, "write_occurred": {"type": "boolean"}, "migration_status": {"enum": ["current", "required"]}}}]}
+    "meta": {"oneOf": [{"type": "null"}, {"type": "object", "required": ["command"], "properties": {"command": {"type": "string"}, "budget_id": {"type": "string", "format": "uuid"}, "revision": {"type": "integer"}, "revision_id": {"type": "string", "format": "uuid"}, "write_occurred": {"type": "boolean"}, "migration_status": {"enum": ["current", "required"]}, "currency": {"type": "string", "description": "ISO 4217 code stored in the budget; absent for budgets saved before budgets stored a currency"}}}]}
   }
 }

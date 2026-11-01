@@ -39,7 +39,8 @@ fn main() -> ExitCode {
     };
 
     let output_format = cli.output;
-    let currency = if output_format == bw_cli::OutputFormat::Text {
+    // Budgets saved before budgets stored a currency use the configured one.
+    let default_currency = if output_format == bw_cli::OutputFormat::Text {
         bw_cli::config::load(cli.config_dir.as_deref())
             .ok()
             .and_then(|config| config.currency)
@@ -50,6 +51,12 @@ fn main() -> ExitCode {
     match result {
         Ok(outcome) => {
             let line = if output_format == bw_cli::OutputFormat::Text {
+                let currency = outcome
+                    .envelope
+                    .meta
+                    .as_ref()
+                    .and_then(|meta| meta.currency.clone())
+                    .or(default_currency);
                 bw_cli::render_text(&outcome, currency.as_deref())
             } else {
                 serde_json::to_string(&outcome.envelope).unwrap_or_else(|_| "{}".to_string())

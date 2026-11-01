@@ -129,6 +129,12 @@ fn apply_operation(
                 .map_err(|message| core_error("mutation_failed", message))?;
             Ok((updated, json!({"title":title})))
         }
+        Operation::SetBudgetCurrency { currency } => {
+            let updated = bw_core::domain::update_budget_currency(budget, currency.clone())
+                .map_err(|message| core_error("mutation_failed", message))?;
+            let currency = updated.currency.clone();
+            Ok((updated, json!({"currency":currency})))
+        }
         Operation::CreateCategory {
             local_ref,
             title,
@@ -413,6 +419,7 @@ fn register_ref(
 fn operation_name(operation: &Operation) -> &'static str {
     match operation {
         Operation::RenameBudget { .. } => "rename_budget",
+        Operation::SetBudgetCurrency { .. } => "set_budget_currency",
         Operation::CreateCategory { .. } => "create_category",
         Operation::UpdateCategory { .. } => "update_category",
         Operation::DeleteCategory { .. } => "delete_category",

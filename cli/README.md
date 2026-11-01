@@ -51,6 +51,8 @@ The alternative `transaction create --today` uses the host's local calendar date
 
 `budget create --from PATH` creates a new budget with new budget and category IDs, carrying planned and accumulated amounts while clearing transactions. `budget copy --to PATH` creates a replica that retains the original budget ID and file contents. Use `--overwrite-budget-id UUID` to replace an existing destination after confirming its current budget ID. `budget delete` requires `--confirm-budget-id UUID`.
 
+Each budget stores its currency as an ISO 4217 code. `budget create --currency EUR` sets it; without `--currency`, a budget created `--from` another keeps that budget's currency and other new budgets use `config set --currency`. `budget currency --file PATH --currency JPY` (or the `set_budget_currency` apply operation) changes it without converting amounts. Budgets saved before budgets stored a currency have none; `meta.currency` is then omitted and text output uses the configured currency.
+
 `budget migrate` requires either `--in-place` or `--to PATH`. In-place migration supports `--if-revision UUID`; a destination write is no-clobber unless its existing budget ID is supplied using `--overwrite-budget-id`. Validation and ordinary reads never rewrite or upgrade the source file.
 
 Category types are `income`, `expenses`, `savings`, and `debt`. Category ordering is ordinal within type. Category list sorting and transaction list sorting are ascending, with UUID as the deterministic tie breaker. Text matching lowercases Unicode text without host-locale collation. Transaction `--after` and `--before` filters include their boundary dates. Pagination uses zero-based `--offset` and `--limit` (1 through 1000).
@@ -115,7 +117,7 @@ CLI writers use a five-second exclusive lock on a persistent sibling named `<bud
 
 Locks coordinate CLI invocations only. GUI apps, external sync tools, network filesystems, and cloud providers do not join this lock protocol. The CLI rereads and merges through the core save API, but a final check/write race remains with uncooperative writers. Avoid editing the same budget simultaneously in a GUI and CLI when strict isolation matters. Apart from the `cloud` commands, the CLI only uses locally accessible paths; document providers, iCloud, OS bookmarks, and GUI recent-file preferences remain native-client features.
 
-`recent` commands and `config` operate on CLI-owned settings and do not change native app preferences. `config set --currency USD` stores a display preference only. `budget list --directory PATH` discovers `.budget` files in one directory.
+`recent` commands and `config` operate on CLI-owned settings and do not change native app preferences. `config set --currency USD` sets the default currency for new budgets and for text output of budgets without a currency; it does not change existing budgets. `budget list --directory PATH` discovers `.budget` files in one directory.
 
 ## Distribution
 
